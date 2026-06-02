@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Designup Connect",
+    "slug": "designup-connect",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "designup",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.designup.connect",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Designup Connect uses the camera to scan booth QR codes and save brands at exhibitions.",
+        "NSPhotoLibraryUsageDescription": "Designup Connect accesses your photos to upload your profile picture.",
+        "NSLocationWhenInUseUsageDescription": "Designup Connect uses your heading to keep the venue map oriented in your direction of travel."
+      }
+    },
+    "android": {
+      "package": "com.designup.connect",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0A0A"
+      },
+      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Designup Connect uses the camera to scan booth QR codes at exhibitions."
+        }
+      ]
+    ]
+  }
+}

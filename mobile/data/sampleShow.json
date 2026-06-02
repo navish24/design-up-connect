@@ -1,0 +1,1443 @@
+{
+  "meta": {
+    "id": "ad-design-show-2025",
+    "name": "AD Design Show 2025",
+    "venue": "Jio World Convention Centre",
+    "address": "G Block BKC, Bandra Kurla Complex, Mumbai, Maharashtra 400051",
+    "dates": {
+      "start": "2025-02-06",
+      "end": "2025-02-09"
+    },
+    "hours": "11:00 AM \u2013 8:00 PM",
+    "dataUrl": null
+  },
+  "canvas": {
+    "width": 2282,
+    "height": 2950
+  },
+  "mapBounds": {
+    "x": 0,
+    "y": 0,
+    "width": 2282,
+    "height": 2950
+  },
+  "halls": [
+    {
+      "id": "h1",
+      "name": "Main Hall",
+      "imageUrl": "local:venue-map.png",
+      "x": 0,
+      "y": 0,
+      "width": 2282,
+      "height": 2950
+    }
+  ],
+  "stalls": [
+    {
+      "id": "stall_fca",
+      "brandName": "FCA",
+      "x": 567,
+      "y": 10,
+      "width": 259,
+      "height": 386,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Craft"
+    },
+    {
+      "id": "stall_034",
+      "brandName": "AD CAF\u00c9",
+      "x": 4,
+      "y": 10,
+      "width": 563,
+      "height": 386,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Cafe"
+    },
+    {
+      "id": "stall_048",
+      "brandName": "AD DISCOVERIES",
+      "x": 2079,
+      "y": 0,
+      "width": 202,
+      "height": 439,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Featured"
+    },
+    {
+      "id": "stall_011",
+      "brandName": "SIORAA",
+      "x": 1517,
+      "y": 58,
+      "width": 218,
+      "height": 280,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Jewellery"
+    },
+    {
+      "id": "stall_013",
+      "brandName": "AD CAF\u00c9",
+      "x": 1738,
+      "y": 58,
+      "width": 215,
+      "height": 137,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Cafe"
+    },
+    {
+      "id": "stall_012",
+      "brandName": "ASIGN",
+      "x": 1735,
+      "y": 200,
+      "width": 215,
+      "height": 138,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Furniture"
+    },
+    {
+      "id": "stall_014",
+      "brandName": "FENESTA",
+      "x": 908,
+      "y": 230,
+      "width": 215,
+      "height": 427,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Windows"
+    },
+    {
+      "id": "stall_024",
+      "brandName": "ATTITUDES",
+      "x": 1125,
+      "y": 230,
+      "width": 215,
+      "height": 216,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Decor"
+    },
+    {
+      "id": "stall_025",
+      "brandName": "INDIA CIRCUS BY KRSNAA MEHTA",
+      "x": 1125,
+      "y": 450,
+      "width": 215,
+      "height": 207,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Textiles"
+    },
+    {
+      "id": "stall_001",
+      "brandName": "MERINO",
+      "x": 4,
+      "y": 479,
+      "width": 201,
+      "height": 211,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Surfaces"
+    },
+    {
+      "id": "stall_010",
+      "brandName": "TAKSHNI",
+      "x": 299,
+      "y": 488,
+      "width": 215,
+      "height": 133,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Jewellery"
+    },
+    {
+      "id": "stall_015",
+      "brandName": "EXHIBIT 320",
+      "x": 514,
+      "y": 488,
+      "width": 215,
+      "height": 266,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Decor"
+    },
+    {
+      "id": "stall_027",
+      "brandName": "AD CAF\u00c9",
+      "x": 1517,
+      "y": 478,
+      "width": 220,
+      "height": 142,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Cafe"
+    },
+    {
+      "id": "stall_026",
+      "brandName": "THE ARTISANIA",
+      "x": 1737,
+      "y": 478,
+      "width": 215,
+      "height": 275,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Craft"
+    },
+    {
+      "id": "stall_047",
+      "brandName": "AD DISCOVERIES",
+      "x": 2076,
+      "y": 542,
+      "width": 202,
+      "height": 439,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Featured"
+    },
+    {
+      "id": "stall_009",
+      "brandName": "RIVVAZ",
+      "x": 299,
+      "y": 621,
+      "width": 215,
+      "height": 133,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Fabric"
+    },
+    {
+      "id": "stall_028",
+      "brandName": "FORMFORGE BY ABHINAV GOYAL",
+      "x": 1515,
+      "y": 624,
+      "width": 222,
+      "height": 132,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Furniture"
+    },
+    {
+      "id": "stall_002",
+      "brandName": "SQUARE KNOTS",
+      "x": 4,
+      "y": 696,
+      "width": 201,
+      "height": 211,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Textiles"
+    },
+    {
+      "id": "stall_053",
+      "brandName": "AD SELECTIONS & BATHWARE",
+      "x": 902,
+      "y": 776,
+      "width": 438,
+      "height": 239,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Featured"
+    },
+    {
+      "id": "stall_003",
+      "brandName": "MASHA ART",
+      "x": 4,
+      "y": 917,
+      "width": 201,
+      "height": 855,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Art"
+    },
+    {
+      "id": "stall_016",
+      "brandName": "DELTA FAUCET COMPANY",
+      "x": 299,
+      "y": 891,
+      "width": 435,
+      "height": 280,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Sanitaryware"
+    },
+    {
+      "id": "stall_029",
+      "brandName": "LITTLEBIRD INDIA",
+      "x": 1514,
+      "y": 895,
+      "width": 218,
+      "height": 133,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Decor"
+    },
+    {
+      "id": "stall_030",
+      "brandName": "ART AND CHARLIE",
+      "x": 1734,
+      "y": 895,
+      "width": 215,
+      "height": 133,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Art"
+    },
+    {
+      "id": "stall_035",
+      "brandName": "SIMPOLO TILE & BATHWARE",
+      "x": 2076,
+      "y": 986,
+      "width": 194,
+      "height": 439,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Tiles"
+    },
+    {
+      "id": "stall_031",
+      "brandName": "KALAKAARI HAATH",
+      "x": 1512,
+      "y": 1032,
+      "width": 220,
+      "height": 133,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Craft"
+    },
+    {
+      "id": "stall_032",
+      "brandName": "SOLID BENCH",
+      "x": 1734,
+      "y": 1032,
+      "width": 215,
+      "height": 133,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Furniture"
+    },
+    {
+      "id": "stall_018",
+      "brandName": "AD LOUNGE",
+      "x": 849,
+      "y": 1144,
+      "width": 495,
+      "height": 541,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Lounge"
+    },
+    {
+      "id": "stall_008",
+      "brandName": "SPECTA SURFACES",
+      "x": 299,
+      "y": 1297,
+      "width": 215,
+      "height": 214,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Surfaces"
+    },
+    {
+      "id": "stall_017",
+      "brandName": "TEMPLE TOWN BY MEERA PYARELAL",
+      "x": 519,
+      "y": 1301,
+      "width": 215,
+      "height": 210,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Craft"
+    },
+    {
+      "id": "stall_033",
+      "brandName": "COAST TO COAST DESIGNS",
+      "x": 1508,
+      "y": 1303,
+      "width": 218,
+      "height": 211,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Decor"
+    },
+    {
+      "id": "stall_039",
+      "brandName": "AD PRO DIRECTORY",
+      "x": 1732,
+      "y": 1303,
+      "width": 218,
+      "height": 211,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Featured"
+    },
+    {
+      "id": "stall_036",
+      "brandName": "HOUSE OF EDWA",
+      "x": 2073,
+      "y": 1429,
+      "width": 197,
+      "height": 218,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Decor"
+    },
+    {
+      "id": "stall_007",
+      "brandName": "ALIGN BY MR. GLASS",
+      "x": 299,
+      "y": 1514,
+      "width": 215,
+      "height": 210,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Glass"
+    },
+    {
+      "id": "stall_019",
+      "brandName": "BESPOKE ART GALLERY AHMEDABAD",
+      "x": 514,
+      "y": 1514,
+      "width": 215,
+      "height": 210,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Art"
+    },
+    {
+      "id": "stall_038",
+      "brandName": "AADYAM HANDWOVEN",
+      "x": 1514,
+      "y": 1523,
+      "width": 218,
+      "height": 211,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Textiles"
+    },
+    {
+      "id": "stall_037",
+      "brandName": "AMORE MURO",
+      "x": 1731,
+      "y": 1523,
+      "width": 218,
+      "height": 211,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Art"
+    },
+    {
+      "id": "stall_045",
+      "brandName": "NILAYA REDDY FINE JEWELLERY",
+      "x": 2073,
+      "y": 1651,
+      "width": 197,
+      "height": 218,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Jewellery"
+    },
+    {
+      "id": "stall_004",
+      "brandName": "SQUARE FOOT",
+      "x": 4,
+      "y": 1779,
+      "width": 201,
+      "height": 419,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Flooring"
+    },
+    {
+      "id": "stall_049",
+      "brandName": "ICA ITALIAN WOOD FINISHES",
+      "x": 902,
+      "y": 1806,
+      "width": 432,
+      "height": 441,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Surfaces"
+    },
+    {
+      "id": "stall_006",
+      "brandName": "IPSE IPSA IPSUM",
+      "x": 294,
+      "y": 1866,
+      "width": 215,
+      "height": 131,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Decor"
+    },
+    {
+      "id": "stall_020",
+      "brandName": "METANESTT",
+      "x": 514,
+      "y": 1867,
+      "width": 215,
+      "height": 130,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Furniture"
+    },
+    {
+      "id": "stall_041",
+      "brandName": "ART CENTRIX SPACE",
+      "x": 1513,
+      "y": 1873,
+      "width": 218,
+      "height": 139,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Art"
+    },
+    {
+      "id": "stall_042",
+      "brandName": "THE HOUSE OF ESTHETE",
+      "x": 1731,
+      "y": 1873,
+      "width": 218,
+      "height": 139,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Luxury"
+    },
+    {
+      "id": "stall_046",
+      "brandName": "AD CAF\u00c9",
+      "x": 2073,
+      "y": 1873,
+      "width": 194,
+      "height": 434,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Cafe"
+    },
+    {
+      "id": "stall_022",
+      "brandName": "OZONE",
+      "x": 294,
+      "y": 2005,
+      "width": 440,
+      "height": 131,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Hardware"
+    },
+    {
+      "id": "stall_040",
+      "brandName": "THE ANTIQUE LOFT - COLLEZIONI",
+      "x": 1514,
+      "y": 2017,
+      "width": 435,
+      "height": 132,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Antiques"
+    },
+    {
+      "id": "stall_005",
+      "brandName": "VENZO",
+      "x": 4,
+      "y": 2198,
+      "width": 201,
+      "height": 229,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Hardware"
+    },
+    {
+      "id": "stall_021",
+      "brandName": "BEYOND SQUARE UDAIPUR",
+      "x": 294,
+      "y": 2270,
+      "width": 440,
+      "height": 279,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Marble"
+    },
+    {
+      "id": "stall_050",
+      "brandName": "JAIPUR RUGS",
+      "x": 943,
+      "y": 2325,
+      "width": 351,
+      "height": 224,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Textiles"
+    },
+    {
+      "id": "stall_043",
+      "brandName": "POLTRONA FRAU",
+      "x": 1514,
+      "y": 2282,
+      "width": 429,
+      "height": 276,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Luxury"
+    },
+    {
+      "id": "stall_052",
+      "brandName": "ESPRAVO",
+      "x": 27,
+      "y": 2588,
+      "width": 356,
+      "height": 225,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Sanitaryware"
+    },
+    {
+      "id": "stall_044",
+      "brandName": "BACCARAT",
+      "x": 1514,
+      "y": 2611,
+      "width": 435,
+      "height": 224,
+      "stallType": "brand",
+      "hallId": "h1",
+      "category": "Luxury"
+    },
+    {
+      "id": "stall_054",
+      "brandName": "BOX OFFICE",
+      "x": 648,
+      "y": 2673,
+      "width": 481,
+      "height": 148,
+      "stallType": "service",
+      "hallId": "h1",
+      "category": "Service"
+    },
+    {
+      "id": "stall_051",
+      "brandName": "EXIT",
+      "x": 1129,
+      "y": 2673,
+      "width": 377,
+      "height": 277,
+      "stallType": "exit",
+      "hallId": "h1",
+      "category": "Exit"
+    },
+    {
+      "id": "stall_055",
+      "brandName": "ENTRY",
+      "x": 648,
+      "y": 2887,
+      "width": 481,
+      "height": 63,
+      "stallType": "entry",
+      "hallId": "h1",
+      "category": "Entry"
+    }
+  ],
+  "navGraph": {
+    "nodes": [
+      {
+        "id": "n1",
+        "x": 861,
+        "y": 464,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n2",
+        "x": 865,
+        "y": 149,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n3",
+        "x": 1431,
+        "y": 153,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n4",
+        "x": 1431,
+        "y": 415,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n5",
+        "x": 1424,
+        "y": 716,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n6",
+        "x": 1424,
+        "y": 841,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n7",
+        "x": 1422,
+        "y": 1087,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n8",
+        "x": 1424,
+        "y": 1244,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n9",
+        "x": 1418,
+        "y": 1739,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n10",
+        "x": 1422,
+        "y": 1821,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n11",
+        "x": 1424,
+        "y": 2222,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n12",
+        "x": 1422,
+        "y": 2302,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n13",
+        "x": 1418,
+        "y": 2579,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n14",
+        "x": 1418,
+        "y": 2624,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n15",
+        "x": 836,
+        "y": 2624,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n16",
+        "x": 834,
+        "y": 2291,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n17",
+        "x": 832,
+        "y": 2213,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n18",
+        "x": 830,
+        "y": 1819,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n19",
+        "x": 830,
+        "y": 1745,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n20",
+        "x": 867,
+        "y": 725,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n21",
+        "x": 867,
+        "y": 841,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n22",
+        "x": 863,
+        "y": 1058,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n23",
+        "x": 785,
+        "y": 1058,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n24",
+        "x": 788,
+        "y": 1244,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n25",
+        "x": 792,
+        "y": 1745,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n26",
+        "x": 262,
+        "y": 1233,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n27",
+        "x": 262,
+        "y": 836,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n28",
+        "x": 262,
+        "y": 457,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n29",
+        "x": 260,
+        "y": 1825,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n30",
+        "x": 257,
+        "y": 2213,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n31",
+        "x": 240,
+        "y": 2570,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n32",
+        "x": 839,
+        "y": 2573,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n33",
+        "x": 530,
+        "y": 2577,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n34",
+        "x": 524,
+        "y": 2857,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n35",
+        "x": 910,
+        "y": 2854,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n36",
+        "x": 2034,
+        "y": 2588,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n37",
+        "x": 2014,
+        "y": 2213,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n38",
+        "x": 2014,
+        "y": 1821,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n39",
+        "x": 2019,
+        "y": 1233,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n40",
+        "x": 2025,
+        "y": 838,
+        "type": "junction",
+        "hallId": "h1"
+      },
+      {
+        "id": "n41",
+        "x": 2003,
+        "y": 410,
+        "type": "junction",
+        "hallId": "h1"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n2",
+        "to": "n3",
+        "distance": 566
+      },
+      {
+        "from": "n3",
+        "to": "n4",
+        "distance": 262
+      },
+      {
+        "from": "n4",
+        "to": "n5",
+        "distance": 301
+      },
+      {
+        "from": "n5",
+        "to": "n6",
+        "distance": 125
+      },
+      {
+        "from": "n6",
+        "to": "n7",
+        "distance": 246
+      },
+      {
+        "from": "n7",
+        "to": "n8",
+        "distance": 157
+      },
+      {
+        "from": "n8",
+        "to": "n9",
+        "distance": 495
+      },
+      {
+        "from": "n9",
+        "to": "n10",
+        "distance": 82
+      },
+      {
+        "from": "n10",
+        "to": "n11",
+        "distance": 401
+      },
+      {
+        "from": "n4",
+        "to": "n41",
+        "distance": 572
+      },
+      {
+        "from": "n6",
+        "to": "n40",
+        "distance": 601
+      },
+      {
+        "from": "n11",
+        "to": "n12",
+        "distance": 80
+      },
+      {
+        "from": "n12",
+        "to": "n13",
+        "distance": 277
+      },
+      {
+        "from": "n13",
+        "to": "n14",
+        "distance": 45
+      },
+      {
+        "from": "n2",
+        "to": "n1",
+        "distance": 315
+      },
+      {
+        "from": "n1",
+        "to": "n20",
+        "distance": 261
+      },
+      {
+        "from": "n20",
+        "to": "n21",
+        "distance": 116
+      },
+      {
+        "from": "n21",
+        "to": "n22",
+        "distance": 217
+      },
+      {
+        "from": "n22",
+        "to": "n23",
+        "distance": 78
+      },
+      {
+        "from": "n23",
+        "to": "n24",
+        "distance": 186
+      },
+      {
+        "from": "n24",
+        "to": "n25",
+        "distance": 501
+      },
+      {
+        "from": "n25",
+        "to": "n19",
+        "distance": 38
+      },
+      {
+        "from": "n19",
+        "to": "n18",
+        "distance": 74
+      },
+      {
+        "from": "n18",
+        "to": "n17",
+        "distance": 394
+      },
+      {
+        "from": "n17",
+        "to": "n16",
+        "distance": 78
+      },
+      {
+        "from": "n16",
+        "to": "n32",
+        "distance": 282
+      },
+      {
+        "from": "n32",
+        "to": "n15",
+        "distance": 51
+      },
+      {
+        "from": "n1",
+        "to": "n28",
+        "distance": 599
+      },
+      {
+        "from": "n28",
+        "to": "n27",
+        "distance": 379
+      },
+      {
+        "from": "n27",
+        "to": "n26",
+        "distance": 397
+      },
+      {
+        "from": "n26",
+        "to": "n29",
+        "distance": 592
+      },
+      {
+        "from": "n29",
+        "to": "n30",
+        "distance": 388
+      },
+      {
+        "from": "n30",
+        "to": "n31",
+        "distance": 357
+      },
+      {
+        "from": "n31",
+        "to": "n33",
+        "distance": 290
+      },
+      {
+        "from": "n33",
+        "to": "n32",
+        "distance": 309
+      },
+      {
+        "from": "n32",
+        "to": "n13",
+        "distance": 579
+      },
+      {
+        "from": "n16",
+        "to": "n12",
+        "distance": 588
+      },
+      {
+        "from": "n30",
+        "to": "n17",
+        "distance": 575
+      },
+      {
+        "from": "n29",
+        "to": "n18",
+        "distance": 570
+      },
+      {
+        "from": "n19",
+        "to": "n9",
+        "distance": 588
+      },
+      {
+        "from": "n22",
+        "to": "n7",
+        "distance": 560
+      },
+      {
+        "from": "n20",
+        "to": "n5",
+        "distance": 557
+      },
+      {
+        "from": "n21",
+        "to": "n27",
+        "distance": 605
+      },
+      {
+        "from": "n24",
+        "to": "n26",
+        "distance": 526
+      },
+      {
+        "from": "n33",
+        "to": "n34",
+        "distance": 280
+      },
+      {
+        "from": "n34",
+        "to": "n35",
+        "distance": 386
+      },
+      {
+        "from": "n13",
+        "to": "n36",
+        "distance": 616
+      },
+      {
+        "from": "n11",
+        "to": "n37",
+        "distance": 590
+      },
+      {
+        "from": "n10",
+        "to": "n38",
+        "distance": 592
+      },
+      {
+        "from": "n8",
+        "to": "n39",
+        "distance": 595
+      },
+      {
+        "from": "n41",
+        "to": "n40",
+        "distance": 429
+      },
+      {
+        "from": "n40",
+        "to": "n39",
+        "distance": 395
+      },
+      {
+        "from": "n39",
+        "to": "n38",
+        "distance": 588
+      },
+      {
+        "from": "n38",
+        "to": "n37",
+        "distance": 392
+      },
+      {
+        "from": "n37",
+        "to": "n36",
+        "distance": 376
+      }
+    ]
+  },
+  "specialZones": [
+    {
+      "id": "zone-cafe-1",
+      "type": "cafe",
+      "name": "AD CAF\u00c9",
+      "x": 4,
+      "y": 10,
+      "width": 563,
+      "height": 386,
+      "hallId": "h1",
+      "linkedNodeId": "n28",
+      "items": [
+        {
+          "id": "c1-i1",
+          "name": "Blue Tokai Coffee",
+          "category": "Coffee"
+        },
+        {
+          "id": "c1-i2",
+          "name": "The Bombay Sweet Shop",
+          "category": "Bakery"
+        },
+        {
+          "id": "c1-i3",
+          "name": "Hunger Inc. Hospitality",
+          "category": "Food"
+        }
+      ]
+    },
+    {
+      "id": "zone-cafe-2",
+      "type": "cafe",
+      "name": "AD CAF\u00c9",
+      "x": 1738,
+      "y": 58,
+      "width": 215,
+      "height": 137,
+      "hallId": "h1",
+      "linkedNodeId": "n41",
+      "items": [
+        {
+          "id": "c2-i1",
+          "name": "Subko Coffee",
+          "category": "Coffee"
+        },
+        {
+          "id": "c2-i2",
+          "name": "Le15 Patisserie",
+          "category": "Bakery"
+        }
+      ]
+    },
+    {
+      "id": "zone-cafe-3",
+      "type": "cafe",
+      "name": "AD CAF\u00c9",
+      "x": 1517,
+      "y": 478,
+      "width": 220,
+      "height": 142,
+      "hallId": "h1",
+      "linkedNodeId": "n4",
+      "items": [
+        {
+          "id": "c3-i1",
+          "name": "Drifters Coffee",
+          "category": "Coffee"
+        },
+        {
+          "id": "c3-i2",
+          "name": "Theobroma",
+          "category": "Bakery"
+        }
+      ]
+    },
+    {
+      "id": "zone-cafe-4",
+      "type": "cafe",
+      "name": "AD CAF\u00c9",
+      "x": 2073,
+      "y": 1873,
+      "width": 194,
+      "height": 434,
+      "hallId": "h1",
+      "linkedNodeId": "n37",
+      "items": [
+        {
+          "id": "c4-i1",
+          "name": "Araku Coffee",
+          "category": "Coffee"
+        },
+        {
+          "id": "c4-i2",
+          "name": "Wabi Sabi Patisserie",
+          "category": "Bakery"
+        }
+      ]
+    },
+    {
+      "id": "zone-lounge",
+      "type": "lounge",
+      "name": "AD LOUNGE",
+      "x": 849,
+      "y": 1144,
+      "width": 495,
+      "height": 541,
+      "hallId": "h1",
+      "linkedNodeId": "n24",
+      "items": [
+        {
+          "id": "l-i1",
+          "name": "Armani Casa"
+        },
+        {
+          "id": "l-i2",
+          "name": "Herm\u00e8s Maison"
+        },
+        {
+          "id": "l-i3",
+          "name": "B&B Italia"
+        }
+      ]
+    },
+    {
+      "id": "zone-selections",
+      "type": "curated",
+      "name": "AD SELECTIONS",
+      "x": 902,
+      "y": 776,
+      "width": 438,
+      "height": 239,
+      "hallId": "h1",
+      "linkedNodeId": "n21",
+      "items": [
+        {
+          "id": "s-i1",
+          "name": "INDIA CIRCUS BY KRSNAA MEHTA",
+          "stallId": "stall_025"
+        },
+        {
+          "id": "s-i2",
+          "name": "FENESTA",
+          "stallId": "stall_014"
+        },
+        {
+          "id": "s-i3",
+          "name": "JAIPUR RUGS",
+          "stallId": "stall_050"
+        },
+        {
+          "id": "s-i4",
+          "name": "ICA ITALIAN WOOD FINISHES",
+          "stallId": "stall_049"
+        },
+        {
+          "id": "s-i5",
+          "name": "POLTRONA FRAU",
+          "stallId": "stall_043"
+        }
+      ]
+    },
+    {
+      "id": "zone-discoveries-1",
+      "type": "directory",
+      "name": "AD DISCOVERIES",
+      "x": 2079,
+      "y": 0,
+      "width": 202,
+      "height": 439,
+      "hallId": "h1",
+      "linkedNodeId": "n41"
+    },
+    {
+      "id": "zone-discoveries-2",
+      "type": "directory",
+      "name": "AD DISCOVERIES",
+      "x": 2076,
+      "y": 542,
+      "width": 202,
+      "height": 439,
+      "hallId": "h1",
+      "linkedNodeId": "n40"
+    },
+    {
+      "id": "zone-pro-directory",
+      "type": "pro-directory",
+      "name": "AD PRO DIRECTORY",
+      "x": 1732,
+      "y": 1303,
+      "width": 218,
+      "height": 211,
+      "hallId": "h1",
+      "linkedNodeId": "n39"
+    }
+  ],
+  "events": [
+    {
+      "id": "evt-1",
+      "title": "Design Forward: Trends in Interior Design",
+      "description": "Join leading interior designers and industry voices for an insightful panel discussion on the trends reshaping living spaces in 2025 \u2014 from biophilic design to material innovation and the resurgence of craft.",
+      "day": 1,
+      "time": "11:00 AM",
+      "locationZoneId": "zone-lounge",
+      "inviteOnly": false
+    },
+    {
+      "id": "evt-2",
+      "title": "Exclusive Brand Preview",
+      "description": "A curated invite-only presentation giving AD subscribers and select design professionals first access to new collections and launches from this year's featured brands before the show opens to the public.",
+      "day": 1,
+      "time": "2:30 PM",
+      "locationZoneId": "zone-lounge",
+      "inviteOnly": true
+    },
+    {
+      "id": "evt-3",
+      "title": "Craftsmanship in Modern Architecture",
+      "description": "An exploration of how traditional Indian craft techniques are finding new expression in contemporary architecture and interior projects. Featuring conversations with artisans, architects, and material specialists.",
+      "day": 2,
+      "time": "12:00 PM",
+      "locationZoneId": "zone-lounge",
+      "inviteOnly": false
+    },
+    {
+      "id": "evt-4",
+      "title": "VIP Curator's Walk",
+      "description": "An intimate guided walkthrough of the show floor led by AD's editorial team, highlighting the most significant stalls, installations, and design moments of the 2025 edition. Limited to VIP guests and press.",
+      "day": 2,
+      "time": "4:00 PM",
+      "locationZoneId": "zone-lounge",
+      "inviteOnly": true
+    }
+  ]
+}

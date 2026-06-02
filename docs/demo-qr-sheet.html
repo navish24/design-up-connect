@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Designup Connect — Demo QR Sheet · 3 Exhibitions</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f4f0;
+      color: #1a1612;
+      padding: 40px 32px 80px;
+    }
+
+    /* ── Page header ── */
+    .page-header { margin-bottom: 40px; }
+    .page-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .page-header p  { font-size: 13px; color: #888; }
+
+    /* ── Test flow guide ── */
+    .guide {
+      background: #fff; border-radius: 14px; padding: 20px 24px;
+      margin-bottom: 40px; border-left: 4px solid #1a1612;
+    }
+    .guide h3 { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #555; margin-bottom: 14px; }
+    .guide ol  { padding-left: 18px; }
+    .guide li  { font-size: 13px; line-height: 1.7; color: #444; }
+    .guide li + li { margin-top: 4px; }
+    .guide strong { color: #1a1612; }
+
+    /* ── Exhibition block ── */
+    .exh-block { margin-bottom: 56px; }
+
+    .exh-header {
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      display: flex; align-items: flex-start; gap: 16px;
+    }
+    .exh-num {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 700; flex-shrink: 0;
+    }
+    .exh-header-info h2  { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+    .exh-header-info p   { font-size: 12px; opacity: .7; line-height: 1.5; }
+
+    /* Per-exhibition colour themes */
+    .exh-1 .exh-header { background: #eaf4f0; }
+    .exh-1 .exh-num    { background: #2a7a60; color: #fff; }
+    .exh-1 .exh-header-info h2 { color: #1a4d3c; }
+
+    .exh-2 .exh-header { background: #eaeff8; }
+    .exh-2 .exh-num    { background: #2a4e8a; color: #fff; }
+    .exh-2 .exh-header-info h2 { color: #1a2e5a; }
+
+    .exh-3 .exh-header { background: #f0eaf6; }
+    .exh-3 .exh-num    { background: #6a3a8a; color: #fff; }
+    .exh-3 .exh-header-info h2 { color: #3a1a5a; }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+      text-transform: uppercase; color: #999;
+      margin: 0 0 14px;
+      padding-bottom: 7px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    /* ── Card grid ── */
+    .grid { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 28px; }
+
+    .card {
+      background: #fff; border-radius: 12px;
+      padding: 18px 14px 14px;
+      width: 172px; text-align: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .card img {
+      width: 136px; height: 136px; display: block; margin: 0 auto 10px;
+      cursor: pointer; transition: transform .15s;
+    }
+    .card img:hover { transform: scale(1.05); }
+    .card-title { font-size: 12px; font-weight: 700; line-height: 1.3; margin-bottom: 2px; }
+    .card-sub   { font-size: 11px; color: #888; line-height: 1.4; }
+    .card-code  { font-size: 9px; color: #bbb; margin-top: 7px; word-break: break-all; }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block; font-size: 9px; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; margin-bottom: 10px;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    /* Entry badges per exhibition */
+    .badge-entry-1 { background: #d6f0e8; color: #1a6048; }
+    .badge-entry-2 { background: #d6e4f8; color: #1a3a78; }
+    .badge-entry-3 { background: #ead6f8; color: #5a1a8a; }
+    /* Booth badges per exhibition */
+    .badge-booth-1 { background: #f0ede4; color: #6a5020; }
+    .badge-booth-2 { background: #e4eaf4; color: #2a3a68; }
+    .badge-booth-3 { background: #f4e8f8; color: #602080; }
+    /* People */
+    .badge-person  { background: #eeedf5; color: #4a4888; }
+
+    /* ── People section (shared) ── */
+    .people-section { margin-bottom: 40px; }
+
+    /* ── Lightbox ── */
+    #lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88); z-index: 999;
+      align-items: center; justify-content: center; flex-direction: column;
+      gap: 14px; cursor: pointer;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img  { width: 300px; height: 300px; border-radius: 12px; background: #fff; }
+    #lightbox-label { color: #fff; font-size: 15px; font-weight: 700; text-align: center; line-height: 1.5; }
+    #lightbox-code  { color: #aaa; font-size: 11px; }
+    #lightbox-hint  { color: #555; font-size: 11px; margin-top: 6px; }
+
+    @media print {
+      body { background: #fff; padding: 20px; }
+      .card { box-shadow: none; border: 1px solid #eee; }
+      #lightbox { display: none !important; }
+      .guide { break-inside: avoid; }
+      .exh-block { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Page header ── -->
+  <div class="page-header">
+    <h1>Designup Connect · Demo QR Sheet — 3 Exhibitions</h1>
+    <p>Scan with the app to test entry check-in, booth saves, and networking across three different shows.</p>
+  </div>
+
+  <!-- ── Test flow guide ── -->
+  <div class="guide">
+    <h3>Test Flow — How to use these QRs</h3>
+    <ol>
+      <li><strong>Scan Entry QR</strong> first — activates the exhibition on your Home screen dashboard.</li>
+      <li><strong>Scan Booth QRs</strong> from the same exhibition — saved brands appear under that show in your Saved tab.</li>
+      <li><strong>Scan People QRs</strong> (any time) — saved contacts appear in your Connections tab.</li>
+      <li>Switch exhibitions by scanning a different Entry QR — the active show updates on Home.</li>
+      <li><strong>Tap any QR</strong> to enlarge it for easier phone scanning.</li>
+    </ol>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- EXHIBITION 1 — Index Mumbai 2025                                       -->
+  <!-- Brands: b01 b02 b03 b11 b15                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="exh-block exh-1">
+    <div class="exh-header">
+      <div class="exh-num">1</div>
+      <div class="exh-header-info">
+        <h2>Index Mumbai 2025</h2>
+        <p>India's Premier Design Exhibition &nbsp;·&nbsp; Bombay Exhibition Centre, Goregaon East, Mumbai &nbsp;·&nbsp; 15–18 Nov 2025<br>ID: <code>exh-001</code></p>
+      </div>
+    </div>
+
+    <p class="section-label">Entry Gate</p>
+    <div class="grid">
+      <div class="card">
+        <span class="badge badge-entry-1">Entry Gate</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=entry:exh-001&margin=4" alt="entry:exh-001" />
+        <div class="card-title">Index Mumbai 2025</div>
+        <div class="card-sub">Scan at gate to activate</div>
+        <div class="card-code">entry:exh-001</div>
+      </div>
+    </div>
+
+    <p class="section-label">Brand Booths</p>
+    <div class="grid">
+
+      <div class="card">
+        <span class="badge badge-booth-1">B12 · Hall 2</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b01:exh-001&margin=4" alt="booth:b01:exh-001" />
+        <div class="card-title">Lumina Lighting</div>
+        <div class="card-sub">Lighting</div>
+        <div class="card-code">booth:b01:exh-001</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-1">C4 · Hall 1</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b02:exh-001&margin=4" alt="booth:b02:exh-001" />
+        <div class="card-title">ClayCraft Ceramics</div>
+        <div class="card-sub">Decor</div>
+        <div class="card-code">booth:b02:exh-001</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-1">A7 · Hall 1</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b03:exh-001&margin=4" alt="booth:b03:exh-001" />
+        <div class="card-title">Studio Forma</div>
+        <div class="card-sub">Furniture</div>
+        <div class="card-code">booth:b03:exh-001</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-1">K1 · Hall 2</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b11:exh-001&margin=4" alt="booth:b11:exh-001" />
+        <div class="card-title">Bloom Art</div>
+        <div class="card-sub">Art &amp; Accessories</div>
+        <div class="card-code">booth:b11:exh-001</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-1">O2 · Hall 2</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b15:exh-001&margin=4" alt="booth:b15:exh-001" />
+        <div class="card-title">Casa Luce</div>
+        <div class="card-sub">Lighting</div>
+        <div class="card-code">booth:b15:exh-001</div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- EXHIBITION 2 — ACETECH Mumbai 2025                                     -->
+  <!-- Brands: b04 b05 b06 b08 b09                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="exh-block exh-2">
+    <div class="exh-header">
+      <div class="exh-num">2</div>
+      <div class="exh-header-info">
+        <h2>ACETECH Mumbai 2025</h2>
+        <p>Architecture, Construction &amp; Interior Design Expo &nbsp;·&nbsp; Bombay Exhibition Centre, Goregaon East, Mumbai &nbsp;·&nbsp; 5–8 Dec 2025<br>ID: <code>exh-002</code></p>
+      </div>
+    </div>
+
+    <p class="section-label">Entry Gate</p>
+    <div class="grid">
+      <div class="card">
+        <span class="badge badge-entry-2">Entry Gate</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=entry:exh-002&margin=4" alt="entry:exh-002" />
+        <div class="card-title">ACETECH Mumbai 2025</div>
+        <div class="card-sub">Scan at gate to activate</div>
+        <div class="card-code">entry:exh-002</div>
+      </div>
+    </div>
+
+    <p class="section-label">Brand Booths</p>
+    <div class="grid">
+
+      <div class="card">
+        <span class="badge badge-booth-2">D3 · Hall 3</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b04:exh-002&margin=4" alt="booth:b04:exh-002" />
+        <div class="card-title">Arche Surfaces</div>
+        <div class="card-sub">Wall Finishes</div>
+        <div class="card-code">booth:b04:exh-002</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-2">E9 · Hall 2</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b05:exh-002&margin=4" alt="booth:b05:exh-002" />
+        <div class="card-title">Kala Textiles</div>
+        <div class="card-sub">Soft Furnishings</div>
+        <div class="card-code">booth:b05:exh-002</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-2">F5 · Hall 3</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b06:exh-002&margin=4" alt="booth:b06:exh-002" />
+        <div class="card-title">Mara Kitchen</div>
+        <div class="card-sub">Kitchen &amp; Bath</div>
+        <div class="card-code">booth:b06:exh-002</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-2">H8 · Hall 4</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b08:exh-002&margin=4" alt="booth:b08:exh-002" />
+        <div class="card-title">Arterra Tiles</div>
+        <div class="card-sub">Architectural Materials</div>
+        <div class="card-code">booth:b08:exh-002</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-2">I3 · Hall 5</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b09:exh-002&margin=4" alt="booth:b09:exh-002" />
+        <div class="card-title">Nomo Design</div>
+        <div class="card-sub">Smart Living</div>
+        <div class="card-code">booth:b09:exh-002</div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- EXHIBITION 3 — AD Design Show 2026                                     -->
+  <!-- Brands: b07 b10 b12 b13 b14                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="exh-block exh-3">
+    <div class="exh-header">
+      <div class="exh-num">3</div>
+      <div class="exh-header-info">
+        <h2>AD Design Show 2026</h2>
+        <p>Curated Luxury Design &nbsp;·&nbsp; MMRDA Grounds, Bandra Kurla Complex, Mumbai &nbsp;·&nbsp; 22–25 Jan 2026<br>ID: <code>exh-003</code></p>
+      </div>
+    </div>
+
+    <p class="section-label">Entry Gate</p>
+    <div class="grid">
+      <div class="card">
+        <span class="badge badge-entry-3">Entry Gate</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=entry:exh-003&margin=4" alt="entry:exh-003" />
+        <div class="card-title">AD Design Show 2026</div>
+        <div class="card-sub">Scan at gate to activate</div>
+        <div class="card-code">entry:exh-003</div>
+      </div>
+    </div>
+
+    <p class="section-label">Brand Booths</p>
+    <div class="grid">
+
+      <div class="card">
+        <span class="badge badge-booth-3">G2 · Hall 4</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b07:exh-003&margin=4" alt="booth:b07:exh-003" />
+        <div class="card-title">Verdant Living</div>
+        <div class="card-sub">Outdoor</div>
+        <div class="card-code">booth:b07:exh-003</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-3">J6 · Hall 5</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b10:exh-003&margin=4" alt="booth:b10:exh-003" />
+        <div class="card-title">Nexus Doors</div>
+        <div class="card-sub">Doors &amp; Hardware</div>
+        <div class="card-code">booth:b10:exh-003</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-3">L4 · Hall 1</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b12:exh-003&margin=4" alt="booth:b12:exh-003" />
+        <div class="card-title">Drift Wood Co</div>
+        <div class="card-sub">Furniture</div>
+        <div class="card-code">booth:b12:exh-003</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-3">M7 · Hall 3</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b13:exh-003&margin=4" alt="booth:b13:exh-003" />
+        <div class="card-title">Prism Glass</div>
+        <div class="card-sub">Architectural Materials</div>
+        <div class="card-code">booth:b13:exh-003</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-booth-3">N9 · Hall 4</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b14:exh-003&margin=4" alt="booth:b14:exh-003" />
+        <div class="card-title">Terrain Stone</div>
+        <div class="card-sub">Architectural Materials</div>
+        <div class="card-code">booth:b14:exh-003</div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- PEOPLE — shared across all exhibitions                                 -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="people-section">
+    <p class="section-label">People — Networking QR Badges (works at any exhibition)</p>
+    <div class="grid">
+
+      <div class="card">
+        <span class="badge badge-person">Visitor</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-priya&margin=4" alt="user:u-priya" />
+        <div class="card-title">Priya Sharma</div>
+        <div class="card-sub">Principal Designer<br>Studio Forma</div>
+        <div class="card-code">user:u-priya</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-person">Brand Rep</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-arjun&margin=4" alt="user:u-arjun" />
+        <div class="card-title">Arjun Mehta</div>
+        <div class="card-sub">Sales Manager<br>Lumina Lighting</div>
+        <div class="card-code">user:u-arjun</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-person">Visitor</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-ananya&margin=4" alt="user:u-ananya" />
+        <div class="card-title">Ananya Kapoor</div>
+        <div class="card-sub">Interior Architect<br>Kapoor &amp; Associates</div>
+        <div class="card-code">user:u-ananya</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-person">Brand Rep</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-rohan&margin=4" alt="user:u-rohan" />
+        <div class="card-title">Rohan Desai</div>
+        <div class="card-sub">Brand Director<br>ClayCraft Ceramics</div>
+        <div class="card-code">user:u-rohan</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-person">Visitor</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-meera&margin=4" alt="user:u-meera" />
+        <div class="card-title">Meera Nair</div>
+        <div class="card-sub">Creative Director<br>Bloom Art Studio</div>
+        <div class="card-code">user:u-meera</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-person">Brand Rep</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-vikram&margin=4" alt="user:u-vikram" />
+        <div class="card-title">Vikram Bose</div>
+        <div class="card-sub">Head of Sales<br>Arterra Tiles</div>
+        <div class="card-code">user:u-vikram</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ SHOWROOM VISIT QR CODES ══════════════════════════════════════════ -->
+  <div class="people-section">
+    <div class="section-label">Showroom Visit Scans — scan these without an active exhibition to save as Showroom Visit</div>
+    <div class="grid">
+
+      <div class="card">
+        <span class="badge" style="background:#f0ede4;color:#6a5020;">Showroom Brand</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b04&margin=4" alt="booth:b04"
+             onclick="openLightbox(this.src,'Arche Studio · Showroom Visit','booth:b04'); event.stopPropagation();" />
+        <div class="card-title">Arche Studio</div>
+        <div class="card-sub">Modular Furniture<br>Showroom · Bandra, Mumbai</div>
+        <div class="card-code">booth:b04</div>
+      </div>
+
+      <div class="card">
+        <span class="badge" style="background:#f0ede4;color:#6a5020;">Showroom Brand</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b07&margin=4" alt="booth:b07"
+             onclick="openLightbox(this.src,'Verdant Living · Showroom Visit','booth:b07'); event.stopPropagation();" />
+        <div class="card-title">Verdant Living</div>
+        <div class="card-sub">Sustainable Furniture<br>Showroom · Khar, Mumbai</div>
+        <div class="card-code">booth:b07</div>
+      </div>
+
+      <div class="card">
+        <span class="badge" style="background:#f0ede4;color:#6a5020;">Showroom Brand</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b11&margin=4" alt="booth:b11"
+             onclick="openLightbox(this.src,'Bloom Art Studio · Showroom Visit','booth:b11'); event.stopPropagation();" />
+        <div class="card-title">Bloom Art Studio</div>
+        <div class="card-sub">Art &amp; Décor<br>Showroom · Colaba, Mumbai</div>
+        <div class="card-code">booth:b11</div>
+      </div>
+
+      <div class="card">
+        <span class="badge" style="background:#f0ede4;color:#6a5020;">Showroom Brand</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b13&margin=4" alt="booth:b13"
+             onclick="openLightbox(this.src,'Prism Surfaces · Showroom Visit','booth:b13'); event.stopPropagation();" />
+        <div class="card-title">Prism Surfaces</div>
+        <div class="card-sub">Materials &amp; Surfaces<br>Showroom · Lower Parel</div>
+        <div class="card-code">booth:b13</div>
+      </div>
+
+      <div class="card">
+        <span class="badge" style="background:#f0ede4;color:#6a5020;">Showroom Brand</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=booth:b15&margin=4" alt="booth:b15"
+             onclick="openLightbox(this.src,'Casa Luce · Showroom Visit','booth:b15'); event.stopPropagation();" />
+        <div class="card-title">Casa Luce</div>
+        <div class="card-sub">Luxury Lighting<br>Showroom · Worli, Mumbai</div>
+        <div class="card-code">booth:b15</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ BRAND-LINKED USERS ════════════════════════════════════════════════ -->
+  <div class="people-section">
+    <div class="section-label">Brand-Linked Visiting Cards — users whose profiles are linked to a brand on Designup</div>
+    <div class="grid">
+
+      <div class="card">
+        <span class="badge badge-person">Brand Rep · Lumina</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-arjun&margin=4" alt="user:u-arjun"
+             onclick="openLightbox(this.src,'Arjun Mehta · Lumina Lighting','user:u-arjun'); event.stopPropagation();" />
+        <div class="card-title">Arjun Mehta</div>
+        <div class="card-sub">Sales Manager<br>Lumina Lighting</div>
+        <div class="card-code">user:u-arjun</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-person">Brand Rep · ClayCraft</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-rohan&margin=4" alt="user:u-rohan"
+             onclick="openLightbox(this.src,'Rohan Desai · ClayCraft Ceramics','user:u-rohan'); event.stopPropagation();" />
+        <div class="card-title">Rohan Desai</div>
+        <div class="card-sub">Brand Director<br>ClayCraft Ceramics</div>
+        <div class="card-code">user:u-rohan</div>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-person">Brand Rep · Bloom Art</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=136x136&data=user:u-meera&margin=4" alt="user:u-meera"
+             onclick="openLightbox(this.src,'Meera Nair · Bloom Art Studio','user:u-meera'); event.stopPropagation();" />
+        <div class="card-title">Meera Nair</div>
+        <div class="card-sub">Creative Director<br>Bloom Art Studio</div>
+        <div class="card-code">user:u-meera</div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ── Lightbox ── -->
+  <div id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="" />
+    <div id="lightbox-label"></div>
+    <div id="lightbox-code"></div>
+    <div id="lightbox-hint">Tap anywhere to close · Press Esc to dismiss</div>
+  </div>
+
+  <script>
+    function openLightbox(src, label, code) {
+      document.getElementById('lightbox-img').src = src.replace('size=136x136', 'size=300x300');
+      document.getElementById('lightbox-label').textContent = label;
+      document.getElementById('lightbox-code').textContent = code;
+      document.getElementById('lightbox').classList.add('open');
+    }
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('open');
+    }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+
+    document.querySelectorAll('.card img').forEach((img) => {
+      img.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = img.closest('.card');
+        const title = card.querySelector('.card-title').textContent;
+        const sub   = card.querySelector('.card-sub').textContent.replace(/\n/g, ' · ');
+        const code  = card.querySelector('.card-code').textContent;
+        openLightbox(img.src, title + ' · ' + sub, code);
+      });
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+/* ── Dark mode (default) — grey_jade palette, matches the mobile app ─────── */
+:root,
+[data-theme="dark"] {
+  --bg:           #0A0A0C;
+  --surface:      #16161A;
+  --surface2:     #202026;
+  --surface3:     #2C2C34;
+  --border:       rgba(255, 255, 255, 0.07);
+  --accent:       #6A9888;
+  --accent-dim:   rgba(106, 152, 136, 0.14);
+  --accent-hover: #7AABA0;
+  --gold:         #C8A050;
+  --gold-dim:     rgba(200, 160, 80, 0.14);
+  --green:        #4ade80;
+  --green-dim:    rgba(74, 222, 128, 0.12);
+  --red:          #f87171;
+  --red-dim:      rgba(248, 113, 113, 0.12);
+  --amber:        #fb923c;
+  --amber-dim:    rgba(251, 146, 60, 0.12);
+  --text:         #F0F0F2;
+  --text2:        #9898A8;
+  --text3:        #5C5C6C;
+}
+
+/* ── Light mode ──────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:           #F4F4F7;
+  --surface:      #EAEAEF;
+  --surface2:     #DFDFE8;
+  --surface3:     #D4D4DF;
+  --border:       rgba(0, 0, 0, 0.09);
+  --accent:       #407060;
+  --accent-dim:   rgba(64, 112, 96, 0.12);
+  --accent-hover: #4E8872;
+  --gold:         #9A7820;
+  --gold-dim:     rgba(154, 120, 32, 0.12);
+  --green:        #16a34a;
+  --green-dim:    rgba(22, 163, 74, 0.1);
+  --red:          #dc2626;
+  --red-dim:      rgba(220, 38, 38, 0.1);
+  --amber:        #c2410c;
+  --amber-dim:    rgba(194, 65, 12, 0.1);
+  --text:         #18181E;
+  --text2:        #525260;
+  --text3:        #9494A8;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input, textarea, select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  width: 100%;
+  transition: border-color 0.15s, background 0.2s;
+  font-family: inherit;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+input::placeholder, textarea::placeholder { color: var(--text3); }
+
+button { cursor: pointer; font-family: inherit; }
+
+@keyframes scan-line {
+  0%   { top: 8px; }
+  50%  { top: calc(100% - 8px); }
+  100% { top: 8px; }
+}
+.animate-scan-line { animation: scan-line 2s ease-in-out infinite; }

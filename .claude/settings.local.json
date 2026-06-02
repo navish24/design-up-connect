@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:doc-04-1s-sheets.googleusercontent.com)",
+      "Bash(tee /tmp/tsc-out.txt)",
+      "Bash(echo \"EXIT:$?\")"
+    ]
+  }
+}
