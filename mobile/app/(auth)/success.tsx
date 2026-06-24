@@ -5,6 +5,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
+import { isBeta } from '../../lib/betaConfig';
 
 export default function SuccessScreen() {
   const { colors } = useTheme();
@@ -33,9 +34,13 @@ export default function SuccessScreen() {
       {/* Headline */}
       <View style={s.topSection}>
         <Ionicons name="checkmark-circle" size={48} color={colors.accent} />
-        <Text style={[s.headline, { color: colors.text }]}>Your discovery pass{'\n'}is ready</Text>
+        <Text style={[s.headline, { color: colors.text }]}>
+          {isBeta ? 'Your Nexgild card\nis ready.' : 'Your discovery pass\nis ready'}
+        </Text>
         <Text style={[s.sub, { color: colors.textSecondary }]}>
-          Brands you scan will receive this card
+          {isBeta
+            ? 'Share your QR to connect with anyone, instantly.'
+            : 'Brands you scan will receive this card'}
         </Text>
       </View>
 
@@ -92,14 +97,16 @@ export default function SuccessScreen() {
         <View style={[s.nudge, { backgroundColor: colors.accent + '12' }]}>
           <Ionicons name="information-circle-outline" size={13} color={colors.accent} />
           <Text style={[s.nudgeText, { color: colors.accent }]}>
-            Add your portfolio link and city so brands remember you.
+            {isBeta
+              ? 'Add LinkedIn and Instagram so contacts can follow up.'
+              : 'Add your portfolio link and city so brands remember you.'}
           </Text>
         </View>
       </View>
 
       {/* CTA */}
       <Pressable style={[s.exploreBtn, { backgroundColor: colors.accent }]} onPress={handleExplore}>
-        <Text style={s.exploreBtnText}>Explore</Text>
+        <Text style={s.exploreBtnText}>{isBeta ? 'Continue' : 'Explore'}</Text>
         <Ionicons name="arrow-forward" size={16} color="#FFF" />
       </Pressable>
     </ScrollView>

@@ -142,7 +142,7 @@ function _resolveLocalAsset(filename: string): ReturnType<typeof require> | unde
 
   const asset = LOCAL_ASSETS[filename];
   if (!asset) {
-    console.warn(
+    console.log(
       `[showDataService] No bundled asset for "${filename}". ` +
         'Add it to LOCAL_ASSETS in showDataService.ts.',
     );
@@ -185,7 +185,7 @@ async function _fetchAndCacheRemote(url: string): Promise<void> {
     const result = await FileSystem.downloadAsync(url, tmpUri);
 
     if (result.status !== 200) {
-      console.warn(
+      console.log(
         `[showDataService] Remote fetch returned HTTP ${result.status} for ${url}`,
       );
       return;
@@ -196,6 +196,6 @@ async function _fetchAndCacheRemote(url: string): Promise<void> {
     const enriched = enrichStalls(parsed);
     await _persistToCache(enriched);
   } catch (err) {
-    console.warn('[showDataService] Background remote fetch failed:', err);
+    console.log('[showDataService] Background remote fetch failed:', err);
   }
 }

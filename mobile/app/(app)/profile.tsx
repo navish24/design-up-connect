@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import { ALL_BRANDS } from '../../data/brands';
 import { getAllBrandsForSearch, type BrandSearchResult } from '../../lib/api';
+import { isBeta } from '../../lib/betaConfig';
 
 // ── Free Google Sheets query submission via Google Apps Script ──────────────
 // Setup: go to script.google.com → new project → paste the script below → Deploy as Web App
@@ -188,6 +189,39 @@ if (!user) return null;
             </Text>
           </View>
         </View>
+        {/* ── PROFILE COMPLETENESS (Beta only) ─────────────────────────── */}
+        {isBeta && (() => {
+          const profileFields = [
+            user.designation,
+            user.company_name,
+            user.email,
+            user.phone,
+            user.city,
+            user.instagram_handle || user.linkedin_url || user.website_url,
+          ];
+          const filled = profileFields.filter(Boolean).length;
+          const pct = Math.round((filled / profileFields.length) * 100);
+          const missing = profileFields.filter((f) => !f).length;
+          return (
+            <View style={[s.completenessCard, { backgroundColor: colors.surface }]}>
+              <View style={s.completenessRow}>
+                <Text style={[s.completenessLabel, { color: colors.text }]}>Card Completeness</Text>
+                <Text style={[s.completenessPct, { color: colors.accent }]}>{pct}%</Text>
+              </View>
+              <View style={[s.completenessTrack, { backgroundColor: colors.border }]}>
+                <View style={[s.completenessFill, { backgroundColor: colors.accent, width: `${pct}%` as any }]} />
+              </View>
+              {missing > 0 && (
+                <Pressable onPress={openEditDetails}>
+                  <Text style={[s.completenessTip, { color: colors.accent }]}>
+                    Add {missing} more detail{missing > 1 ? 's' : ''} to complete your card →
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          );
+        })()}
+
         {/* ── VISITING CARD ─────────────────────────────────────────────── */}
         <View style={s.sectionHeader}>
           <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>YOUR VISITING CARD</Text>
@@ -278,6 +312,15 @@ if (!user) return null;
           <QRCode value={qrValue} size={120} backgroundColor={colors.surface} color={colors.text} />
           <Text style={[s.qrHint, { color: colors.textMuted }]}>Tap to expand</Text>
         </Pressable>
+        {isBeta && (
+          <Pressable
+            style={[s.shareQrBtn, { backgroundColor: colors.accent }]}
+            onPress={() => setQrExpanded(true)}
+          >
+            <Ionicons name="share-outline" size={18} color="#FFF" />
+            <Text style={s.shareQrBtnText}>Share my QR</Text>
+          </Pressable>
+        )}
 
         {/* QR expanded modal */}
         {qrExpanded && (
@@ -934,5 +977,24 @@ function makeStyles(colors: any) {
       gap: Spacing.sm, paddingVertical: 14, borderRadius: Radius.md,
     },
     querySubmitBtnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+
+    // Profile completeness (Beta)
+    completenessCard: {
+      borderRadius: Radius.lg, padding: Spacing.md,
+      marginBottom: Spacing.md, gap: Spacing.sm,
+    },
+    completenessRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    completenessLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+    completenessPct: { fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+    completenessTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+    completenessFill: { height: 6, borderRadius: 3 },
+    completenessTip: { fontSize: FontSize.xs, fontWeight: FontWeight.medium },
+
+    shareQrBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: Spacing.sm, paddingVertical: 14, borderRadius: Radius.md,
+      marginBottom: Spacing.md,
+    },
+    shareQrBtnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
   });
 }

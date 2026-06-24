@@ -305,7 +305,7 @@ export async function getBrand(id: string, isDemoMode?: boolean): Promise<ApiBra
   console.log('[getBrand] supabase result — brand:', brand?.id ?? 'null', 'brandErr:', brandErr?.message ?? 'none', 'products:', products?.length ?? 0, 'projects:', projects?.length ?? 0, 'projErr:', projErr?.message ?? 'none');
 
   if (brandErr || !brand) {
-    console.warn('[getBrand] brand fetch failed:', brandErr?.message, 'id:', id);
+    console.log('[getBrand] brand fetch failed:', brandErr?.message, 'id:', id);
     const local = ALL_BRANDS.find((b) => b.id === id);
     if (local) {
       return {
@@ -321,7 +321,7 @@ export async function getBrand(id: string, isDemoMode?: boolean): Promise<ApiBra
     return null;
   }
 
-  if (prodErr) console.warn('[getBrand] products fetch failed:', prodErr.message);
+  if (prodErr) console.log('[getBrand] products fetch failed:', prodErr.message);
 
   // Fetch product images separately — more reliable than nested join
   const productIds = (products ?? []).map((p: any) => p.id);
@@ -469,7 +469,7 @@ export async function getNewBrands(): Promise<NewBrand[]> {
     .limit(20);
 
   if (error) {
-    console.warn('[getNewBrands] error:', error.message, error.code);
+    console.log('[getNewBrands] error:', error.message, error.code);
     return [];
   }
   if (!data || data.length === 0) return [];

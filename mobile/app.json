@@ -17,7 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.designup.connect",
       "infoPlist": {
-        "NSCameraUsageDescription": "Designup Connect uses the camera to scan booth QR codes and save brands at exhibitions.",
+        "NSCameraUsageDescription": "Designup Connect uses the camera to scan booth QR codes at exhibitions and to capture physical visiting cards.",
         "NSPhotoLibraryUsageDescription": "Designup Connect accesses your photos to upload your profile picture.",
         "NSLocationWhenInUseUsageDescription": "Designup Connect uses your heading to keep the venue map oriented in your direction of travel."
       }
@@ -28,7 +28,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0A0A"
       },
-      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -41,7 +46,16 @@
         {
           "cameraPermission": "Designup Connect uses the camera to scan booth QR codes at exhibitions."
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ],
+      "expo-font"
     ]
   }
 }

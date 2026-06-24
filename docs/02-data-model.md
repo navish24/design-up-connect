@@ -380,6 +380,54 @@ CREATE TABLE notifications (
 
 ---
 
+### `card_contacts`
+A physical visiting card scanned by a user and saved to their personal contact directory.
+
+This table stores **user-owned, private data only** — it is never shared or visible to other users, never used for any matching or suggestion system.
+
+**Privacy rules:**
+- Card images (`card_image_url`) are stored only locally on the device. The URL stored here is a Supabase Storage URL only if the user explicitly enables cloud backup; otherwise it is null.
+- All data is synced exclusively to the owning user's account — no cross-user access at any level.
+- Deletion removes all data including the associated image.
+
+```sql
+CREATE TABLE card_contacts (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL REFERENCES users(id),
+  source            VARCHAR(20) NOT NULL DEFAULT 'card_scan',
+  scanned_at        TIMESTAMPTZ DEFAULT NOW(),
+  card_image_url    VARCHAR(500),           -- Supabase Storage URL; null if image not backed up
+  fields            JSONB NOT NULL DEFAULT '[]', -- [{label, value}, ...] — flexible, any field
+  notes             TEXT DEFAULT '',
+  tags              TEXT[] DEFAULT '{}',
+  nexgild_user_id   UUID REFERENCES users(id),  -- set when this card is matched to a Nexgild user
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+**`fields` JSONB structure** (flexible array — any number of any label):
+
+```json
+[
+  { "label": "Name",        "value": "Rahul Mehta" },
+  { "label": "Company",     "value": "Studio Mehta" },
+  { "label": "Designation", "value": "Principal Architect" },
+  { "label": "Phone",       "value": "+91 98200 00000" },
+  { "label": "Phone",       "value": "+91 22 4000 0000" },
+  { "label": "Email",       "value": "rahul@studiomehta.com" },
+  { "label": "Instagram",   "value": "@studiomehta" },
+  { "label": "LinkedIn",    "value": "linkedin.com/in/rahulmehta" },
+  { "label": "Address",     "value": "202 Maker Chambers, Nariman Point, Mumbai 400021" }
+]
+```
+
+- Labels are free-form strings. Standard set: `Name`, `Company`, `Designation`, `Phone`, `WhatsApp`, `Email`, `Website`, `LinkedIn`, `Instagram`, `Twitter/X`, `Behance`, `YouTube`, `Address`, `Other`.
+- A card may have zero or multiple values for any label.
+- `nexgild_user_id` is populated by a future matching step — not set at scan time.
+
+---
+
 ## Key Indexes
 
 ```sql
@@ -392,6 +440,8 @@ CREATE INDEX idx_notifications_user      ON notifications(user_id, is_read);
 CREATE INDEX idx_visitor_reg_user        ON visitor_registrations(user_id);
 CREATE INDEX idx_exhibition_brands_exh   ON exhibition_brands(exhibition_id);
 CREATE INDEX idx_product_images_product  ON product_images(product_id);
+CREATE INDEX idx_card_contacts_user      ON card_contacts(user_id);
+CREATE INDEX idx_card_contacts_fields    ON card_contacts USING gin(fields);  -- enables JSONB text search
 ```
 
 ---
@@ -408,6 +458,7 @@ CREATE INDEX idx_product_images_product  ON product_images(product_id);
 | `brands` | All authenticated users can read brands. Only brand admins can update. |
 | `exhibitions` | All authenticated users can read. Only admins can create/update. |
 | `exhibition_brands` | Admins and organizers can write. All authenticated users can read. |
+| `card_contacts` | Users can only read/write/delete their own rows. No other user can read this data. Card image URLs are treated as private — Storage bucket policy must also restrict access to the owning user. |
 
 ---
 

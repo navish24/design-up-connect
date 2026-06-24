@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import type { User } from '../types';
+import type { User, CardContact } from '../types';
 
 const SAVED_BRANDS_KEY = 'saved_brands_v1';
+const CARD_CONTACTS_KEY = 'card_contacts_v1';
 
 export interface Note {
   id: string;
@@ -56,6 +57,11 @@ interface AuthContextType {
   dismissProfileNudge: () => void;
   // User update
   updateUser: (fields: Partial<User>) => void;
+  // Card contacts (physical visiting card scans)
+  cardContacts: CardContact[];
+  addCardContact: (contact: CardContact) => void;
+  updateCardContact: (contact: CardContact) => void;
+  deleteCardContact: (id: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -89,6 +95,10 @@ const AuthContext = createContext<AuthContextType>({
   showProfileNudge: false,
   dismissProfileNudge: () => {},
   updateUser: () => {},
+  cardContacts: [],
+  addCardContact: () => {},
+  updateCardContact: () => {},
+  deleteCardContact: () => {},
 });
 
 const MOCK_USER: User = {
@@ -122,6 +132,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [demoWishlist, setDemoWishlist] = useState<any[]>([]);
   const [notes, setNotes] = useState<Record<string, Note[]>>({});
   const [showProfileNudge, setShowProfileNudge] = useState(false);
+  const [cardContacts, setCardContacts] = useState<CardContact[]>([]);
+  const [cardContactsLoaded, setCardContactsLoaded] = useState(false);
 
   // Load persisted saved brands on mount
   useEffect(() => {
@@ -138,6 +150,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!savedBrandsLoaded) return;
     AsyncStorage.setItem(SAVED_BRANDS_KEY, JSON.stringify(demoSavedBrands));
   }, [demoSavedBrands, savedBrandsLoaded]);
+
+  // Load persisted card contacts on mount
+  useEffect(() => {
+    AsyncStorage.getItem(CARD_CONTACTS_KEY).then((raw) => {
+      if (raw) {
+        try { setCardContacts(JSON.parse(raw)); } catch (_) {}
+      }
+      setCardContactsLoaded(true);
+    });
+  }, []);
+
+  // Persist card contacts whenever they change (after initial load)
+  useEffect(() => {
+    if (!cardContactsLoaded) return;
+    AsyncStorage.setItem(CARD_CONTACTS_KEY, JSON.stringify(cardContacts));
+  }, [cardContacts, cardContactsLoaded]);
 
   const setActiveExhibition = (id: string, name: string) => {
     setActiveExhibitionId(id);
@@ -234,6 +262,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setShowProfileNudge(false);
   };
 
+  const addCardContact = (contact: CardContact) => {
+    setCardContacts((prev) => [contact, ...prev]);
+  };
+
+  const updateCardContact = (contact: CardContact) => {
+    setCardContacts((prev) => prev.map((c) => (c.id === contact.id ? contact : c)));
+  };
+
+  const deleteCardContact = (id: string) => {
+    setCardContacts((prev) => prev.filter((c) => c.id !== id));
+  };
+
   const demoWishlistedIds = demoWishlist.map((w: any) => w.id);
 
   const toggleWishlistItem = (item: any) => {
@@ -275,6 +315,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       showProfileNudge,
       dismissProfileNudge,
       updateUser,
+      cardContacts,
+      addCardContact,
+      updateCardContact,
+      deleteCardContact,
     }}>
       {children}
     </AuthContext.Provider>

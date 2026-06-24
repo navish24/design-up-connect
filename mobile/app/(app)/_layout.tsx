@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Spacing, FontSize, Radius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { isBeta } from '../../lib/betaConfig';
 
 type TabIconProps = {
   name: keyof typeof Ionicons.glyphMap;
@@ -31,6 +32,20 @@ function TabIcon({ name, color, label, focused, isScan }: TabIconProps) {
   );
 }
 
+// Shared with scan.tsx so it can restore the exact same style when un-hiding
+// the tab bar — passing `undefined` to setOptions overwrites this default
+// instead of falling back to it, leaving the bar with no theming.
+export function getTabBarStyle(colors: ReturnType<typeof useTheme>['colors']) {
+  return {
+    backgroundColor: colors.tabBar,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    height: 80,
+    paddingBottom: 16,
+    paddingTop: 8,
+  };
+}
+
 export default function AppLayout() {
   const { colors } = useTheme();
 
@@ -38,14 +53,7 @@ export default function AppLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.tabBar,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: 80,
-          paddingBottom: 16,
-          paddingTop: 8,
-        },
+        tabBarStyle: getTabBarStyle(colors),
         tabBarShowLabel: false,
       }}
     >
@@ -62,6 +70,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="saved"
         options={{
+          href: isBeta ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'bookmark' : 'bookmark-outline'} color={color} label="Saved" focused={focused} />
           ),

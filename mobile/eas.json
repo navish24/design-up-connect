@@ -3,6 +3,24 @@
     "version": ">= 5.9.0"
   },
   "build": {
+    "beta": {
+      "env": {
+        "APP_VARIANT": "beta",
+        "EXPO_PUBLIC_IS_BETA": "true"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "beta-ios": {
+      "env": {
+        "APP_VARIANT": "beta",
+        "EXPO_PUBLIC_IS_BETA": "true"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
     "preview": {
       "android": {
         "buildType": "apk"

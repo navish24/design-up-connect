@@ -115,6 +115,23 @@ export interface Notification {
   created_at: string;
 }
 
+export interface CardContactField {
+  label: string;
+  value: string;
+}
+
+export interface CardContact {
+  id: string;
+  source: 'card_scan';
+  scanned_at: string;
+  card_image_uri: string | null;
+  card_image_uri_back: string | null;
+  fields: CardContactField[];
+  notes: string;
+  tags: string[];
+  nexgild_user_id: string | null;
+}
+
 export interface ScanResult {
   scan_type: 'booth' | 'user' | 'entry' | 'unknown';
   action: 'brand_saved' | 'already_saved' | 'connection_created' | 'already_connected' | 'exhibition_activated';

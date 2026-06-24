@@ -1,10 +1,19 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, View, StyleSheet } from 'react-native';
+import { Platform, View, Text, StyleSheet, LogBox } from 'react-native';
 import { useEffect } from 'react';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider } from '../context/AuthContext';
 import { prefetchCategories } from '../lib/unsplash';
+import { isBeta } from '../lib/betaConfig';
+
+// Suppress expected dev-only log messages that appear as yellow warnings
+// in the LogBox banner. These are informational — not real errors.
+LogBox.ignoreLogs([
+  '[getBrand]',
+  '[getNewBrands]',
+  '[showDataService]',
+]);
 
 function RootLayoutInner() {
   const { isDark, colors } = useTheme();
@@ -14,6 +23,11 @@ function RootLayoutInner() {
   const inner = (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      {isBeta && (
+        <View style={styles.betaBanner}>
+          <Text style={styles.betaBannerText}>β  BETA BUILD</Text>
+        </View>
+      )}
       <Stack screenOptions={{ headerShown: false }} />
     </>
   );
@@ -43,6 +57,17 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  betaBanner: {
+    backgroundColor: '#B45309',
+    alignItems: 'center',
+    paddingVertical: 3,
+  },
+  betaBannerText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
   webOuter: {
     flex: 1,
     alignItems: 'center',

@@ -1,7 +1,10 @@
-import { ScrollView, View, Text, StyleSheet, Pressable, Image, Modal } from 'react-native';
-import { useState, useEffect } from 'react';
+import { ScrollView, View, Text, StyleSheet, Pressable, Image, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import QRCode from 'react-native-qrcode-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
@@ -9,6 +12,9 @@ import { getExhibitions, getExhibition, getNewBrands, type ApiExhibition, type N
 import { ALL_EXHIBITIONS } from '../../data/exhibitions';
 import { ALL_BRANDS } from '../../data/brands';
 import { getCachedCover, subscribeToCache } from '../../lib/unsplash';
+import { isBeta } from '../../lib/betaConfig';
+import { recognizeCardText, parseCardFields } from '../../lib/cardOcr';
+import { cardScanStore } from '../../lib/cardScanStore';
 
 function getBrandCoverImage(brandId: string): string | null {
   const brand = ALL_BRANDS.find((b) => b.id === brandId);
@@ -45,6 +51,8 @@ const DEMO_CONNECTIONS = [
 type DemoConnState = 'idle' | 'capture' | 'saving' | 'success';
 
 export default function HomeScreen() {
+  if (isBeta) return <BetaHomeScreen />;
+
   const { colors } = useTheme();
   const { activeExhibitionId, activeExhibitionName, isDemoMode, addDemoConnection, demoAddedConnections, demoSavedBrands, demoSavedReset, showProfileNudge, dismissProfileNudge, user } = useAuth();
   const unreadNotifCount = demoAddedConnections.length + demoSavedBrands.length;
@@ -809,5 +817,427 @@ function makeStyles(colors: any) {
     savingIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
     demoConnResultTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center' },
     demoConnResultSub: { fontSize: FontSize.md, textAlign: 'center' },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Beta Home Screen
+// ─────────────────────────────────────────────────────────────────────────────
+
+const POPUP_SHOWN_KEY = 'onboarding_popup_shown';
+
+function BetaHomeScreen() {
+  const { colors } = useTheme();
+  const { user, cardContacts, demoAddedConnections, updateUser } = useAuth();
+
+  const [showQR, setShowQR] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  // Popup fields
+  const [popupLinkedin, setPopupLinkedin] = useState('');
+  const [popupInstagram, setPopupInstagram] = useState('');
+  const [popupEmail, setPopupEmail] = useState(user?.email ?? '');
+  const [popupWebsite, setPopupWebsite] = useState('');
+
+  useEffect(() => {
+    AsyncStorage.getItem(POPUP_SHOWN_KEY).then((val) => {
+      if (!val) setShowPopup(true);
+    });
+  }, []);
+
+  const dismissPopup = async (save: boolean) => {
+    if (save) {
+      const updates: Record<string, string> = {};
+      if (popupLinkedin.trim()) updates.linkedin = popupLinkedin.trim();
+      if (popupInstagram.trim()) updates.instagram = popupInstagram.trim();
+      if (popupEmail.trim()) updates.email = popupEmail.trim();
+      if (popupWebsite.trim()) updates.website = popupWebsite.trim();
+      if (Object.keys(updates).length) updateUser(updates as any);
+    }
+    await AsyncStorage.setItem(POPUP_SHOWN_KEY, '1');
+    setShowPopup(false);
+  };
+
+  // Merge card contacts + demo QR connections, most recent first, max 5
+  const recentContacts = useMemo(() => {
+    const cards = cardContacts.map((c) => ({
+      id: c.id,
+      name: c.fields.find((f) => f.label === 'Name')?.value ?? 'Unknown',
+      sub: [
+        c.fields.find((f) => f.label === 'Designation')?.value,
+        c.fields.find((f) => f.label === 'Company')?.value,
+      ].filter(Boolean).join(' · '),
+      source: 'card' as const,
+      ts: new Date(c.scanned_at).getTime(),
+    }));
+    const qrs = (demoAddedConnections as any[]).map((c) => ({
+      id: c.id as string,
+      name: c.full_name as string,
+      sub: [c.designation, c.company].filter(Boolean).join(' · '),
+      source: 'qr' as const,
+      ts: Date.now(),
+    }));
+    return [...cards, ...qrs].sort((a, b) => b.ts - a.ts).slice(0, 5);
+  }, [cardContacts, demoAddedConnections]);
+
+  const hasContacts = recentContacts.length > 0;
+
+  const handleGalleryImport = async () => {
+    setImporting(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.9,
+      });
+      if (result.canceled || !result.assets?.[0]) { setImporting(false); return; }
+      const imageUri = result.assets[0].uri;
+      const blocks = await recognizeCardText(imageUri);
+      const fields = parseCardFields(blocks);
+      cardScanStore.set({ imageUri, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+      setImporting(false);
+      router.push('/card-review');
+    } catch {
+      setImporting(false);
+    }
+  };
+
+  const initials = user?.first_name
+    ? `${user.first_name[0]}${user.last_name?.[0] ?? ''}`.toUpperCase()
+    : 'U';
+
+  const b = betaStyles(colors);
+
+  return (
+    <View style={[b.root, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={b.header}>
+        <Text style={[b.headerTitle, { color: colors.text }]}>Nexgild Connect</Text>
+        <Pressable style={b.iconBtn} onPress={() => router.push('/notifications')}>
+          <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
+        </Pressable>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={b.scroll}>
+
+        {/* QR compact card */}
+        <Pressable
+          style={[b.qrCard, { backgroundColor: colors.surface, borderColor: colors.accent + '55' }]}
+          onPress={() => setShowQR(true)}
+        >
+          <View style={[b.qrAvatar, { backgroundColor: colors.accent + '22' }]}>
+            <Text style={[b.qrAvatarText, { color: colors.accent }]}>{initials}</Text>
+          </View>
+          <View style={b.qrInfo}>
+            <Text style={[b.qrName, { color: colors.text }]}>
+              {user?.first_name} {user?.last_name}
+            </Text>
+            <Text style={[b.qrSub, { color: colors.textSecondary }]} numberOfLines={1}>
+              {[user?.designation ?? user?.profession, user?.company_name].filter(Boolean).join(' · ')}
+            </Text>
+            <Text style={[b.qrTap, { color: colors.accent }]}>Tap to show QR</Text>
+          </View>
+          <View style={[b.qrThumb, { backgroundColor: colors.background }]}>
+            <QRCode
+              value={`user:${user?.id ?? 'user-001'}`}
+              size={58}
+              backgroundColor={colors.background}
+              color={colors.text}
+            />
+          </View>
+        </Pressable>
+
+        {/* Contacts */}
+        {hasContacts ? (
+          <View style={b.section}>
+            <View style={b.sectionHeader}>
+              <Text style={[b.sectionTitle, { color: colors.text }]}>Recent Contacts</Text>
+              <Pressable onPress={() => router.push('/(app)/connections')}>
+                <Text style={[b.seeAll, { color: colors.accent }]}>See all →</Text>
+              </Pressable>
+            </View>
+            {recentContacts.map((contact) => {
+              const avatarLetters = contact.name
+                .split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+              return (
+                <Pressable
+                  key={contact.id}
+                  style={[b.contactRow, { backgroundColor: colors.surface }]}
+                  onPress={() => router.push('/(app)/connections')}
+                >
+                  <View style={[b.contactAvatar, { backgroundColor: colors.accent + '18' }]}>
+                    <Text style={[b.contactAvatarText, { color: colors.accent }]}>{avatarLetters}</Text>
+                  </View>
+                  <View style={b.contactInfo}>
+                    <Text style={[b.contactName, { color: colors.text }]} numberOfLines={1}>{contact.name}</Text>
+                    {!!contact.sub && (
+                      <Text style={[b.contactSub, { color: colors.textMuted }]} numberOfLines={1}>{contact.sub}</Text>
+                    )}
+                  </View>
+                  <View style={[b.sourceTag, {
+                    backgroundColor: contact.source === 'card' ? colors.accent + '18' : colors.gold + '22',
+                  }]}>
+                    <Text style={[b.sourceTagText, {
+                      color: contact.source === 'card' ? colors.accent : colors.gold,
+                    }]}>
+                      {contact.source === 'card' ? 'Card' : 'QR'}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={[b.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="people-outline" size={40} color={colors.textMuted} />
+            <Text style={[b.emptyTitle, { color: colors.text }]}>Your connections will appear here</Text>
+            <Text style={[b.emptySub, { color: colors.textMuted }]}>
+              Start by scanning a visiting card or importing one from your gallery.
+            </Text>
+            <Pressable
+              style={[b.primaryCta, { backgroundColor: colors.accent }]}
+              onPress={() => router.push('/card-scanner')}
+            >
+              <Ionicons name="camera-outline" size={18} color="#FFF" />
+              <Text style={b.primaryCtaText}>Scan a card now</Text>
+            </Pressable>
+            <Pressable
+              style={[b.secondaryCta, { borderColor: colors.border }]}
+              onPress={handleGalleryImport}
+              disabled={importing}
+            >
+              {importing ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <>
+                  <Ionicons name="images-outline" size={18} color={colors.textSecondary} />
+                  <Text style={[b.secondaryCtaText, { color: colors.textSecondary }]}>Import from gallery</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        )}
+
+      </ScrollView>
+
+      {/* FAB: tap = scan card, long-press = gallery */}
+      {hasContacts && (
+        <Pressable
+          style={[b.fab, { backgroundColor: colors.accent }]}
+          onPress={() => router.push('/card-scanner')}
+          onLongPress={handleGalleryImport}
+          delayLongPress={400}
+        >
+          <Ionicons name="camera-outline" size={26} color="#FFF" />
+        </Pressable>
+      )}
+
+      {/* Full-screen QR modal */}
+      <Modal visible={showQR} animationType="slide" transparent>
+        <View style={b.qrOverlay}>
+          <View style={[b.qrModal, { backgroundColor: colors.surface }]}>
+            <Text style={[b.qrModalTitle, { color: colors.text }]}>My QR Code</Text>
+            <Text style={[b.qrModalSub, { color: colors.textSecondary }]}>
+              Ask others to scan this to connect instantly
+            </Text>
+            <View style={[b.qrModalBox, { backgroundColor: colors.background }]}>
+              <QRCode
+                value={`user:${user?.id ?? 'user-001'}`}
+                size={220}
+                backgroundColor={colors.background}
+                color={colors.text}
+              />
+            </View>
+            {user?.designup_user_id && user.designup_user_id !== 'demo_user' && (
+              <Text style={[b.qrModalId, { color: colors.accent }]}>@{user.designup_user_id}</Text>
+            )}
+            <Pressable
+              style={[b.qrModalClose, { backgroundColor: colors.accent }]}
+              onPress={() => setShowQR(false)}
+            >
+              <Text style={b.qrModalCloseText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Post-onboarding popup — shown once */}
+      <Modal visible={showPopup} animationType="slide" transparent>
+        <View style={b.popupOverlay}>
+          <View style={[b.popup, { backgroundColor: colors.surface }]}>
+            <Text style={[b.popupTitle, { color: colors.text }]}>Make your card complete</Text>
+            <Text style={[b.popupSub, { color: colors.textSecondary }]}>
+              Add your socials so contacts can find and follow you.
+            </Text>
+            <View style={b.popupFields}>
+              {[
+                { icon: 'logo-linkedin' as const, placeholder: 'LinkedIn URL', value: popupLinkedin, onChange: setPopupLinkedin },
+                { icon: 'logo-instagram' as const, placeholder: 'Instagram handle', value: popupInstagram, onChange: setPopupInstagram },
+                { icon: 'mail-outline' as const, placeholder: 'Email address', value: popupEmail, onChange: setPopupEmail },
+                { icon: 'globe-outline' as const, placeholder: 'Website URL', value: popupWebsite, onChange: setPopupWebsite },
+              ].map(({ icon, placeholder, value, onChange }) => (
+                <View key={placeholder} style={[b.popupField, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Ionicons name={icon} size={16} color={colors.textMuted} />
+                  <TextInput
+                    style={[b.popupInput, { color: colors.text }]}
+                    placeholder={placeholder}
+                    placeholderTextColor={colors.textMuted}
+                    value={value}
+                    onChangeText={onChange}
+                    autoCapitalize="none"
+                    keyboardType={icon === 'mail-outline' ? 'email-address' : 'default'}
+                  />
+                </View>
+              ))}
+            </View>
+            <Pressable
+              style={[b.popupPrimary, { backgroundColor: colors.accent }]}
+              onPress={() => dismissPopup(true)}
+            >
+              <Text style={b.popupPrimaryText}>Add details</Text>
+            </Pressable>
+            <Pressable style={b.popupSkip} onPress={() => dismissPopup(false)}>
+              <Text style={[b.popupSkipText, { color: colors.textMuted }]}>Skip for now</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function betaStyles(colors: any) {
+  return StyleSheet.create({
+    root: { flex: 1 },
+
+    header: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.md,
+    },
+    headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+    iconBtn: { padding: 4 },
+
+    scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
+
+    // QR compact card
+    qrCard: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+      borderRadius: Radius.xl, borderWidth: 1.5,
+      padding: Spacing.md, marginBottom: Spacing.xl,
+    },
+    qrAvatar: {
+      width: 48, height: 48, borderRadius: 24,
+      alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    },
+    qrAvatarText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+    qrInfo: { flex: 1, gap: 2 },
+    qrName: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
+    qrSub: { fontSize: FontSize.xs },
+    qrTap: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, marginTop: 2 },
+    qrThumb: { padding: 6, borderRadius: Radius.md },
+
+    section: { marginBottom: Spacing.xl },
+    sectionHeader: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+    seeAll: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },
+
+    // Contact rows
+    contactRow: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+      borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm,
+    },
+    contactAvatar: {
+      width: 40, height: 40, borderRadius: 20,
+      alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    },
+    contactAvatarText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+    contactInfo: { flex: 1 },
+    contactName: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+    contactSub: { fontSize: FontSize.xs, marginTop: 2 },
+    sourceTag: {
+      paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full,
+    },
+    sourceTagText: { fontSize: 10, fontWeight: FontWeight.bold },
+
+    // Empty state
+    emptyState: {
+      borderRadius: Radius.xl, borderWidth: 1, borderStyle: 'dashed',
+      padding: Spacing.xl, alignItems: 'center', gap: Spacing.md,
+      marginTop: Spacing.sm,
+    },
+    emptyTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, textAlign: 'center' },
+    emptySub: { fontSize: FontSize.sm, textAlign: 'center', lineHeight: 20 },
+    primaryCta: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: Spacing.sm, paddingVertical: 14, paddingHorizontal: Spacing.xl,
+      borderRadius: Radius.md, width: '100%',
+    },
+    primaryCtaText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+    secondaryCta: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: Spacing.sm, paddingVertical: 13, paddingHorizontal: Spacing.xl,
+      borderRadius: Radius.md, borderWidth: 1, width: '100%',
+    },
+    secondaryCtaText: { fontSize: FontSize.md, fontWeight: FontWeight.medium },
+
+    // FAB
+    fab: {
+      position: 'absolute', bottom: 96, right: Spacing.lg,
+      width: 56, height: 56, borderRadius: 28,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: '#00B4B4', shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+    },
+
+    // Full-screen QR modal
+    qrOverlay: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
+      justifyContent: 'flex-end', alignItems: 'center',
+    },
+    qrModal: {
+      borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      padding: Spacing.xl, alignItems: 'center', gap: Spacing.md,
+      paddingBottom: 44, width: '100%',
+    },
+    qrModalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold },
+    qrModalSub: { fontSize: FontSize.sm, textAlign: 'center' },
+    qrModalBox: { padding: Spacing.lg, borderRadius: Radius.lg },
+    qrModalId: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+    qrModalClose: {
+      width: '100%', paddingVertical: 14, borderRadius: Radius.md,
+      alignItems: 'center', marginTop: Spacing.sm,
+    },
+    qrModalCloseText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+
+    // Post-onboarding popup
+    popupOverlay: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'flex-end',
+    },
+    popup: {
+      borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: 44,
+      gap: Spacing.sm,
+    },
+    popupTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold },
+    popupSub: { fontSize: FontSize.sm, lineHeight: 20, marginBottom: 4 },
+    popupFields: { gap: Spacing.sm, marginVertical: Spacing.sm },
+    popupField: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+      borderWidth: 1, borderRadius: Radius.md,
+      paddingHorizontal: Spacing.md, height: 44,
+    },
+    popupInput: { flex: 1, fontSize: FontSize.sm },
+    popupPrimary: {
+      paddingVertical: 15, borderRadius: Radius.md,
+      alignItems: 'center', marginTop: Spacing.sm,
+    },
+    popupPrimaryText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+    popupSkip: { alignItems: 'center', paddingVertical: 12 },
+    popupSkipText: { fontSize: FontSize.sm },
   });
 }

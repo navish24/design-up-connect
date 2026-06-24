@@ -1,37 +1,109 @@
 import { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, Pressable, Image,
-  TextInput, ScrollView, Modal, Platform,
+  ScrollView, Modal, ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { processScan } from '../../lib/supabase';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
-import { ALL_BRANDS } from '../../data/brands';
+import { recognizeCardText, parseCardFields } from '../../lib/cardOcr';
+import { cardScanStore } from '../../lib/cardScanStore';
 import type { ScanResult } from '../../types';
 
-type ScanState = 'idle' | 'scanning' | 'saving_brand' | 'saving_connection' | 'success_brand' | 'success_connection' | 'success_entry' | 'already_saved' | 'error';
+type ScanState =
+  | 'idle'
+  | 'scanning'
+  | 'saving_brand'
+  | 'saving_connection'
+  | 'success_brand'
+  | 'success_connection'
+  | 'success_entry'
+  | 'already_saved'
+  | 'error';
+
+// Only process QRs that belong to this app; silently ignore everything else
+// (website links, social QRs, etc. printed on physical visiting cards).
+const isDesignupQR = (payload: string): boolean =>
+  payload.startsWith('https://nexgild.com/') ||
+  payload.startsWith('designup://') ||
+  // Legacy / dev formats kept for backward compatibility
+  payload.startsWith('booth:') ||
+  payload.startsWith('user:') ||
+  payload.startsWith('entry:');
+
+const HOW_IT_WORKS = [
+  {
+    icon: 'card-outline' as const,
+    label: 'Scan physical visiting cards',
+    description:
+      'Tap "Scan Visiting Card", place the card flat and capture it. Contacts are saved and organised automatically.',
+  },
+  {
+    icon: 'people-outline' as const,
+    label: 'Connect with people',
+    description:
+      "Scan someone's Nexgild personal QR to exchange digital visiting cards instantly — no number sharing needed.",
+  },
+  {
+    icon: 'storefront-outline' as const,
+    label: 'Save a brand (coming soon)',
+    description:
+      "At an exhibition, point at a brand's booth QR to save their catalogue and stay updated on new products.",
+  },
+];
 
 export default function ScanScreen() {
   const { colors } = useTheme();
-  const { activeExhibitionId, activeExhibitionName, user, addDemoSavedBrand, addDemoConnection, setActiveExhibition } = useAuth();
+  const { activeExhibitionId, user, addDemoSavedBrand, addDemoConnection, setActiveExhibition } =
+    useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [brandSearch, setBrandSearch] = useState('');
   const [showMyQR, setShowMyQR] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const isProcessing = useRef(false);
+
+  const handleGalleryImport = async () => {
+    setIsImporting(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.9,
+      });
+      if (result.canceled || !result.assets?.[0]) { setIsImporting(false); return; }
+      const imageUri = result.assets[0].uri;
+      const blocks = await recognizeCardText(imageUri);
+      const fields = parseCardFields(blocks);
+      cardScanStore.set({ imageUri, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+      setIsImporting(false);
+      router.push('/card-review');
+    } catch {
+      setIsImporting(false);
+    }
+  };
 
   const s = makeStyles(colors);
 
+  const resetToIdle = () => {
+    setScanState('idle');
+    setScanResult(null);
+    isProcessing.current = false;
+  };
+
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
+    if (!isDesignupQR(data)) return; // silently discard foreign QRs
     if (isProcessing.current) return;
     isProcessing.current = true;
     setScanState('scanning');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     try {
       const result: ScanResult = await processScan(data, activeExhibitionId);
@@ -44,9 +116,6 @@ export default function ScanScreen() {
           setScanState('saving_brand');
           if (result.brand) {
             const b = result.brand;
-            // Use the exhibition embedded in the QR; null means showroom visit
-            const qrExhibitionName = b.exhibition_name ?? null;
-            const qrExhibitionId = qrExhibitionName ? (activeExhibitionId ?? null) : null;
             addDemoSavedBrand({
               id: `scan-save-${b.id}-${Date.now()}`,
               brand_id: b.id,
@@ -54,8 +123,8 @@ export default function ScanScreen() {
               brand_category: b.category,
               brand_tagline: b.tagline ?? '',
               product_image_url: b.product_images[0] ?? '',
-              exhibition_id: qrExhibitionId,
-              exhibition_name: qrExhibitionName,
+              exhibition_id: activeExhibitionId ?? null,
+              exhibition_name: b.exhibition_name ?? null,
               booth_number: b.booth_number,
               hall_number: b.hall_number,
               saved_at: new Date().toISOString(),
@@ -72,7 +141,7 @@ export default function ScanScreen() {
             full_name: u.full_name,
             designation: u.designation ?? '',
             company: u.company_name ?? '',
-            brand_id: u.brand_id,
+            brand_id: (u as any).brand_id,
             email: (u as any).email ?? '',
             phone: (u as any).phone ?? '',
             city: (u as any).city ?? '',
@@ -95,13 +164,7 @@ export default function ScanScreen() {
     }
   };
 
-  const resetToIdle = () => {
-    setScanState('idle');
-    setScanResult(null);
-    isProcessing.current = false;
-  };
-
-  // ── No permission yet ──────────────────────────────────────────────────────
+  // ── No permission ─────────────────────────────────────────────────────────
   if (!permission) return <View style={[s.root, { backgroundColor: colors.background }]} />;
 
   if (!permission.granted) {
@@ -110,7 +173,7 @@ export default function ScanScreen() {
         <Ionicons name="camera-outline" size={56} color={colors.textSecondary} />
         <Text style={[s.permTitle, { color: colors.text }]}>Camera Access Required</Text>
         <Text style={[s.permBody, { color: colors.textSecondary }]}>
-          Designup Connect needs camera access to scan booth QR codes at exhibitions.
+          Designup Connect needs camera access to scan booth QR codes and visiting cards.
         </Text>
         <Pressable style={[s.btn, { backgroundColor: colors.accent }]} onPress={requestPermission}>
           <Text style={s.btnText}>Allow Camera</Text>
@@ -119,7 +182,7 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Scanning overlay ───────────────────────────────────────────────────────
+  // ── Scanning overlay ──────────────────────────────────────────────────────
   if (scanState === 'scanning') {
     return (
       <View style={[s.root, s.center, { backgroundColor: '#000' }]}>
@@ -133,27 +196,26 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Brand saving spinner ──────────────────────────────────────────────────
+  // ── Saving spinners ───────────────────────────────────────────────────────
   if (scanState === 'saving_brand') {
     return (
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
         <View style={[s.savingIcon, { backgroundColor: colors.accent + '22' }]}>
-          <Ionicons name="sync-outline" size={36} color={colors.accent} />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
         <Text style={[s.successTitle, { color: colors.text }]}>Saving...</Text>
         <Text style={[s.successSub, { color: colors.textMuted }]}>
-          Saving {scanResult?.brand?.name} to your saved
+          Saving {scanResult?.brand?.name} to your saves
         </Text>
       </View>
     );
   }
 
-  // ── Connection saving spinner ──────────────────────────────────────────────
   if (scanState === 'saving_connection') {
     return (
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
         <View style={[s.savingIcon, { backgroundColor: colors.accent + '22' }]}>
-          <Ionicons name="sync-outline" size={36} color={colors.accent} />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
         <Text style={[s.successTitle, { color: colors.text }]}>Saving...</Text>
         <Text style={[s.successSub, { color: colors.textMuted }]}>
@@ -163,20 +225,17 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Brand saved success ────────────────────────────────────────────────────
+  // ── Brand saved ───────────────────────────────────────────────────────────
   if (scanState === 'success_brand' && scanResult?.brand) {
     const { brand } = scanResult;
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
         <ScrollView contentContainerStyle={s.successScroll}>
           <Ionicons name="checkmark-circle" size={64} color={colors.accent} />
-          <Text style={[s.successTitle, { color: colors.text }]}>
-            {brand.name} saved successfully
-          </Text>
+          <Text style={[s.successTitle, { color: colors.text }]}>{brand.name} saved!</Text>
           <Text style={[s.successSub, { color: colors.textSecondary }]}>
             Added to your saves. Open the brand page to add notes.
           </Text>
-
           {brand.product_images.length > 0 && (
             <View style={s.productImgRow}>
               {brand.product_images.slice(0, 2).map((url, i) => (
@@ -184,59 +243,61 @@ export default function ScanScreen() {
               ))}
             </View>
           )}
-
           <View style={[s.boothTag, { backgroundColor: colors.surface }]}>
             <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
             <Text style={[s.boothTagText, { color: colors.textSecondary }]}>
               {brand.hall_number} · Booth {brand.booth_number}
             </Text>
           </View>
-
-          <Pressable style={[s.outlineBtn, { borderColor: colors.gold }]} onPress={() => { resetToIdle(); router.push(`/brand/${scanResult?.brand?.id ?? 'b1'}`); }}>
+          <Pressable
+            style={[s.outlineBtn, { borderColor: colors.gold }]}
+            onPress={() => { resetToIdle(); router.push(`/brand/${scanResult?.brand?.id ?? 'b1'}`); }}
+          >
             <Text style={[s.outlineBtnText, { color: colors.gold }]}>View Brand Details</Text>
           </Pressable>
-
           <Pressable style={[s.btn, { backgroundColor: colors.accent }]} onPress={resetToIdle}>
             <Text style={s.btnText}>Scan Next</Text>
           </Pressable>
-
-          <Text style={[s.revisitNote, { color: colors.textMuted }]}>
-            You can revisit this anytime after the show
-          </Text>
         </ScrollView>
       </View>
     );
   }
 
-  // ── Already saved ──────────────────────────────────────────────────────────
+  // ── Already saved ─────────────────────────────────────────────────────────
   if (scanState === 'already_saved' && scanResult?.brand) {
     return (
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
         <Ionicons name="bookmark" size={48} color={colors.accent} />
         <Text style={[s.successTitle, { color: colors.text }]}>Already saved</Text>
         <Text style={[s.successSub, { color: colors.textSecondary }]}>
-          {scanResult.brand.name} is already in your saved
+          {scanResult.brand.name} is already in your saves
         </Text>
-        <Pressable style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]} onPress={resetToIdle}>
+        <Pressable
+          style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
+          onPress={resetToIdle}
+        >
           <Text style={s.btnText}>Scan Next</Text>
         </Pressable>
       </View>
     );
   }
 
-  // ── Connection created ─────────────────────────────────────────────────────
+  // ── Connection created ────────────────────────────────────────────────────
   if (scanState === 'success_connection' && scanResult?.connection) {
-    const { user } = scanResult.connection;
+    const { user: connUser } = scanResult.connection;
     return (
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
         <Ionicons name="person-add" size={52} color={colors.accent} />
         <Text style={[s.successTitle, { color: colors.text }]}>
-          {user.full_name} saved in your connections
+          {connUser.full_name} saved!
         </Text>
         <Text style={[s.successSub, { color: colors.textSecondary }]}>
-          {user.designation} · {user.company_name}
+          {connUser.designation} · {connUser.company_name}
         </Text>
-        <Pressable style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]} onPress={() => { resetToIdle(); router.push('/(app)/connections'); }}>
+        <Pressable
+          style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
+          onPress={() => { resetToIdle(); router.push('/(app)/connections'); }}
+        >
           <Text style={s.btnText}>View Connections</Text>
         </Pressable>
         <Pressable style={s.textBtn} onPress={resetToIdle}>
@@ -246,7 +307,7 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Exhibition entry activated ─────────────────────────────────────────────
+  // ── Exhibition entry ──────────────────────────────────────────────────────
   if (scanState === 'success_entry' && scanResult?.exhibition) {
     return (
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
@@ -259,29 +320,26 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Error ──────────────────────────────────────────────────────────────────
+  // ── Error ─────────────────────────────────────────────────────────────────
   if (scanState === 'error') {
     return (
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
         <Ionicons name="alert-circle-outline" size={48} color="#FF4444" />
-        <Text style={[s.successTitle, { color: colors.text }]}>Not recognized</Text>
-        <Text style={[s.successSub, { color: colors.textSecondary }]}>
-          This QR code isn't a Designup code
-        </Text>
+        <Text style={[s.successTitle, { color: colors.text }]}>Couldn't connect</Text>
+        <Text style={[s.successSub, { color: colors.textSecondary }]}>Try scanning again</Text>
       </View>
     );
   }
 
-  // ── Main scanner UI ────────────────────────────────────────────────────────
+  // ── Main scanner UI ───────────────────────────────────────────────────────
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={s.header}>
         <Text style={[s.headerTitle, { color: colors.text }]}>Designup Connect</Text>
       </View>
 
-      <ScrollView stickyHeaderIndices={[0]} showsVerticalScrollIndicator={false}>
-        {/* Camera */}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Live viewfinder — always on for QR detection */}
         <View style={s.cameraWrap}>
           <CameraView
             style={s.camera}
@@ -289,100 +347,70 @@ export default function ScanScreen() {
             barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
             onBarcodeScanned={scanState === 'idle' ? handleBarCodeScanned : undefined}
           >
-            {/* Scan frame indicator centered */}
             <View style={s.scanFrameWrap}>
-              <View style={[s.scanFrame, { borderColor: colors.accent }]}>
+              <View style={s.scanFrame}>
                 <View style={[s.corner, s.cornerTL, { borderColor: colors.accent }]} />
                 <View style={[s.corner, s.cornerTR, { borderColor: colors.accent }]} />
                 <View style={[s.corner, s.cornerBL, { borderColor: colors.accent }]} />
                 <View style={[s.corner, s.cornerBR, { borderColor: colors.accent }]} />
               </View>
-              <Text style={s.scanHint}>Scan QR to save brand or connection</Text>
+              <Text style={s.scanHint}>Point at any Nexgild QR code to save</Text>
             </View>
           </CameraView>
         </View>
 
-        {/* Manual brand search */}
-        <View style={s.belowCamera}>
-          <View style={[s.infoBlurb, { backgroundColor: colors.surface }]}>
-            <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
-            <Text style={[s.infoBlurbText, { color: colors.textMuted }]}>
-              Point the camera at a booth QR code to save the brand instantly. Or type a brand name below to search and save manually.
-            </Text>
-          </View>
-          <View style={[s.searchRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="search" size={16} color={colors.textMuted} />
-            <TextInput
-              style={[s.searchInput, { color: colors.text }]}
-              placeholder="Type brand name to save"
-              placeholderTextColor={colors.textMuted}
-              value={brandSearch}
-              onChangeText={setBrandSearch}
-            />
-            {brandSearch.length > 0 && (
-              <Pressable onPress={() => setBrandSearch('')}>
-                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-              </Pressable>
+        <View style={s.below}>
+          {/* Scan Visiting Card — primary CTA */}
+          <Pressable
+            style={[s.scanCardBtn, { backgroundColor: colors.accent }]}
+            onPress={() => router.push('/card-scanner')}
+          >
+            <Ionicons name="card-outline" size={18} color="#FFF" />
+            <Text style={s.scanCardBtnText}>Scan Visiting Card</Text>
+          </Pressable>
+
+          {/* Import from Gallery */}
+          <Pressable
+            style={[s.galleryBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={handleGalleryImport}
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <>
+                <Ionicons name="images-outline" size={18} color={colors.textSecondary} />
+                <Text style={[s.galleryBtnText, { color: colors.textSecondary }]}>Import from Gallery</Text>
+              </>
             )}
-          </View>
-          {/* Brand suggestions — show after 1 char */}
-          {brandSearch.length >= 1 && (() => {
-            const q = brandSearch.toLowerCase();
-            const suggestions = ALL_BRANDS.filter((b) =>
-              b.name.toLowerCase().includes(q) || b.category.toLowerCase().includes(q)
-            );
-            if (suggestions.length === 0) {
-              return (
-                <View style={[s.suggestEmpty, { backgroundColor: colors.surface }]}>
-                  <Text style={[s.suggestEmptyText, { color: colors.textMuted }]}>No brands found matching "{brandSearch}"</Text>
-                </View>
-              );
-            }
-            return (
-              <View style={[s.suggestList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                {suggestions.map((b) => (
-                  <Pressable
-                    key={b.id}
-                    style={[s.suggestItem, { borderBottomColor: colors.border }]}
-                    onPress={() => {
-                      handleBarCodeScanned({ data: `booth:${b.id}:exh-001` });
-                      setBrandSearch('');
-                    }}
-                  >
-                    <View style={[s.suggestInitial, { backgroundColor: colors.accent + '22' }]}>
-                      <Text style={[s.suggestInitialText, { color: colors.accent }]}>{b.logo_initial}</Text>
-                    </View>
-                    <View style={s.suggestInfo}>
-                      <Text style={[s.suggestName, { color: colors.text }]}>{b.name}</Text>
-                      <Text style={[s.suggestMeta, { color: colors.textMuted }]}>{b.category} · Booth {b.booth_number}</Text>
-                    </View>
-                    <View style={[s.suggestSave, { backgroundColor: colors.accent }]}>
-                      <Text style={s.suggestSaveText}>Save</Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            );
-          })()}
+          </Pressable>
+
+          <View style={[s.divider, { backgroundColor: colors.border }]} />
 
           {/* My Visiting QR */}
-          <Pressable style={[s.visitingQrBtn, { backgroundColor: colors.surface }]} onPress={() => setShowMyQR(true)}>
-            <Ionicons name="qr-code-outline" size={20} color={colors.accent} />
-            <Text style={[s.visitingQrText, { color: colors.text }]}>My Visiting QR</Text>
+          <Pressable
+            style={[s.qrRow, { backgroundColor: colors.surface }]}
+            onPress={() => setShowMyQR(true)}
+          >
+            <Ionicons name="qr-code-outline" size={22} color={colors.accent} />
+            <Text style={[s.qrRowText, { color: colors.text }]}>My Visiting QR</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
 
+          <View style={[s.divider, { backgroundColor: colors.border }]} />
+
           {/* How it works */}
-          <View style={[s.howCard, { backgroundColor: colors.surface }]}>
-            <Text style={[s.howTitle, { color: colors.text }]}>How Scanner Works</Text>
-            {[
-              'Point camera at booth QR code to save a brand',
-              "Scan others' personal QR code to exchange digital visiting cards",
-              'Revisit it later when you need it',
-            ].map((step, i) => (
-              <View key={i} style={s.howRow}>
-                <Text style={[s.howNum, { color: colors.accent }]}>{i + 1}</Text>
-                <Text style={[s.howText, { color: colors.textSecondary }]}>{step}</Text>
+          <View style={s.howSection}>
+            <Text style={[s.howHeading, { color: colors.textMuted }]}>HOW IT WORKS</Text>
+            {HOW_IT_WORKS.map((item) => (
+              <View key={item.label} style={s.howItem}>
+                <View style={[s.howIconWrap, { backgroundColor: colors.accent + '18' }]}>
+                  <Ionicons name={item.icon} size={20} color={colors.accent} />
+                </View>
+                <View style={s.howContent}>
+                  <Text style={[s.howLabel, { color: colors.text }]}>{item.label}</Text>
+                  <Text style={[s.howDesc, { color: colors.textMuted }]}>{item.description}</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -408,7 +436,10 @@ export default function ScanScreen() {
             {user?.designup_user_id && user.designup_user_id !== 'demo_user' && (
               <Text style={[s.myQrId, { color: colors.accent }]}>@{user.designup_user_id}</Text>
             )}
-            <Pressable style={[s.myQrClose, { backgroundColor: colors.accent }]} onPress={() => setShowMyQR(false)}>
+            <Pressable
+              style={[s.myQrClose, { backgroundColor: colors.accent }]}
+              onPress={() => setShowMyQR(false)}
+            >
               <Text style={s.myQrCloseText}>Close</Text>
             </Pressable>
           </View>
@@ -429,14 +460,15 @@ function makeStyles(colors: any) {
     },
     headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
 
-    // Camera
-    cameraWrap: { width: '100%', height: 320 },
+    // Viewfinder
+    cameraWrap: { width: '100%', height: 420 },
     camera: { flex: 1 },
     scanFrameWrap: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'rgba(0,0,0,0.3)',
+      gap: Spacing.md,
     },
     scanFrame: {
       width: 200,
@@ -445,8 +477,8 @@ function makeStyles(colors: any) {
     },
     corner: {
       position: 'absolute',
-      width: 20,
-      height: 20,
+      width: 22,
+      height: 22,
       borderWidth: 3,
     },
     cornerTL: { top: 0, left: 0, borderBottomWidth: 0, borderRightWidth: 0 },
@@ -456,8 +488,7 @@ function makeStyles(colors: any) {
     scanHint: {
       color: '#FFF',
       fontSize: FontSize.sm,
-      marginTop: Spacing.lg,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: 'rgba(0,0,0,0.55)',
       paddingHorizontal: Spacing.md,
       paddingVertical: 6,
       borderRadius: Radius.full,
@@ -465,58 +496,77 @@ function makeStyles(colors: any) {
     },
 
     // Below camera
-    belowCamera: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 120 },
-    infoBlurb: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'flex-start', borderRadius: Radius.md, padding: Spacing.sm },
-    infoBlurbText: { flex: 1, fontSize: FontSize.xs, lineHeight: 18 },
-    // Brand suggestions
-    suggestList: { borderWidth: 1, borderRadius: Radius.md, overflow: 'hidden' },
-    suggestEmpty: { borderRadius: Radius.md, padding: Spacing.md },
-    suggestEmptyText: { fontSize: FontSize.sm, textAlign: 'center' },
-    suggestItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
-    suggestInitial: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-    suggestInitialText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold },
-    suggestInfo: { flex: 1 },
-    suggestName: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
-    suggestMeta: { fontSize: FontSize.xs, marginTop: 2 },
-    suggestSave: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.sm },
-    suggestSaveText: { color: '#FFF', fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
-    searchRow: {
+    below: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 120 },
+
+    scanCardBtn: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       gap: Spacing.sm,
-      borderWidth: 1,
+      paddingVertical: 16,
       borderRadius: Radius.md,
-      paddingHorizontal: Spacing.md,
-      height: 48,
     },
-    searchInput: { flex: 1, fontSize: FontSize.md },
-    saveBtn: { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: Radius.sm },
-    saveBtnText: { color: '#FFF', fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
-    visitingQrBtn: {
+    scanCardBtnText: {
+      color: '#FFF',
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.semibold,
+    },
+
+    galleryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       gap: Spacing.sm,
+      paddingVertical: 14,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+    },
+    galleryBtnText: {
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.medium,
+    },
+
+    divider: { height: StyleSheet.hairlineWidth, marginVertical: 4 },
+
+    qrRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
       padding: Spacing.md,
       borderRadius: Radius.md,
     },
-    visitingQrText: { flex: 1, fontSize: FontSize.md, fontWeight: FontWeight.medium },
-    howCard: { borderRadius: Radius.md, padding: Spacing.md },
-    howTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, marginBottom: Spacing.md },
-    howRow: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.sm, alignItems: 'flex-start' },
-    howNum: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, width: 16 },
-    howText: { fontSize: FontSize.sm, flex: 1, lineHeight: 20 },
+    qrRowText: { flex: 1, fontSize: FontSize.md, fontWeight: FontWeight.medium },
 
-    // Saving spinner
+    // How it works
+    howSection: { gap: Spacing.md },
+    howHeading: {
+      fontSize: 11,
+      fontWeight: FontWeight.semibold,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      marginBottom: 4,
+    },
+    howItem: { flexDirection: 'row', gap: Spacing.md, alignItems: 'flex-start' },
+    howIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    howContent: { flex: 1, gap: 2 },
+    howLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+    howDesc: { fontSize: FontSize.xs, lineHeight: 18 },
+
+    // Saving / scanning states
     savingIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm },
-
-    // Scanning overlay
     scanningOverlay: { alignItems: 'center', gap: Spacing.lg },
     scanningIcon: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
     scanningText: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold },
 
-    // Success screens
+    // Success / result screens
     successScroll: { alignItems: 'center', padding: Spacing.xl, paddingBottom: 120, gap: Spacing.md },
-    successCheck: {},
     successTitle: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, textAlign: 'center' },
     successSub: { fontSize: FontSize.md, textAlign: 'center' },
     productImgRow: { flexDirection: 'row', gap: Spacing.sm, width: '100%' },
@@ -534,18 +584,11 @@ function makeStyles(colors: any) {
     outlineBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
     btn: { width: '100%', paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
     btnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
-    revisitNote: { fontSize: FontSize.sm, textAlign: 'center' },
 
     textBtn: { marginTop: Spacing.sm, alignItems: 'center', paddingVertical: Spacing.sm },
     textBtnText: { fontSize: FontSize.sm },
 
-    notesNudge: {
-      width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
-      borderWidth: 1, borderRadius: Radius.md, padding: Spacing.md,
-    },
-    notesNudgeText: { flex: 1, fontSize: FontSize.sm, lineHeight: 18 },
-
-    // Permission screen
+    // Permission
     permTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center', marginTop: Spacing.lg },
     permBody: { fontSize: FontSize.md, textAlign: 'center', lineHeight: 22, marginVertical: Spacing.lg },
 
@@ -557,7 +600,7 @@ function makeStyles(colors: any) {
     myQrModal: {
       borderTopLeftRadius: 24, borderTopRightRadius: 24,
       padding: Spacing.xl, alignItems: 'center', gap: Spacing.md,
-      paddingBottom: 40, width: '100%', maxWidth: 390,
+      paddingBottom: 40, width: '100%',
     },
     myQrTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold },
     myQrSub: { fontSize: FontSize.sm, textAlign: 'center' },
