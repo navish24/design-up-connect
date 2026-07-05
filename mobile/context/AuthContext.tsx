@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import type { User, CardContact } from '../types';
+import { Analytics } from '../lib/analytics';
+import type { User, CardContact, ConnectionType, ConnectionScope } from '../types';
 
 const SAVED_BRANDS_KEY = 'saved_brands_v1';
 const CARD_CONTACTS_KEY = 'card_contacts_v1';
+const CONNECTIONS_KEY = 'connections_v1';
 
 export interface Note {
   id: string;
@@ -51,7 +53,7 @@ interface AuthContextType {
   notes: Record<string, Note[]>;
   addNote: (entityId: string, text: string) => void;
   // Profile setup
-  completeProfile: (input: ProfileInput) => void;
+  completeProfile: (input: ProfileInput) => Promise<void>;
   setProfileComplete: () => void;
   showProfileNudge: boolean;
   dismissProfileNudge: () => void;
@@ -59,9 +61,10 @@ interface AuthContextType {
   updateUser: (fields: Partial<User>) => void;
   // Card contacts (physical visiting card scans)
   cardContacts: CardContact[];
-  addCardContact: (contact: CardContact) => void;
-  updateCardContact: (contact: CardContact) => void;
-  deleteCardContact: (id: string) => void;
+  addCardContact: (contact: CardContact) => Promise<void>;
+  updateCardContact: (contact: CardContact) => Promise<void>;
+  deleteCardContact: (id: string) => Promise<void>;
+  clearCardContacts: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -90,36 +93,23 @@ const AuthContext = createContext<AuthContextType>({
   toggleWishlistItem: () => {},
   notes: {},
   addNote: () => {},
-  completeProfile: () => {},
+  completeProfile: async () => {},
   setProfileComplete: () => {},
   showProfileNudge: false,
   dismissProfileNudge: () => {},
   updateUser: () => {},
   cardContacts: [],
-  addCardContact: () => {},
-  updateCardContact: () => {},
-  deleteCardContact: () => {},
+  addCardContact: async () => {},
+  updateCardContact: async () => {},
+  deleteCardContact: async () => {},
+  clearCardContacts: () => {},
 });
-
-const MOCK_USER: User = {
-  id: 'user-001',
-  designup_user_id: 'demo_user',
-  first_name: 'Demo',
-  last_name: 'User',
-  phone: '+919876543210',
-  email: 'demo@designup.in',
-  profession: 'Interior Designer',
-  company_name: 'Studio Demo',
-  designation: 'Principal Designer',
-  city: 'Mumbai',
-  country: 'India',
-  profile_complete: false,
-};
 
 const DEMO_EXHIBITION = { id: 'exh-001', name: 'Index Mumbai 2025' };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(MOCK_USER);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeExhibitionId, setActiveExhibitionId] = useState<string | null>(null);
   const [activeExhibitionName, setActiveExhibitionName] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -128,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [demoSavedBrands, setDemoSavedBrands] = useState<any[]>([]);
   const [savedBrandsLoaded, setSavedBrandsLoaded] = useState(false);
   const [demoAddedConnections, setDemoAddedConnections] = useState<any[]>([]);
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
   const [demoRegisteredExhibitions, setDemoRegisteredExhibitions] = useState<string[]>([]);
   const [demoWishlist, setDemoWishlist] = useState<any[]>([]);
   const [notes, setNotes] = useState<Record<string, Note[]>>({});
@@ -151,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(SAVED_BRANDS_KEY, JSON.stringify(demoSavedBrands));
   }, [demoSavedBrands, savedBrandsLoaded]);
 
-  // Load persisted card contacts on mount
+  // Load card contacts from AsyncStorage on mount (fallback / offline cache)
   useEffect(() => {
     AsyncStorage.getItem(CARD_CONTACTS_KEY).then((raw) => {
       if (raw) {
@@ -161,11 +152,231 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Persist card contacts whenever they change (after initial load)
+  // Keep AsyncStorage in sync as local cache
   useEffect(() => {
     if (!cardContactsLoaded) return;
     AsyncStorage.setItem(CARD_CONTACTS_KEY, JSON.stringify(cardContacts));
   }, [cardContacts, cardContactsLoaded]);
+
+  // Sync local-only contacts → Supabase once both AsyncStorage and auth are ready.
+  // This recovers cards scanned before RLS was set up, and cards scanned in a
+  // different browser/storage context (e.g. Safari vs PWA).
+  const didSyncUp = useRef(false);
+  useEffect(() => {
+    if (!cardContactsLoaded || !user?.id || didSyncUp.current) return;
+    didSyncUp.current = true;
+    if (cardContacts.length === 0) return;
+    const uid = user.id;
+    void supabase
+      .from('card_contacts')
+      .select('id')
+      .eq('user_id', uid)
+      .then(({ data: rows }) => {
+        const remoteIds = new Set((rows ?? []).map((r: any) => r.id));
+        const missing = cardContacts.filter((c) => !remoteIds.has(c.id));
+        if (missing.length === 0) return;
+        console.log('[didSyncUp] syncing', missing.length, 'local-only cards to Supabase');
+        supabase.from('card_contacts').upsert(
+          missing.map((c) => ({
+            id: c.id,
+            user_id: uid,
+            scanned_at: c.scanned_at,
+            fields: c.fields,
+            notes: c.notes,
+            tags: c.tags,
+            connect_user_id: c.connect_user_id ?? null,
+          })),
+          { onConflict: 'id' },
+        ).then(({ error: syncErr }) => {
+          if (syncErr) console.error('[didSyncUp] upsert failed:', syncErr.message);
+          else console.log('[didSyncUp] sync complete');
+        });
+      });
+  }, [cardContactsLoaded, user?.id]);
+
+  // Load persisted connections on mount
+  useEffect(() => {
+    AsyncStorage.getItem(CONNECTIONS_KEY).then((raw) => {
+      if (raw) {
+        try { setDemoAddedConnections(JSON.parse(raw)); } catch (_) {}
+      }
+      setConnectionsLoaded(true);
+    });
+  }, []);
+
+  // Persist connections whenever they change (after initial load)
+  useEffect(() => {
+    if (!connectionsLoaded) return;
+    AsyncStorage.setItem(CONNECTIONS_KEY, JSON.stringify(demoAddedConnections));
+  }, [demoAddedConnections, connectionsLoaded]);
+
+  // ── Real Supabase auth ───────────────────────────────────────────────────────
+
+  const loadCardContacts = useCallback(async (userId: string) => {
+    const { data: rows, error: ccError } = await supabase
+      .from('card_contacts')
+      .select('id, scanned_at, fields, notes, tags, connect_user_id')
+      .eq('user_id', userId)
+      .order('scanned_at', { ascending: false });
+    if (ccError) console.error('[loadCardContacts] query failed:', ccError.message);
+
+    const remoteIds = new Set((rows ?? []).map((r: any) => r.id));
+
+    setCardContacts((prev) => {
+      // Contacts that exist locally but not in Supabase (saved before RLS was set up,
+      // or while offline). Upload them now so they survive context switches (e.g. PWA).
+      const localOnly = prev.filter((c) => !remoteIds.has(c.id));
+      if (localOnly.length > 0) {
+        void supabase.from('card_contacts').upsert(
+          localOnly.map((c) => ({
+            id: c.id,
+            user_id: userId,
+            scanned_at: c.scanned_at,
+            fields: c.fields,
+            notes: c.notes,
+            tags: c.tags,
+            connect_user_id: c.connect_user_id ?? null,
+          })),
+          { onConflict: 'id' },
+        );
+      }
+
+      if (!rows || rows.length === 0) return prev; // Supabase empty — keep local
+
+      // Merge remote rows with local image URIs (images are device-only)
+      const localById: Record<string, CardContact> = {};
+      for (const c of prev) localById[c.id] = c;
+
+      const remote = rows.map((r: any) => ({
+        id: r.id,
+        source: 'card_scan' as const,
+        scanned_at: r.scanned_at,
+        card_image_uri: localById[r.id]?.card_image_uri ?? null,
+        card_image_uri_back: localById[r.id]?.card_image_uri_back ?? null,
+        fields: r.fields ?? [],
+        notes: r.notes ?? '',
+        tags: r.tags ?? [],
+        connect_user_id: r.connect_user_id ?? null,
+      }));
+
+      // Combine: remote + any local-only contacts, newest first
+      return [...localOnly, ...remote].sort(
+        (a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime(),
+      );
+    });
+  }, []);
+
+  const loadConnections = useCallback(async (userId: string) => {
+    const { data: rows } = await supabase
+      .from('connections')
+      .select('connected_user_id, is_mutual, connected_at')
+      .eq('user_id', userId);
+
+    if (!rows || rows.length === 0) return;
+
+    const ids = rows.map((r: any) => r.connected_user_id);
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id')
+      .in('id', ids);
+
+    const profileMap: Record<string, any> = {};
+    for (const p of (profiles ?? [])) profileMap[p.id] = p;
+
+    const connections = rows.map((c: any) => {
+      const p = profileMap[c.connected_user_id] ?? {};
+      return {
+        id: `demo-${c.connected_user_id}`,
+        user: {
+          id: c.connected_user_id,
+          full_name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(),
+          designup_user_id: p.designup_user_id ?? '',
+          designation: p.designation ?? undefined,
+          company_name: p.company_name ?? undefined,
+          city: p.city ?? undefined,
+          phone: p.phone ?? undefined,
+          email: p.email ?? undefined,
+        },
+        connection_type: 'networking' as ConnectionType,
+        scope: 'personal' as ConnectionScope,
+        is_mutual: c.is_mutual ?? false,
+        to_contact_shared: true,
+        from_contact_shared: true,
+        created_at: c.connected_at ?? new Date().toISOString(),
+      };
+    });
+
+    setDemoAddedConnections(connections);
+  }, []);
+
+  const loadProfile = useCallback(async (userId: string) => {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, email, phone, designation, company_name, city, country, designup_user_id, instagram_handle, website_url, linkedin_url, address')
+      .eq('id', userId)
+      .single();
+
+    if (profile) {
+      if (profile.email) {
+        AsyncStorage.setItem('connect_last_email', profile.email).catch(() => {});
+      }
+      setUser({
+        id: profile.id,
+        designup_user_id: profile.designup_user_id ?? '',
+        first_name: profile.first_name ?? '',
+        last_name: profile.last_name ?? '',
+        email: profile.email ?? '',
+        phone: profile.phone ?? '',
+        profession: profile.designation ?? '',
+        company_name: profile.company_name ?? '',
+        designation: profile.designation ?? '',
+        city: profile.city ?? '',
+        country: profile.country ?? 'India',
+        instagram_handle: profile.instagram_handle ?? '',
+        website_url: profile.website_url ?? '',
+        linkedin_url: profile.linkedin_url ?? '',
+        address: profile.address ?? '',
+        profile_complete: !!(profile.first_name && profile.designation),
+      });
+      Analytics.identify(profile.id, {
+        name: `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim(),
+        email: profile.email ?? '',
+        phone: profile.phone ?? '',
+        profession: profile.designation ?? '',
+        company: profile.company_name ?? '',
+      });
+      void loadConnections(userId);
+      void loadCardContacts(userId);
+    }
+
+    setIsLoading(false);
+  }, [loadConnections, loadCardContacts]);
+
+  useEffect(() => {
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user) {
+          void loadProfile(session.user.id);
+        } else {
+          setIsLoading(false);
+        }
+      })
+      .catch(() => setIsLoading(false));
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setDemoAddedConnections([]);
+        setIsLoading(false);
+      } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        void loadProfile(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadProfile]);
+
+  // ────────────────────────────────────────────────────────────────────────────
 
   const setActiveExhibition = (id: string, name: string) => {
     setActiveExhibitionId(id);
@@ -180,9 +391,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
-    } catch (_) {
-      // No active session in demo mode — ignore
-    }
+    } catch (_) {}
+    setUser(null);
+    // Do NOT clear demoAddedConnections here — clearing state triggers the
+    // persistence effect which would overwrite AsyncStorage with [].
+    // Local device connections survive logout by design.
     const { router } = await import('expo-router');
     router.replace('/(auth)/welcome');
   };
@@ -206,6 +419,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetDemoConnections = () => {
     setDemoConnectionsReset(true);
     setDemoAddedConnections([]);
+    AsyncStorage.removeItem(CONNECTIONS_KEY);
   };
 
   const addDemoSavedBrand = (brand: any) => {
@@ -232,26 +446,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const addNote = (entityId: string, text: string) => {
     const note: Note = { id: Date.now().toString(), text, created_at: new Date().toISOString() };
+    Analytics.noteAdded();
     setNotes((prev) => ({ ...prev, [entityId]: [note, ...(prev[entityId] ?? [])] }));
   };
 
   const updateUser = (fields: Partial<User>) => {
     setUser((prev) => prev ? { ...prev, ...fields } : prev);
+    // Persist to Supabase so changes survive refresh
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      if (!authUser) return;
+      const dbFields: Record<string, any> = { id: authUser.id };
+      if (fields.first_name !== undefined) dbFields.first_name = fields.first_name;
+      if (fields.last_name !== undefined) dbFields.last_name = fields.last_name;
+      if (fields.designation !== undefined) dbFields.designation = fields.designation;
+      if (fields.profession !== undefined) dbFields.designation = fields.profession;
+      if (fields.company_name !== undefined) dbFields.company_name = fields.company_name;
+      if (fields.city !== undefined) dbFields.city = fields.city;
+      if (fields.country !== undefined) dbFields.country = fields.country;
+      if (fields.phone !== undefined) dbFields.phone = fields.phone;
+      if (fields.email !== undefined) dbFields.email = fields.email;
+      if (fields.instagram_handle !== undefined) dbFields.instagram_handle = fields.instagram_handle;
+      if (fields.website_url !== undefined) dbFields.website_url = fields.website_url;
+      if (fields.linkedin_url !== undefined) dbFields.linkedin_url = fields.linkedin_url;
+      if (fields.address !== undefined) dbFields.address = fields.address;
+      if (Object.keys(dbFields).length > 1) {
+        supabase.from('profiles').upsert(dbFields, { onConflict: 'id' }).then(({ error }) => {
+          if (error) console.error('[updateUser] upsert failed:', error.message, dbFields);
+        });
+      }
+    });
   };
 
-  const completeProfile = (input: ProfileInput) => {
+  const completeProfile = async (input: ProfileInput): Promise<void> => {
     const [first, ...rest] = input.full_name.trim().split(' ');
-    setUser((prev) => prev ? {
-      ...prev,
+    const lastName = rest.join(' ');
+    setUser((prev) => ({
+      id: prev?.id ?? 'pending',
+      designup_user_id: prev?.designup_user_id ?? '',
       first_name: first,
-      last_name: rest.join(' '),
-      profession: input.profession,
-      company_name: input.company_name,
-      email: input.email,
+      last_name: lastName,
       phone: input.phone,
+      email: input.email,
+      profession: input.profession,
+      designation: input.profession,
+      company_name: input.company_name,
+      city: prev?.city ?? '',
+      country: prev?.country ?? 'India',
       profile_complete: true,
-    } : prev);
+    }));
     setShowProfileNudge(true);
+
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      await supabase.from('profiles').upsert({
+        id: authUser.id,
+        first_name: first,
+        last_name: lastName || null,
+        designation: input.profession,
+        company_name: input.company_name || null,
+        email: input.email,
+        phone: input.phone,
+      }, { onConflict: 'id' });
+    }
   };
 
   const setProfileComplete = () => {
@@ -262,16 +518,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setShowProfileNudge(false);
   };
 
-  const addCardContact = (contact: CardContact) => {
+  const addCardContact = async (contact: CardContact) => {
     setCardContacts((prev) => [contact, ...prev]);
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      const { error: insertErr } = await supabase.from('card_contacts').upsert({
+        id: contact.id,
+        user_id: authUser.id,
+        scanned_at: contact.scanned_at,
+        fields: contact.fields,
+        notes: contact.notes,
+        tags: contact.tags,
+        connect_user_id: contact.connect_user_id ?? null,
+      }, { onConflict: 'id' });
+      if (insertErr) console.error('[addCardContact] upsert failed:', insertErr.message);
+    } else {
+      console.warn('[addCardContact] no auth session — card saved locally only');
+    }
   };
 
-  const updateCardContact = (contact: CardContact) => {
+  const updateCardContact = async (contact: CardContact) => {
     setCardContacts((prev) => prev.map((c) => (c.id === contact.id ? contact : c)));
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      await supabase.from('card_contacts').update({
+        fields: contact.fields,
+        notes: contact.notes,
+        tags: contact.tags,
+      }).eq('id', contact.id).eq('user_id', authUser.id);
+    }
   };
 
-  const deleteCardContact = (id: string) => {
+  const deleteCardContact = async (id: string) => {
     setCardContacts((prev) => prev.filter((c) => c.id !== id));
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      await supabase.from('card_contacts').delete().eq('id', id).eq('user_id', authUser.id);
+    }
+  };
+
+  const clearCardContacts = () => {
+    setCardContacts([]);
   };
 
   const demoWishlistedIds = demoWishlist.map((w: any) => w.id);
@@ -286,7 +573,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user,
-      isLoading: false,
+      isLoading,
       activeExhibitionId,
       activeExhibitionName,
       setActiveExhibition,
@@ -319,6 +606,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       addCardContact,
       updateCardContact,
       deleteCardContact,
+      clearCardContacts,
     }}>
       {children}
     </AuthContext.Provider>
