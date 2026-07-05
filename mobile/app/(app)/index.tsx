@@ -17,6 +17,7 @@ import { isBeta } from '../../lib/betaConfig';
 import { Analytics } from '../../lib/analytics';
 import { recognizeCardText, recognizeCardTextWeb, parseCardFields } from '../../lib/cardOcr';
 import { cardScanStore } from '../../lib/cardScanStore';
+import { getCardDisplayName } from './connections';
 
 function getBrandCoverImage(brandId: string): string | null {
   const brand = ALL_BRANDS.find((b) => b.id === brandId);
@@ -866,7 +867,7 @@ function BetaHomeScreen() {
   const recentContacts = useMemo(() => {
     const cards = cardContacts.map((c) => ({
       id: c.id,
-      name: c.fields.find((f) => f.label === 'Name')?.value || c.fields.find((f) => f.label === 'Company')?.value || 'Unknown',
+      name: getCardDisplayName(c.fields),
       sub: [
         c.fields.find((f) => f.label === 'Designation')?.value,
         c.fields.find((f) => f.label === 'Company')?.value,

@@ -17,6 +17,22 @@ import NotesModal from '../../components/NotesModal';
 import { Analytics } from '../../lib/analytics';
 import type { Connection, CardContact } from '../../types';
 
+export function getCardDisplayName(fields: { label: string; value: string }[]): string {
+  const get = (label: string) => fields.find((f) => f.label === label)?.value ?? '';
+  if (get('Name')) return get('Name');
+  if (get('Company')) return get('Company');
+  // Instagram: @ZIBA.HOMES → Ziba Homes
+  const ig = get('Instagram').replace(/^@/, '');
+  if (ig) return ig.replace(/\./g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  // Website: www.zibahomes.in → Zibahomes
+  const web = get('Website').replace(/^www\./, '').split('.')[0];
+  if (web) return web.charAt(0).toUpperCase() + web.slice(1).toLowerCase();
+  // Email domain: connect@zibahomes.com → Zibahomes
+  const domain = get('Email').split('@')[1]?.split('.')[0] ?? '';
+  if (domain) return domain.charAt(0).toUpperCase() + domain.slice(1).toLowerCase();
+  return 'Unknown';
+}
+
 function openExternal(url: string) {
   if (Platform.OS === 'web') {
     (globalThis as any).window?.open(url, '_blank', 'noopener,noreferrer');
@@ -350,7 +366,7 @@ function CardContactCard({ contact, colors, onPress, search }: {
   const nameField = contact.fields.find((f) => f.label === 'Name');
   const companyField = contact.fields.find((f) => f.label === 'Company');
   const desigField = contact.fields.find((f) => f.label === 'Designation');
-  const displayName = nameField?.value || companyField?.value || 'Unknown';
+  const displayName = getCardDisplayName(contact.fields);
   const date = new Date(contact.scanned_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   const initials = nameField
     ? nameField.value.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
@@ -435,7 +451,7 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
 
   const company = contact.fields.find((f) => f.label === 'Company')?.value;
-  const name = contact.fields.find((f) => f.label === 'Name')?.value || company || 'Unknown';
+  const name = getCardDisplayName(contact.fields);
   const designation = contact.fields.find((f) => f.label === 'Designation')?.value;
 
   const contactFields = contact.fields.filter((f) => CONTACT_LABELS_SET.has(f.label));
