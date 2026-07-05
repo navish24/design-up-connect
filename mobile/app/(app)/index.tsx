@@ -1,4 +1,5 @@
-import { ScrollView, View, Text, StyleSheet, Pressable, Image, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Pressable, Image, Modal, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect, useMemo } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +14,8 @@ import { ALL_EXHIBITIONS } from '../../data/exhibitions';
 import { ALL_BRANDS } from '../../data/brands';
 import { getCachedCover, subscribeToCache } from '../../lib/unsplash';
 import { isBeta } from '../../lib/betaConfig';
-import { recognizeCardText, parseCardFields } from '../../lib/cardOcr';
+import { Analytics } from '../../lib/analytics';
+import { recognizeCardText, recognizeCardTextWeb, parseCardFields } from '../../lib/cardOcr';
 import { cardScanStore } from '../../lib/cardScanStore';
 
 function getBrandCoverImage(brandId: string): string | null {
@@ -653,7 +655,7 @@ function makeStyles(colors: any) {
     nudgeClose: { padding: 2 },
     header: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.md,
+      paddingHorizontal: Spacing.lg, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.md,
     },
     headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
     headerRight: { flexDirection: 'row', gap: Spacing.md },
@@ -828,9 +830,10 @@ const POPUP_SHOWN_KEY = 'onboarding_popup_shown';
 
 function BetaHomeScreen() {
   const { colors } = useTheme();
-  const { user, cardContacts, demoAddedConnections, updateUser } = useAuth();
+  const { top: topInset } = useSafeAreaInsets();
+  const { user, cardContacts, demoAddedConnections, updateUser, signOut, clearCardContacts, resetDemoConnections } = useAuth();
 
-  const [showQR, setShowQR] = useState(false);
+  const [qrExpanded, setQrExpanded] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [importing, setImporting] = useState(false);
 
@@ -871,19 +874,75 @@ function BetaHomeScreen() {
       source: 'card' as const,
       ts: new Date(c.scanned_at).getTime(),
     }));
-    const qrs = (demoAddedConnections as any[]).map((c) => ({
-      id: c.id as string,
-      name: c.full_name as string,
-      sub: [c.designation, c.company].filter(Boolean).join(' · '),
-      source: 'qr' as const,
-      ts: Date.now(),
-    }));
+    const qrs = (demoAddedConnections as any[]).map((c) => {
+      const isConnection = c.user && typeof c.user === 'object';
+      return {
+        id: String(c.id),
+        name: (isConnection ? c.user.full_name : c.full_name) as string,
+        sub: [
+          isConnection ? c.user.designation : c.designation,
+          isConnection ? c.user.company_name : (c.company_name ?? c.company),
+        ].filter(Boolean).join(' · '),
+        source: 'qr' as const,
+        ts: Date.now(),
+      };
+    });
     return [...cards, ...qrs].sort((a, b) => b.ts - a.ts).slice(0, 5);
   }, [cardContacts, demoAddedConnections]);
 
   const hasContacts = recentContacts.length > 0;
 
   const handleGalleryImport = async () => {
+    if (Platform.OS === 'web') {
+      const g = globalThis as any;
+      if (!g.document) return;
+      const input = g.document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*';
+      input.style.cssText = 'position:fixed;opacity:0;pointer-events:none;';
+      g.document.body.appendChild(input);
+      input.addEventListener('change', async (ev: any) => {
+        const file = ev.target?.files?.[0];
+        try { g.document.body.removeChild(input); } catch (_) {}
+        if (!file) return;
+        setImporting(true);
+        try {
+          // URL.createObjectURL lets iOS Safari decode HEIC gallery photos natively
+          const base64: string = await new Promise((res, rej) => {
+            const objectUrl = g.URL.createObjectURL(file);
+            const img = new g.Image();
+            img.onload = () => {
+              g.URL.revokeObjectURL(objectUrl);
+              const scale = Math.min(1, 1200 / Math.max(img.width, img.height, 1));
+              const canvas = g.document.createElement('canvas');
+              canvas.width = Math.round(img.width * scale);
+              canvas.height = Math.round(img.height * scale);
+              const ctx = canvas.getContext('2d');
+              if (!ctx) { rej(new Error('no canvas')); return; }
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob((blob: any) => {
+                if (!blob) { rej(new Error('toBlob')); return; }
+                const r = new g.FileReader();
+                r.onload = (e: any) => { const b = (e.target?.result as string ?? '').split(',')[1]; b ? res(b) : rej(new Error('read')); };
+                r.onerror = rej;
+                r.readAsDataURL(blob);
+              }, 'image/jpeg', 0.85);
+            };
+            img.onerror = () => { g.URL.revokeObjectURL(objectUrl); rej(new Error('img load')); };
+            img.src = objectUrl;
+          });
+          const imageDataUrl = `data:image/jpeg;base64,${base64}`;
+          let blocks: any[] = [];
+          try { blocks = await recognizeCardTextWeb(base64); } catch (_) {}
+          const fields = parseCardFields(blocks);
+          cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+          setImporting(false);
+          router.push('/card-review');
+        } catch { setImporting(false); }
+      });
+      input.click();
+      return;
+    }
+    // Native: ImagePicker + ML Kit
     setImporting(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -912,40 +971,27 @@ function BetaHomeScreen() {
   return (
     <View style={[b.root, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={b.header}>
-        <Text style={[b.headerTitle, { color: colors.text }]}>Nexgild Connect</Text>
-        <Pressable style={b.iconBtn} onPress={() => router.push('/notifications')}>
-          <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
-        </Pressable>
+      <View style={[b.header, { paddingTop: topInset + 12 }]}>
+        <Text style={[b.headerTitle, { color: colors.text }]}>Home</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={b.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[b.scroll, { flexGrow: 1 }]}>
 
-        {/* QR compact card */}
+        {/* QR card — profile-style centered layout */}
+        <View style={b.qrSectionLabel}>
+          <Text style={[b.qrSectionLabelText, { color: colors.textSecondary }]}>YOUR QR CODE</Text>
+        </View>
         <Pressable
-          style={[b.qrCard, { backgroundColor: colors.surface, borderColor: colors.accent + '55' }]}
-          onPress={() => setShowQR(true)}
+          style={[b.qrCard, { backgroundColor: colors.surface }]}
+          onPress={() => { Analytics.qrExpanded(); setQrExpanded(true); }}
         >
-          <View style={[b.qrAvatar, { backgroundColor: colors.accent + '22' }]}>
-            <Text style={[b.qrAvatarText, { color: colors.accent }]}>{initials}</Text>
-          </View>
-          <View style={b.qrInfo}>
-            <Text style={[b.qrName, { color: colors.text }]}>
-              {user?.first_name} {user?.last_name}
-            </Text>
-            <Text style={[b.qrSub, { color: colors.textSecondary }]} numberOfLines={1}>
-              {[user?.designation ?? user?.profession, user?.company_name].filter(Boolean).join(' · ')}
-            </Text>
-            <Text style={[b.qrTap, { color: colors.accent }]}>Tap to show QR</Text>
-          </View>
-          <View style={[b.qrThumb, { backgroundColor: colors.background }]}>
-            <QRCode
-              value={`user:${user?.id ?? 'user-001'}`}
-              size={58}
-              backgroundColor={colors.background}
-              color={colors.text}
-            />
-          </View>
+          <QRCode
+            value={`https://connect-designup.vercel.app/u/${user?.id ?? ''}`}
+            size={120}
+            backgroundColor={colors.surface}
+            color={colors.text}
+          />
+          <Text style={[b.qrHint, { color: colors.textMuted }]}>Tap to expand</Text>
         </Pressable>
 
         {/* Contacts */}
@@ -989,78 +1035,26 @@ function BetaHomeScreen() {
             })}
           </View>
         ) : (
-          <View style={[b.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="people-outline" size={40} color={colors.textMuted} />
-            <Text style={[b.emptyTitle, { color: colors.text }]}>Your connections will appear here</Text>
+          <View style={b.emptyState}>
+            <View style={[b.emptyIconWrap, { backgroundColor: colors.accent + '18' }]}>
+              <Ionicons name="people-outline" size={32} color={colors.accent} />
+            </View>
+            <Text style={[b.emptyTitle, { color: colors.text }]}>No contacts yet</Text>
             <Text style={[b.emptySub, { color: colors.textMuted }]}>
-              Start by scanning a visiting card or importing one from your gallery.
+              Scan a visiting card or someone's Connect QR to add your first contact
             </Text>
             <Pressable
               style={[b.primaryCta, { backgroundColor: colors.accent }]}
-              onPress={() => router.push('/card-scanner')}
+              onPress={() => router.push('/(app)/scan')}
             >
               <Ionicons name="camera-outline" size={18} color="#FFF" />
-              <Text style={b.primaryCtaText}>Scan a card now</Text>
-            </Pressable>
-            <Pressable
-              style={[b.secondaryCta, { borderColor: colors.border }]}
-              onPress={handleGalleryImport}
-              disabled={importing}
-            >
-              {importing ? (
-                <ActivityIndicator size="small" color={colors.accent} />
-              ) : (
-                <>
-                  <Ionicons name="images-outline" size={18} color={colors.textSecondary} />
-                  <Text style={[b.secondaryCtaText, { color: colors.textSecondary }]}>Import from gallery</Text>
-                </>
-              )}
+              <Text style={b.primaryCtaText}>Scan a card</Text>
             </Pressable>
           </View>
         )}
 
       </ScrollView>
 
-      {/* FAB: tap = scan card, long-press = gallery */}
-      {hasContacts && (
-        <Pressable
-          style={[b.fab, { backgroundColor: colors.accent }]}
-          onPress={() => router.push('/card-scanner')}
-          onLongPress={handleGalleryImport}
-          delayLongPress={400}
-        >
-          <Ionicons name="camera-outline" size={26} color="#FFF" />
-        </Pressable>
-      )}
-
-      {/* Full-screen QR modal */}
-      <Modal visible={showQR} animationType="slide" transparent>
-        <View style={b.qrOverlay}>
-          <View style={[b.qrModal, { backgroundColor: colors.surface }]}>
-            <Text style={[b.qrModalTitle, { color: colors.text }]}>My QR Code</Text>
-            <Text style={[b.qrModalSub, { color: colors.textSecondary }]}>
-              Ask others to scan this to connect instantly
-            </Text>
-            <View style={[b.qrModalBox, { backgroundColor: colors.background }]}>
-              <QRCode
-                value={`user:${user?.id ?? 'user-001'}`}
-                size={220}
-                backgroundColor={colors.background}
-                color={colors.text}
-              />
-            </View>
-            {user?.designup_user_id && user.designup_user_id !== 'demo_user' && (
-              <Text style={[b.qrModalId, { color: colors.accent }]}>@{user.designup_user_id}</Text>
-            )}
-            <Pressable
-              style={[b.qrModalClose, { backgroundColor: colors.accent }]}
-              onPress={() => setShowQR(false)}
-            >
-              <Text style={b.qrModalCloseText}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       {/* Post-onboarding popup — shown once */}
       <Modal visible={showPopup} animationType="slide" transparent>
@@ -1103,6 +1097,31 @@ function BetaHomeScreen() {
           </View>
         </View>
       </Modal>
+
+
+      {/* Fullscreen QR modal — matches My Card page UI */}
+      <Modal visible={qrExpanded} transparent animationType="fade" onRequestClose={() => setQrExpanded(false)}>
+        <Pressable style={b.qrOverlay} onPress={() => setQrExpanded(false)}>
+          <Text style={b.qrModalHint}>Let others save your details by scanning</Text>
+          <View style={[b.qrModal, { backgroundColor: colors.surface }]} onStartShouldSetResponder={() => true}>
+            <QRCode
+              value={`https://connect-designup.vercel.app/u/${user?.id ?? ''}`}
+              size={240}
+              backgroundColor={colors.surface}
+              color={colors.text}
+            />
+            <Text style={[b.qrModalName, { color: colors.text }]}>
+              {user?.first_name} {user?.last_name}
+            </Text>
+            <Text style={[b.qrModalSub, { color: colors.textSecondary }]}>
+              {[user?.designation ?? user?.profession, user?.company_name].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+          <Pressable style={b.qrClose} onPress={() => setQrExpanded(false)}>
+            <Ionicons name="close-circle" size={36} color="rgba(255,255,255,0.9)" />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1113,29 +1132,37 @@ function betaStyles(colors: any) {
 
     header: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.md,
+      paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md,
     },
     headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
     iconBtn: { padding: 4 },
 
-    scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
+    scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 24 },
 
-    // QR compact card
+    // QR section label
+    qrSectionLabel: { marginBottom: Spacing.sm },
+    qrSectionLabelText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, letterSpacing: 0.8 },
+
+    // QR card — centered layout matching My Card page
     qrCard: {
-      flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
-      borderRadius: Radius.xl, borderWidth: 1.5,
-      padding: Spacing.md, marginBottom: Spacing.xl,
+      borderRadius: Radius.lg, padding: Spacing.xl,
+      alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xl,
     },
-    qrAvatar: {
-      width: 48, height: 48, borderRadius: 24,
-      alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    qrHint: { fontSize: FontSize.xs },
+
+    // Fullscreen QR modal — matching My Card page expand UI
+    qrOverlay: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
+      alignItems: 'center', justifyContent: 'center', gap: Spacing.lg,
     },
-    qrAvatarText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
-    qrInfo: { flex: 1, gap: 2 },
-    qrName: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
-    qrSub: { fontSize: FontSize.xs },
-    qrTap: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, marginTop: 2 },
-    qrThumb: { padding: 6, borderRadius: Radius.md },
+    qrModal: {
+      borderRadius: Radius.xl, padding: Spacing.xl,
+      alignItems: 'center', gap: Spacing.md, width: 300,
+    },
+    qrModalHint: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.55)', textAlign: 'center', letterSpacing: 0.3 },
+    qrModalName: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center' },
+    qrModalSub: { fontSize: FontSize.sm, textAlign: 'center' },
+    qrClose: { alignItems: 'center', justifyContent: 'center', padding: Spacing.sm },
 
     section: { marginBottom: Spacing.xl },
     sectionHeader: {
@@ -1163,14 +1190,28 @@ function betaStyles(colors: any) {
     },
     sourceTagText: { fontSize: 10, fontWeight: FontWeight.bold },
 
+    // Scan row
+    scanRow: {
+      flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xl,
+    },
+    scanAction: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 6, paddingVertical: 13, borderRadius: Radius.md,
+    },
+    scanActionPrimaryText: { color: '#FFF', fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+    scanActionSecondaryText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },
+
     // Empty state
     emptyState: {
-      borderRadius: Radius.xl, borderWidth: 1, borderStyle: 'dashed',
-      padding: Spacing.xl, alignItems: 'center', gap: Spacing.md,
-      marginTop: Spacing.sm,
+      flex: 1, alignItems: 'center', justifyContent: 'center',
+      paddingHorizontal: Spacing.lg, paddingBottom: 60, gap: Spacing.md,
     },
-    emptyTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, textAlign: 'center' },
-    emptySub: { fontSize: FontSize.sm, textAlign: 'center', lineHeight: 20 },
+    emptyIconWrap: {
+      width: 64, height: 64, borderRadius: 20,
+      alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+    },
+    emptyTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, textAlign: 'center' },
+    emptySub: { fontSize: FontSize.sm, textAlign: 'center', lineHeight: 20, maxWidth: 260 },
     primaryCta: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
       gap: Spacing.sm, paddingVertical: 14, paddingHorizontal: Spacing.xl,
@@ -1184,34 +1225,6 @@ function betaStyles(colors: any) {
     },
     secondaryCtaText: { fontSize: FontSize.md, fontWeight: FontWeight.medium },
 
-    // FAB
-    fab: {
-      position: 'absolute', bottom: 96, right: Spacing.lg,
-      width: 56, height: 56, borderRadius: 28,
-      alignItems: 'center', justifyContent: 'center',
-      shadowColor: '#00B4B4', shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
-    },
-
-    // Full-screen QR modal
-    qrOverlay: {
-      flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
-      justifyContent: 'flex-end', alignItems: 'center',
-    },
-    qrModal: {
-      borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      padding: Spacing.xl, alignItems: 'center', gap: Spacing.md,
-      paddingBottom: 44, width: '100%',
-    },
-    qrModalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold },
-    qrModalSub: { fontSize: FontSize.sm, textAlign: 'center' },
-    qrModalBox: { padding: Spacing.lg, borderRadius: Radius.lg },
-    qrModalId: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
-    qrModalClose: {
-      width: '100%', paddingVertical: 14, borderRadius: Radius.md,
-      alignItems: 'center', marginTop: Spacing.sm,
-    },
-    qrModalCloseText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
 
     // Post-onboarding popup
     popupOverlay: {
@@ -1239,5 +1252,27 @@ function betaStyles(colors: any) {
     popupPrimaryText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
     popupSkip: { alignItems: 'center', paddingVertical: 12 },
     popupSkipText: { fontSize: FontSize.sm },
+
+    // How-to items in empty state
+    howList: { gap: Spacing.md, width: '100%', marginVertical: Spacing.sm },
+    howItem: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
+    howIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    howText: { flex: 1 },
+    howLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, marginBottom: 2 },
+    howDesc: { fontSize: FontSize.xs, lineHeight: 18 },
+
+    // Settings bottom sheet
+    settingsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    settingsSheet: {
+      borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: 44,
+    },
+    settingsHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: Spacing.md },
+    settingsTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, marginBottom: Spacing.lg },
+    settingsRow: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+      paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    settingsLabel: { flex: 1, fontSize: FontSize.md },
   });
 }

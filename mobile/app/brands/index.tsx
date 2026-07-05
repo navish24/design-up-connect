@@ -1,5 +1,5 @@
 // All Brands screen — reached from Home "New on Designup → View All"
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -116,7 +116,7 @@ function makeStyles(colors: any) {
     root: { flex: 1 },
     header: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.sm,
+      paddingHorizontal: Spacing.lg, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.sm,
     },
     backBtn: { width: 30, padding: 4 },
     headerTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold },

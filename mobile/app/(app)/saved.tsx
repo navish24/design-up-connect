@@ -309,7 +309,7 @@ function makeStyles(colors: any) {
   return StyleSheet.create({
     root: { flex: 1 },
     // Single top block — title + search + filters all in one View
-    topBlock: { paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.md },
+    topBlock: { paddingHorizontal: Spacing.lg, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.md },
     headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
     headerCount: { fontSize: FontSize.sm },
     searchRow: {

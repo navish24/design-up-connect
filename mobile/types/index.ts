@@ -27,6 +27,7 @@ export interface User {
   designation?: string;
   city?: string;
   country?: string;
+  address?: string;
   linkedin_url?: string;
   instagram_handle?: string;
   website_url?: string;
@@ -129,7 +130,7 @@ export interface CardContact {
   fields: CardContactField[];
   notes: string;
   tags: string[];
-  nexgild_user_id: string | null;
+  connect_user_id: string | null;
 }
 
 export interface ScanResult {
@@ -147,7 +148,7 @@ export interface ScanResult {
   };
   connection?: {
     id: string;
-    user: { full_name: string; designation?: string; company_name?: string; designup_user_id: string };
+    user: { full_name: string; designation?: string; company_name?: string; designup_user_id: string; email?: string; phone?: string; city?: string };
     contact_shared: boolean;
     is_mutual: boolean;
   };

@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  Alert, Modal, Image, KeyboardAvoidingView, Platform,
+  Modal, Image, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { router } from 'expo-router';
@@ -8,8 +8,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cardScanStore } from '../lib/cardScanStore';
+import { uploadCardImages } from '../lib/cloudinary';
+import { Analytics } from '../lib/analytics';
 import { Spacing, FontSize, FontWeight, Radius } from '../constants/theme';
 import type { CardContact, CardContactField } from '../types';
+import { CountryCodePicker } from '../components/CountryCodePicker';
 
 const FIELD_LABELS = [
   'Name', 'Company', 'Designation', 'Phone', 'WhatsApp',
@@ -37,6 +40,12 @@ export default function CardReviewScreen() {
   const [newFieldValue, setNewFieldValue] = useState('');
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [savedContactId, setSavedContactId] = useState<string | null>(null);
+  const [showNoteSheet, setShowNoteSheet] = useState(false);
+  const [noteInput, setNoteInput] = useState('');
+  const [dupContact, setDupContact] = useState<import('../types').CardContact | null>(null);
+  const [phonePrefixes, setPhonePrefixes] = useState<Record<number, string>>({});
+  const [showPrefixPicker, setShowPrefixPicker] = useState<number | null>(null);
 
   useEffect(() => {
     const data = cardScanStore.consume();
@@ -80,53 +89,66 @@ export default function CardReviewScreen() {
   }, [fields, cardContacts]);
 
   const doSave = useCallback(() => {
+    const id = generateId();
+    // For Phone/WhatsApp fields that don't have a country code, prepend the selected prefix
+    const normalizedFields = fields
+      .filter((f) => f.value.trim())
+      .map((f, idx) => {
+        if ((f.label === 'Phone' || f.label === 'WhatsApp') && !f.value.trim().startsWith('+')) {
+          const prefix = phonePrefixes[idx] ?? '+91';
+          return { ...f, value: `${prefix} ${f.value.trim()}` };
+        }
+        return f;
+      });
     const contact: CardContact = {
-      id: generateId(),
+      id,
       source: 'card_scan',
       scanned_at: new Date().toISOString(),
       card_image_uri: imageUri,
       card_image_uri_back: backImageUri,
-      fields: fields.filter((f) => f.value.trim()),
+      fields: normalizedFields,
       notes: notes.trim(),
       tags: [],
-      nexgild_user_id: null,
+      connect_user_id: null,
     };
     addCardContact(contact);
+    Analytics.cardContactSaved();
+    setSavedContactId(id);
     setSaved(true);
-  }, [imageUri, backImageUri, fields, notes, addCardContact]);
+    void uploadCardImages(contact, updateCardContact);
+  }, [imageUri, backImageUri, fields, notes, addCardContact, updateCardContact, phonePrefixes]);
 
   const handleSave = useCallback(() => {
     const dup = findDuplicate();
     if (dup) {
-      const dupName = dup.fields.find((f) => f.label === 'Name')?.value ?? 'this contact';
-      Alert.alert(
-        'Possible Duplicate',
-        `A contact matching ${dupName} already exists.`,
-        [
-          { text: 'View Existing', style: 'cancel', onPress: () => router.back() },
-          {
-            text: 'Update Existing',
-            onPress: () => {
-              const existingLabels = new Set(dup.fields.map((f) => f.label));
-              const newFields = fields.filter((f) => f.value.trim() && !existingLabels.has(f.label));
-              updateCardContact({ ...dup, fields: [...dup.fields, ...newFields] });
-              setSaved(true);
-            },
-          },
-          { text: 'Save New', onPress: doSave },
-        ]
-      );
+      setDupContact(dup);
     } else {
       doSave();
     }
-  }, [findDuplicate, doSave, fields, updateCardContact]);
+  }, [findDuplicate, doSave]);
 
   // ── Success ──────────────────────────────────────────────────────────────────
 
   if (saved) {
     const nameField = fields.find((f) => f.label === 'Name');
+
+    const handleNoteDone = () => {
+      if (savedContactId && noteInput.trim()) {
+        const contact = cardContacts.find((c) => c.id === savedContactId);
+        if (contact) updateCardContact({ ...contact, notes: noteInput.trim() });
+      }
+      setShowNoteSheet(false);
+    };
+
     return (
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
+        <Pressable
+          style={[s.backBtn, { top: Platform.OS === 'web' ? 14 : 56 }]}
+          onPress={() => router.replace('/(app)')}
+          hitSlop={8}
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
+        </Pressable>
         <View style={[s.successIcon, { backgroundColor: colors.accent + '18' }]}>
           <Ionicons name="checkmark-circle" size={52} color={colors.accent} />
         </View>
@@ -138,18 +160,53 @@ export default function CardReviewScreen() {
         </Text>
         <Pressable
           style={[s.solidBtn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
-          onPress={() => {
-            setFields([]); setImageUri(null); setBackImageUri(null); setNotes(''); setSaved(false);
-            router.back();
-            router.push('/(app)/scan?cardMode=1' as any);
-          }}
+          onPress={() => router.replace('/(app)/scan')}
         >
-          <Ionicons name="scan-outline" size={18} color="#FFF" />
+          <Ionicons name="camera-outline" size={18} color="#FFF" />
           <Text style={s.solidBtnText}>Scan Another Card</Text>
         </Pressable>
-        <Pressable style={s.ghostBtn} onPress={() => router.replace('/(app)/connections')}>
-          <Text style={[s.ghostBtnText, { color: colors.textMuted }]}>Done — View Contacts</Text>
+        <Pressable
+          style={[s.outlineBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          onPress={() => router.replace('/(app)/connections')}
+        >
+          <Ionicons name="people-outline" size={18} color={colors.textSecondary} />
+          <Text style={[s.outlineBtnText, { color: colors.textSecondary }]}>View Contacts</Text>
         </Pressable>
+        <Pressable style={s.addNoteLink} onPress={() => setShowNoteSheet(true)}>
+          <Text style={[s.addNoteLinkText, { color: colors.textMuted }]}>
+            {noteInput.trim() ? 'Edit note' : 'Add a note'}
+          </Text>
+        </Pressable>
+
+        {/* Note bottom sheet */}
+        <Modal visible={showNoteSheet} animationType="slide" transparent>
+          <KeyboardAvoidingView
+            style={s.noteSheetBackdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowNoteSheet(false)} />
+            <View style={[s.noteSheet, { backgroundColor: colors.background }]}>
+              <View style={[s.noteSheetHandle, { backgroundColor: colors.border }]} />
+              <Text style={[s.noteSheetTitle, { color: colors.text }]}>Add a note</Text>
+              <TextInput
+                style={[s.noteSheetInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+                placeholder={`Where did you meet ${nameField?.value ?? 'them'}? Any context…`}
+                placeholderTextColor={colors.textMuted}
+                value={noteInput}
+                onChangeText={setNoteInput}
+                multiline
+                autoFocus
+                maxLength={500}
+              />
+              <Pressable
+                style={[s.solidBtn, { backgroundColor: colors.accent }]}
+                onPress={handleNoteDone}
+              >
+                <Text style={s.solidBtnText}>Done</Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     );
   }
@@ -238,6 +295,13 @@ export default function CardReviewScreen() {
                 onPressLabel={() => { setEditingLabelIdx(idx); setShowLabelPicker(true); }}
                 onDelete={() => deleteField(idx)}
                 isLast={idx === fields.length - 1}
+                phonePrefix={
+                  (field.label === 'Phone' || field.label === 'WhatsApp') &&
+                  !field.value.trim().startsWith('+')
+                    ? (phonePrefixes[idx] ?? '+91')
+                    : null
+                }
+                onPrefixPress={() => setShowPrefixPicker(idx)}
               />
             ))}
           </View>
@@ -277,7 +341,7 @@ export default function CardReviewScreen() {
           <Ionicons name="checkmark-circle" size={19} color="#FFF" />
           <Text style={s.solidBtnText}>Save Contact</Text>
         </Pressable>
-        <Pressable style={s.ghostBtn} onPress={() => router.back()}>
+        <Pressable style={s.ghostBtn} onPress={() => { Analytics.cardContactDiscarded(); router.back(); }}>
           <Text style={[s.ghostBtnText, { color: colors.textMuted }]}>Discard</Text>
         </Pressable>
       </View>
@@ -369,16 +433,63 @@ export default function CardReviewScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Lightbox */}
-      {expandedUri && (
-        <Modal visible transparent animationType="fade">
-          <Pressable style={s.lightbox} onPress={() => setExpandedUri(null)}>
-            <Image source={{ uri: expandedUri }} style={s.lightboxImg} resizeMode="contain" />
-            <Pressable style={s.lightboxClose} onPress={() => setExpandedUri(null)}>
-              <Ionicons name="close" size={20} color="#FFF" />
+      {/* Duplicate contact sheet */}
+      <Modal visible={!!dupContact} transparent animationType="slide">
+        <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDupContact(null)} />
+          <View style={[s.sheet, { backgroundColor: colors.surface }]}>
+            <View style={[s.noteSheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[s.sheetTitle, { color: colors.text }]}>Possible Duplicate</Text>
+            <Text style={[s.dupBody, { color: colors.textSecondary }]}>
+              A contact matching {dupContact?.fields.find((f) => f.label === 'Name')?.value ?? 'this person'} already exists.
+            </Text>
+            <Pressable
+              style={[s.solidBtn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
+              onPress={() => {
+                if (!dupContact) return;
+                const existingLabels = new Set(dupContact.fields.map((f) => f.label));
+                const newFields = fields.filter((f) => f.value.trim() && !existingLabels.has(f.label));
+                updateCardContact({ ...dupContact, fields: [...dupContact.fields, ...newFields] });
+                setSavedContactId(dupContact.id);
+                setDupContact(null);
+                setSaved(true);
+              }}
+            >
+              <Ionicons name="refresh-outline" size={18} color="#FFF" />
+              <Text style={s.solidBtnText}>Update Existing</Text>
             </Pressable>
+            <Pressable
+              style={[s.outlineBtn, { borderColor: colors.border, backgroundColor: colors.surfaceElevated, marginTop: 8 }]}
+              onPress={() => { setDupContact(null); doSave(); }}
+            >
+              <Ionicons name="add-outline" size={18} color={colors.textSecondary} />
+              <Text style={[s.outlineBtnText, { color: colors.textSecondary }]}>Save as New Contact</Text>
+            </Pressable>
+            <Pressable style={s.ghostBtn} onPress={() => setDupContact(null)}>
+              <Text style={[s.ghostBtnText, { color: colors.textMuted }]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Lightbox — absolute overlay (Modal transparent is unreliable on web) */}
+      {expandedUri && (
+        <Pressable style={[StyleSheet.absoluteFill, s.lightbox]} onPress={() => setExpandedUri(null)}>
+          <Image source={{ uri: expandedUri }} style={s.lightboxImg} resizeMode="contain" />
+          <Pressable style={s.lightboxClose} onPress={() => setExpandedUri(null)}>
+            <Ionicons name="close" size={20} color="#FFF" />
           </Pressable>
-        </Modal>
+        </Pressable>
+      )}
+
+      {showPrefixPicker !== null && (
+        <CountryCodePicker
+          visible
+          selected={phonePrefixes[showPrefixPicker] ?? '+91'}
+          onSelect={(code) => setPhonePrefixes((prev) => ({ ...prev, [showPrefixPicker!]: code }))}
+          onClose={() => setShowPrefixPicker(null)}
+          colors={colors}
+        />
       )}
     </KeyboardAvoidingView>
   );
@@ -388,7 +499,7 @@ export default function CardReviewScreen() {
 // Stacked layout: colored icon badge → label (small caps, tappable) → value (full-width input)
 
 function FieldRow({
-  field, colors, onChangeValue, onPressLabel, onDelete, isLast,
+  field, colors, onChangeValue, onPressLabel, onDelete, isLast, phonePrefix, onPrefixPress,
 }: {
   field: CardContactField;
   colors: any;
@@ -396,6 +507,8 @@ function FieldRow({
   onPressLabel: () => void;
   onDelete: () => void;
   isLast: boolean;
+  phonePrefix?: string | null;
+  onPrefixPress?: () => void;
 }) {
   const icon = (LABEL_ICONS[field.label] ?? 'ellipsis-horizontal-outline') as any;
   const isMultiline = field.label === 'Address' || field.label === 'Other' || field.label === 'Notes';
@@ -410,17 +523,41 @@ function FieldRow({
       {/* Label + value stacked */}
       <View style={s.fieldBody}>
         <Pressable onPress={onPressLabel} style={s.labelRow} hitSlop={6}>
-          <Text style={[s.fieldLabelText, { color: colors.textMuted }]}>{field.label.toUpperCase()}</Text>
+          <Text style={[s.fieldLabelText, { color: colors.textMuted }]}>
+            {field.label.toUpperCase()}
+            {(field.label === 'Company' || field.label === 'Phone' || field.label === 'WhatsApp') && (
+              <Text style={{ color: colors.accent }}> *</Text>
+            )}
+          </Text>
           <Ionicons name="chevron-down" size={10} color={colors.textMuted} style={{ marginLeft: 2 }} />
         </Pressable>
-        <TextInput
-          style={[s.fieldValueInput, { color: colors.text }]}
-          value={field.value}
-          onChangeText={onChangeValue}
-          multiline={isMultiline}
-          numberOfLines={isMultiline ? 2 : 1}
-          returnKeyType={isMultiline ? 'default' : 'done'}
-        />
+        {phonePrefix != null ? (
+          <View style={s.prefixRow}>
+            <Pressable
+              onPress={onPrefixPress}
+              style={[s.prefixBadge, { backgroundColor: colors.accent + '14' }]}
+            >
+              <Text style={[s.prefixBadgeText, { color: colors.accent }]}>{phonePrefix}</Text>
+              <Ionicons name="chevron-down" size={9} color={colors.accent} />
+            </Pressable>
+            <TextInput
+              style={[s.fieldValueInput, { color: colors.text, flex: 1 }]}
+              value={field.value}
+              onChangeText={onChangeValue}
+              keyboardType="phone-pad"
+              returnKeyType="done"
+            />
+          </View>
+        ) : (
+          <TextInput
+            style={[s.fieldValueInput, { color: colors.text }]}
+            value={field.value}
+            onChangeText={onChangeValue}
+            multiline={isMultiline}
+            numberOfLines={isMultiline ? 2 : 1}
+            returnKeyType={isMultiline ? 'default' : 'done'}
+          />
+        )}
       </View>
 
       {/* Delete */}
@@ -459,7 +596,7 @@ const s = StyleSheet.create({
   // Header
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingTop: 56, paddingBottom: 12,
+    paddingHorizontal: Spacing.md, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerBtn: { width: 44, alignItems: 'center' },
@@ -518,6 +655,9 @@ const s = StyleSheet.create({
   },
   fieldBody: { flex: 1, gap: 3 },
   labelRow: { flexDirection: 'row', alignItems: 'center' },
+  prefixRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  prefixBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  prefixBadgeText: { fontSize: 13, fontWeight: '700' as const },
   fieldLabelText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.7 },
   fieldValueInput: {
     fontSize: 15, lineHeight: 21,
@@ -547,9 +687,15 @@ const s = StyleSheet.create({
   },
   solidBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, paddingVertical: 15, borderRadius: Radius.md,
+    gap: Spacing.sm, paddingVertical: 15, borderRadius: Radius.md, width: '100%',
   },
   solidBtnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+  outlineBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, paddingVertical: 14, borderRadius: Radius.md,
+    borderWidth: 1, width: '100%',
+  },
+  outlineBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.medium },
   ghostBtn: { alignItems: 'center', paddingVertical: 10 },
   ghostBtnText: { fontSize: FontSize.sm },
 
@@ -598,7 +744,31 @@ const s = StyleSheet.create({
   },
 
   // Success
+  backBtn: {
+    position: 'absolute', left: Spacing.md,
+    width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
+  },
   successIcon: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   successTitle: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, textAlign: 'center', marginTop: 4 },
   successSub: { fontSize: FontSize.md, textAlign: 'center' },
+
+  addNoteLink: { paddingVertical: 12, paddingHorizontal: Spacing.lg, marginTop: Spacing.sm },
+  addNoteLinkText: { fontSize: FontSize.sm, textAlign: 'center' },
+  dupBody: { fontSize: FontSize.sm, lineHeight: 20, marginTop: 4 },
+
+  // Note bottom sheet
+  noteSheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  noteSheet: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: 44,
+    gap: Spacing.md,
+  },
+  noteSheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: Spacing.sm },
+  noteSheetTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+  noteSheetInput: {
+    borderWidth: 1, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
+    fontSize: FontSize.md, lineHeight: 22, minHeight: 100,
+    textAlignVertical: 'top',
+  },
 });

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connect — Private Beta</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0A0A0A;
+      color: #F5F5F5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .card { width: 100%; max-width: 460px; }
+
+    .logo {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 36px;
+    }
+
+    h1 {
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 14px;
+    }
+
+    h1 em { font-style: normal; color: #aaa; }
+
+    .subtitle {
+      font-size: 15px;
+      color: #777;
+      line-height: 1.65;
+      margin-bottom: 32px;
+    }
+
+    .features {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .feature { display: flex; align-items: flex-start; gap: 12px; }
+
+    .feature-dot {
+      width: 5px; height: 5px;
+      background: #F5F5F5;
+      border-radius: 50%;
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+
+    .feature-text { font-size: 14px; color: #bbb; line-height: 1.55; }
+
+    .divider { border: none; border-top: 1px solid #1E1E1E; margin: 32px 0; }
+
+    .form-heading {
+      font-size: 13px; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: #555; margin-bottom: 24px;
+    }
+
+    .field { margin-bottom: 18px; }
+
+    label {
+      display: block;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: #555; margin-bottom: 8px;
+    }
+
+    input[type="text"], input[type="email"], input[type="tel"] {
+      width: 100%;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 10px;
+      color: #F5F5F5;
+      font-size: 15px;
+      padding: 13px 16px;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+      font-family: inherit;
+    }
+
+    input:focus { border-color: #444; }
+    input::placeholder { color: #333; }
+
+    .device-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .device-option input[type="radio"] { display: none; }
+
+    .device-option label {
+      display: flex; align-items: center; justify-content: center;
+      padding: 13px 10px;
+      background: #111; border: 1px solid #222; border-radius: 10px;
+      font-size: 13px; font-weight: 500;
+      letter-spacing: 0; text-transform: none;
+      color: #666; cursor: pointer; transition: all 0.15s;
+    }
+
+    .device-option input[type="radio"]:checked + label {
+      border-color: #F5F5F5;
+      color: #F5F5F5;
+      background: #1A1A1A;
+    }
+
+
+    button[type="submit"] {
+      width: 100%;
+      background: #F5F5F5;
+      color: #0A0A0A;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px; font-weight: 700;
+      padding: 16px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.2s;
+      letter-spacing: 0.02em;
+      font-family: inherit;
+    }
+
+    button[type="submit"]:hover { opacity: 0.85; }
+    button[type="submit"]:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .error-msg {
+      display: none;
+      color: #FF6B6B;
+      font-size: 13px;
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    .footer {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #333;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* Success screens */
+    .success { display: none; text-align: center; padding: 48px 0; }
+    .success-mark { font-size: 36px; margin-bottom: 20px; }
+    .success h2 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+    .success p { font-size: 14px; color: #777; line-height: 1.7; }
+
+    @media (max-width: 480px) { h1 { font-size: 26px; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">Connect · Private Beta</div>
+
+    <div id="form-section">
+      <div style="display:inline-flex; align-items:center; gap:7px; background:#1A1A1A; border:1px solid #2A2A2A; border-radius:100px; padding:6px 14px; margin-bottom:24px;">
+        <span style="width:7px;height:7px;background:#4ade80;border-radius:50%;display:inline-block;"></span>
+        <span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#aaa;">Now accepting beta requests</span>
+      </div>
+
+      <h1>You've met the right people.<br/><em>You just can't find them anymore.</em></h1>
+
+      <p class="subtitle">
+        Connect turns every card you collect into a contact you can find. Instantly.
+      </p>
+
+      <div class="features">
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <div class="feature-text">Scan a card — contact saved instantly</div>
+        </div>
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <div class="feature-text">Share your QR — they have your details in one tap</div>
+        </div>
+      </div>
+
+      <p style="font-size: 15px; color: #aaa; font-weight: 500; line-height: 1.5; margin-bottom: 32px;">Everyone you've ever met. One place. Always searchable.</p>
+
+      <hr class="divider" />
+
+      <p class="form-heading">Request early access</p>
+
+      <form id="signup-form">
+        <div class="field">
+          <label for="name">Full name</label>
+          <input type="text" id="name" placeholder="Rahul Mehta" required autocomplete="name" />
+        </div>
+
+        <div class="field">
+          <label for="email">Email address</label>
+          <input type="email" id="email" placeholder="you@company.com" required autocomplete="email" />
+        </div>
+
+        <div class="field">
+          <label for="phone">WhatsApp number</label>
+          <input type="tel" id="phone" placeholder="+91 98765 43210" autocomplete="tel" />
+        </div>
+
+        <div class="field">
+          <label>What phone do you use?</label>
+          <div class="device-group">
+            <div class="device-option">
+              <input type="radio" id="android" name="device_type" value="android" />
+              <label for="android">Android</label>
+            </div>
+            <div class="device-option">
+              <input type="radio" id="ios" name="device_type" value="ios" />
+              <label for="ios">iPhone</label>
+            </div>
+          </div>
+
+        </div>
+
+        <button type="submit" id="submit-btn">Request access</button>
+        <p class="error-msg" id="error-msg">Something went wrong. Please try again.</p>
+      </form>
+
+      <p class="footer">Beta is invite-only · Limited spots · We'll reach out within 48 hours</p>
+    </div>
+
+    <!-- Android success -->
+    <div class="success" id="success-android">
+      <div class="success-mark">✦</div>
+      <h2>You're on the list</h2>
+      <p>We'll send your invite on WhatsApp or email within 48 hours.<br/>Keep an eye out — and check spam just in case.</p>
+    </div>
+
+    <!-- iOS success -->
+    <div class="success" id="success-ios">
+      <div class="success-mark">✦</div>
+      <h2>You're on the iPhone list</h2>
+      <p>We're starting Android testing first and opening iPhone right after.<br/><br/>We have your details — we'll reach out directly on WhatsApp or email the moment iPhone is ready. You won't have to do anything.</p>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://frbozqaqmcwuxfvadhxl.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZyYm96cWFxbWN3dXhmdmFkaHhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTYzMzAsImV4cCI6MjA5MTk3MjMzMH0.Vw08afQN-2gWEMgp3lxsq_KMPeUZcovVJ3sklcXUbuk';
+
+    const submitBtn = document.getElementById('submit-btn');
+
+    document.querySelectorAll('input[name="device_type"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        const isIos = document.getElementById('ios').checked;
+        submitBtn.textContent = isIos ? 'Join iPhone waitlist' : 'Request access';
+      });
+    });
+
+    document.getElementById('signup-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const errorMsg = document.getElementById('error-msg');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+      errorMsg.style.display = 'none';
+
+      const deviceType = document.querySelector('input[name="device_type"]:checked')?.value || null;
+
+      const payload = {
+        name: document.getElementById('name').value.trim(),
+        email: document.getElementById('email').value.trim().toLowerCase(),
+        phone: document.getElementById('phone').value.trim() || null,
+        device_type: deviceType,
+        events_attended: null,
+      };
+
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/beta_signups`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+
+        document.getElementById('form-section').style.display = 'none';
+        const successId = deviceType === 'ios' ? 'success-ios' : 'success-android';
+        document.getElementById(successId).style.display = 'block';
+      } catch (err) {
+        errorMsg.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = deviceType === 'ios' ? 'Join iPhone waitlist' : 'Request access';
+      }
+    });
+  </script>
+</body>
+</html>

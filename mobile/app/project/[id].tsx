@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -124,7 +124,7 @@ function makeStyles() {
     root: { flex: 1 },
     header: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.sm,
+      paddingHorizontal: Spacing.lg, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.sm,
     },
     headerTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
     backBtn: { padding: 4, width: 30 },

@@ -1,7 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Alert, TextInput, Modal, FlatList, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, TextInput, Modal, FlatList, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Switch } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { useState, useEffect } from 'react';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -9,46 +11,53 @@ import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import { ALL_BRANDS } from '../../data/brands';
 import { getAllBrandsForSearch, type BrandSearchResult } from '../../lib/api';
 import { isBeta } from '../../lib/betaConfig';
+import { supabase } from '../../lib/supabase';
+import { Analytics } from '../../lib/analytics';
 
-// ── Free Google Sheets query submission via Google Apps Script ──────────────
-// Setup: go to script.google.com → new project → paste the script below → Deploy as Web App
-// Script: function doPost(e){const s=SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-//   const d=JSON.parse(e.postData.contents);
-//   s.appendRow([new Date(),d.name,d.email,d.query]);
-//   return ContentService.createTextOutput(JSON.stringify({success:true})).setMimeType(ContentService.MimeType.JSON);}
-// Then replace the URL below with your deployment URL.
-const QUERY_SHEET_URL = 'https://script.google.com/macros/s/AKfycbyTP6pllSJ8m2fGRZcmfpy94CVo6JYAwh6urjeps1vfESEJFzF4IJMkA7yf7aFVrUMxCw/exec';
-
-const COUNTRIES = ['India', 'UAE', 'USA', 'UK', 'Singapore', 'Australia', 'Germany', 'Other'];
 const PROFESSIONS = [
-  'Architect', 'Interior Designer', 'Builder / Developer',
-  'Hospitality / Commercial Buyer', 'Retailer / Store Owner',
-  'Distributor / Dealer', 'Manufacturer', 'Product / Furniture Designer',
-  'Design Studio / Firm', 'Art Consultant / Curator', 'Media / Influencer',
-  'Design Student', 'Homeowner / Individual Buyer', 'Other',
+  'Interior Designer', 'Architect', 'Furniture Designer', 'Lighting Designer',
+  'Product Designer', 'Studio Owner', 'Brand Owner', 'Consultant',
+  'Founder', 'Contractor', 'Other',
 ];
 
 export default function ProfileScreen() {
   const { colors, toggleTheme, isDark } = useTheme();
-  const { user, signOut, isDemoMode, toggleDemoMode, activateDemoExhibition, resetDemoSaved, resetDemoConnections, updateUser } = useAuth();
+  const { user, updateUser, isLoading, signOut, resetDemoConnections, clearCardContacts } = useAuth();
+  const { top: topInset } = useSafeAreaInsets();
 
   const [qrExpanded, setQrExpanded] = useState(false);
+  const [showCardPreview, setShowCardPreview] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [invitePhone, setInvitePhone] = useState('');
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+
+  const submitInvite = async () => {
+    const phone = invitePhone.trim();
+    if (phone.replace(/\D/g, '').length < 10) return;
+    setInviteSubmitting(true);
+    await supabase.from('invite_requests').insert({
+      invited_by: user?.id ?? null,
+      phone,
+    });
+    setInviteSubmitting(false);
+    setInviteSent(true);
+  };
   const [showEditDetails, setShowEditDetails] = useState(false);
 
   // Edit Details local state
-  const [editFirstName, setEditFirstName] = useState('');
-  const [editLastName, setEditLastName] = useState('');
+  const [editFullName, setEditFullName] = useState('');
   const [editDesignation, setEditDesignation] = useState('');
   const [editCompany, setEditCompany] = useState('');
+  const [editAddress, setEditAddress] = useState('');
   const [editCity, setEditCity] = useState('');
-  const [editCountry, setEditCountry] = useState('');
   const [editProfession, setEditProfession] = useState('');
+  const [editCustomProfession, setEditCustomProfession] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editInstagram, setEditInstagram] = useState('');
   const [editLinkedin, setEditLinkedin] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
   const [editOtherUrl, setEditOtherUrl] = useState('');
-  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showProfessionPicker, setShowProfessionPicker] = useState(false);
 
   // Link Your Brand
@@ -81,33 +90,23 @@ export default function ProfileScreen() {
 
   const s = makeStyles(colors);
 
-  const handleDemoToggle = () => {
-    toggleDemoMode();
-    if (!isDemoMode) {
-      activateDemoExhibition();
-      Alert.alert(
-        'Demo Mode On',
-        'Index Mumbai 2025 is now active on your dashboard. Open any exhibition ticket to simulate gate scan, or tap brands to simulate scanning their booth QR.',
-        [{ text: 'Got it' }]
-      );
-    }
-  };
-
   const openEditDetails = () => {
+    Analytics.editDetailsTapped();
     if (!user) return;
-    setEditFirstName(user.first_name);
-    setEditLastName(user.last_name);
+    setEditFullName(`${user.first_name} ${user.last_name}`.trim());
     setEditDesignation(user.designation ?? '');
     setEditCompany(user.company_name ?? '');
+    setEditAddress(user.address ?? '');
     setEditCity(user.city ?? '');
-    setEditCountry(user.country ?? '');
-    setEditProfession(user.profession ?? '');
+    const prof = user.profession ?? '';
+    const isKnown = PROFESSIONS.includes(prof);
+    setEditProfession(isKnown ? prof : (prof ? 'Other' : ''));
+    setEditCustomProfession(isKnown ? '' : prof);
     setEditEmail(user.email ?? '');
     setEditInstagram(user.instagram_handle ?? '');
     setEditLinkedin(user.linkedin_url ?? '');
     setEditWebsite(user.website_url ?? '');
     setEditOtherUrl(user.other_url ?? '');
-    setShowCountryPicker(false);
     setShowProfessionPicker(false);
     setShowEditDetails(true);
   };
@@ -133,15 +132,14 @@ export default function ProfileScreen() {
     if (!queryText.trim()) { Alert.alert('Please type your query first.'); return; }
     setQuerySubmitting(true);
     try {
-      await fetch(QUERY_SHEET_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim() || 'Anonymous',
-          email: user?.email ?? '',
-          query: queryText.trim(),
-        }),
+      const { error } = await supabase.from('support_tickets').insert({
+        user_id: user?.id ?? null,
+        name: `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim() || 'Anonymous',
+        email: user?.email ?? '',
+        message: queryText.trim(),
       });
+      if (error) throw error;
+      Analytics.supportQuerySubmitted();
       setQueryDone(true);
       setQueryText('');
     } catch {
@@ -152,44 +150,72 @@ export default function ProfileScreen() {
   };
 
 
-if (!user) return null;
+if (isLoading) {
+    return (
+      <View style={[s.root, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
 
-  const qrValue = `user:${user.id}`;
+  if (!user) {
+    return (
+      <View style={[s.root, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl }]}>
+        <Ionicons name="person-circle-outline" size={64} color={colors.textMuted} />
+        <Text style={[{ color: colors.text, fontSize: FontSize.xl, fontWeight: FontWeight.semibold, marginTop: Spacing.md, textAlign: 'center' }]}>
+          Set up your card
+        </Text>
+        <Text style={[{ color: colors.textSecondary, fontSize: FontSize.md, marginTop: Spacing.sm, textAlign: 'center', lineHeight: 22 }]}>
+          Create your digital visiting card to share your details when someone scans your QR code.
+        </Text>
+        <Pressable
+          style={[{ backgroundColor: colors.accent, paddingVertical: 14, paddingHorizontal: Spacing.xl, borderRadius: Radius.md, marginTop: Spacing.xl }]}
+          onPress={() => router.push('/(auth)/profile-setup')}
+        >
+          <Text style={[{ color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold }]}>Create Profile</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const qrValue = `https://connect-designup.vercel.app/u/${user.id}`;
   const initials = [user.first_name?.[0], user.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={s.header}>
-        <Text style={[s.headerTitle, { color: colors.text }]}>Designup Connect</Text>
+      <View style={[s.header, { paddingTop: topInset + 12 }]}>
+        <Text style={[s.headerTitle, { color: colors.text }]}>My Card</Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* ── IDENTITY ─────────────────────────────────────────────────── */}
+        {/* ── YOUR QR CODE (top) ───────────────────────────────────────── */}
         <View style={s.sectionHeader}>
-          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>YOUR DESIGNUP IDENTITY</Text>
+          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>YOUR QR CODE</Text>
         </View>
-        <View style={[s.identityCard, { backgroundColor: colors.surface }]}>
-          <Pressable style={s.avatarWrap} onPress={pickProfilePhoto}>
-            {user.profile_image_url ? (
-              <Image source={{ uri: user.profile_image_url }} style={s.avatarPhoto} />
-            ) : (
-              <View style={[s.avatar, { backgroundColor: colors.accent + '22' }]}>
-                <Text style={[s.avatarText, { color: colors.accent }]}>{initials}</Text>
-              </View>
-            )}
-            <View style={[s.avatarCameraOverlay, { backgroundColor: colors.background + 'CC' }]}>
-              <Ionicons name="camera-outline" size={12} color={colors.textSecondary} />
-            </View>
-          </Pressable>
-          <View style={s.identityInfo}>
-            <Text style={[s.fullName, { color: colors.text }]}>{user.first_name} {user.last_name}</Text>
-            <Text style={[s.role, { color: colors.textSecondary }]}>
-              {user.profession}{user.company_name ? ` · ${user.company_name}` : ''}
-            </Text>
+        <Pressable style={[s.qrCard, { backgroundColor: colors.surface }]} onPress={() => { Analytics.qrExpanded(); setQrExpanded(true); }}>
+          <QRCode value={qrValue} size={120} backgroundColor={colors.surface} color={colors.text} />
+          <Text style={[s.qrHint, { color: colors.textMuted }]}>Tap to expand</Text>
+        </Pressable>
+        {/* ── CARD PREVIEW ROW ─────────────────────────────────────────── */}
+        <Pressable
+          style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.md }]}
+          onPress={() => { Analytics.previewCardTapped(); setShowCardPreview(true); }}
+        >
+          <Ionicons name="eye-outline" size={20} color={colors.textSecondary} />
+          <View style={s.toggleInfo}>
+            <Text style={[s.toggleLabel, { color: colors.text }]}>Tap to see how others view your card</Text>
+            <Text style={[s.toggleSub, { color: colors.textMuted }]}>Preview what recipients see</Text>
           </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+
+        {/* ── VISITING CARD ─────────────────────────────────────────────── */}
+        <View style={[s.sectionHeader, { marginTop: Spacing.lg }]}>
+          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>YOUR VISITING CARD</Text>
         </View>
-        {/* ── PROFILE COMPLETENESS (Beta only) ─────────────────────────── */}
+
+        {/* Card completeness — hidden at 100% */}
         {isBeta && (() => {
           const profileFields = [
             user.designation,
@@ -202,6 +228,7 @@ if (!user) return null;
           const filled = profileFields.filter(Boolean).length;
           const pct = Math.round((filled / profileFields.length) * 100);
           const missing = profileFields.filter((f) => !f).length;
+          if (pct >= 100) return null;
           return (
             <View style={[s.completenessCard, { backgroundColor: colors.surface }]}>
               <View style={s.completenessRow}>
@@ -222,16 +249,6 @@ if (!user) return null;
           );
         })()}
 
-        {/* ── VISITING CARD ─────────────────────────────────────────────── */}
-        <View style={s.sectionHeader}>
-          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>YOUR VISITING CARD</Text>
-        </View>
-        <View style={[s.infoBlurb, { backgroundColor: colors.surface }]}>
-          <Ionicons name="card-outline" size={13} color={colors.textMuted} />
-          <Text style={[s.infoBlurbText, { color: colors.textMuted }]}>
-            This card is shared when you exchange contacts at a booth or when someone scans your personal QR. Keep it up to date.
-          </Text>
-        </View>
         <View style={[s.visitingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={s.vcTop}>
             <View style={{ flex: 1 }}>
@@ -239,13 +256,18 @@ if (!user) return null;
               {user.designation && <Text style={[s.vcDesig, { color: colors.textSecondary }]}>{user.designation}</Text>}
               {user.company_name && <Text style={[s.vcCompany, { color: colors.accent }]}>{user.company_name}</Text>}
             </View>
-            {user.profile_image_url ? (
-              <Image source={{ uri: user.profile_image_url }} style={s.vcPhoto} />
-            ) : (
-              <View style={[s.vcInitials, { backgroundColor: colors.accent + '22' }]}>
-                <Text style={[s.vcInitialsText, { color: colors.accent }]}>{initials}</Text>
+            <Pressable style={s.avatarWrap} onPress={pickProfilePhoto}>
+              {user.profile_image_url ? (
+                <Image source={{ uri: user.profile_image_url }} style={s.vcPhoto} />
+              ) : (
+                <View style={[s.vcInitials, { backgroundColor: colors.accent + '22' }]}>
+                  <Text style={[s.vcInitialsText, { color: colors.accent }]}>{initials}</Text>
+                </View>
+              )}
+              <View style={[s.avatarCameraOverlay, { backgroundColor: colors.background + 'CC' }]}>
+                <Ionicons name="camera-outline" size={12} color={colors.textSecondary} />
               </View>
-            )}
+            </Pressable>
           </View>
           <View style={[s.vcDivider, { backgroundColor: colors.border }]} />
           <View style={s.vcBottom}>
@@ -292,111 +314,77 @@ if (!user) return null;
               </View>
             )}
           </View>
-          <Pressable style={[s.editBtn, { borderColor: colors.gold }]} onPress={openEditDetails}>
-            <Ionicons name="create-outline" size={14} color={colors.gold} />
-            <Text style={[s.editBtnText, { color: colors.gold }]}>Edit Details</Text>
+          <Pressable style={[s.editBtn, { borderColor: colors.accent }]} onPress={openEditDetails}>
+            <Ionicons name="create-outline" size={14} color={colors.accent} />
+            <Text style={[s.editBtnText, { color: colors.accent }]}>Edit Details</Text>
           </Pressable>
         </View>
-
-        {/* ── QR CODE ───────────────────────────────────────────────────── */}
-        <View style={s.sectionHeader}>
-          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>YOUR QR CODE</Text>
-        </View>
-        <View style={[s.infoBlurb, { backgroundColor: colors.surface }]}>
-          <Ionicons name="qr-code-outline" size={13} color={colors.textMuted} />
-          <Text style={[s.infoBlurbText, { color: colors.textMuted }]}>
-            Others scan this QR to exchange visiting cards with you. Share it at booths or when networking at the show.
-          </Text>
-        </View>
-        <Pressable style={[s.qrCard, { backgroundColor: colors.surface }]} onPress={() => setQrExpanded(true)}>
-          <QRCode value={qrValue} size={120} backgroundColor={colors.surface} color={colors.text} />
-          <Text style={[s.qrHint, { color: colors.textMuted }]}>Tap to expand</Text>
-        </Pressable>
-        {isBeta && (
-          <Pressable
-            style={[s.shareQrBtn, { backgroundColor: colors.accent }]}
-            onPress={() => setQrExpanded(true)}
-          >
-            <Ionicons name="share-outline" size={18} color="#FFF" />
-            <Text style={s.shareQrBtnText}>Share my QR</Text>
-          </Pressable>
-        )}
-
-        {/* QR expanded modal */}
-        {qrExpanded && (
-          <Pressable style={s.qrOverlay} onPress={() => setQrExpanded(false)}>
-            <View style={[s.qrModal, { backgroundColor: colors.surface }]}>
-              <QRCode value={qrValue} size={240} backgroundColor={colors.surface} color={colors.text} />
-              <Text style={[s.qrModalName, { color: colors.text }]}>{user.first_name} {user.last_name}</Text>
-              <Pressable onPress={() => setQrExpanded(false)} style={s.qrClose}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </Pressable>
-            </View>
-          </Pressable>
-        )}
 
         {/* ── LINK YOUR BRAND ───────────────────────────────────────────── */}
-        <View style={[s.sectionHeader, { marginTop: Spacing.lg }]}>
-          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>BRAND AFFILIATION</Text>
-        </View>
-        {linkedBrand ? (
-          <View style={[s.linkedBrandCard, { backgroundColor: colors.surface, borderColor: linkedBrandStatus === 'approved' ? colors.accent : colors.border }]}>
-            <View style={[s.linkedBrandInitial, { backgroundColor: colors.accent + '22' }]}>
-              <Text style={[s.linkedBrandInitialText, { color: colors.accent }]}>
-                {linkedBrand.name.charAt(0)}
-              </Text>
+        {!isBeta && (
+          <>
+            <View style={[s.sectionHeader, { marginTop: Spacing.lg }]}>
+              <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>BRAND AFFILIATION</Text>
             </View>
-            <View style={s.linkedBrandInfo}>
-              <Text style={[s.linkedBrandName, { color: colors.text }]}>{linkedBrand.name}</Text>
-              <Text style={[s.linkedBrandCat, { color: colors.textSecondary }]}>{linkedBrand.category}</Text>
-              <View style={[s.linkedBrandStatusBadge, { backgroundColor: linkedBrandStatus === 'approved' ? colors.accent + '18' : colors.gold + '18' }]}>
-                <Text style={[s.linkedBrandStatusText, { color: linkedBrandStatus === 'approved' ? colors.accent : colors.gold }]}>
-                  {linkedBrandStatus === 'approved' ? 'Linked' : 'Pending approval'}
-                </Text>
+            {linkedBrand ? (
+              <View style={[s.linkedBrandCard, { backgroundColor: colors.surface, borderColor: linkedBrandStatus === 'approved' ? colors.accent : colors.border }]}>
+                <View style={[s.linkedBrandInitial, { backgroundColor: colors.accent + '22' }]}>
+                  <Text style={[s.linkedBrandInitialText, { color: colors.accent }]}>
+                    {linkedBrand.name.charAt(0)}
+                  </Text>
+                </View>
+                <View style={s.linkedBrandInfo}>
+                  <Text style={[s.linkedBrandName, { color: colors.text }]}>{linkedBrand.name}</Text>
+                  <Text style={[s.linkedBrandCat, { color: colors.textSecondary }]}>{linkedBrand.category}</Text>
+                  <View style={[s.linkedBrandStatusBadge, { backgroundColor: linkedBrandStatus === 'approved' ? colors.accent + '18' : colors.gold + '18' }]}>
+                    <Text style={[s.linkedBrandStatusText, { color: linkedBrandStatus === 'approved' ? colors.accent : colors.gold }]}>
+                      {linkedBrandStatus === 'approved' ? 'Linked' : 'Pending approval'}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable onPress={() => setLinkedBrand(null)}>
+                  <Ionicons name="close-circle-outline" size={20} color={colors.textMuted} />
+                </Pressable>
               </View>
-            </View>
-            <Pressable onPress={() => setLinkedBrand(null)}>
-              <Ionicons name="close-circle-outline" size={20} color={colors.textMuted} />
-            </Pressable>
-          </View>
-        ) : (
-          <Pressable
-            style={[s.settingsNavRow, { backgroundColor: colors.surface }]}
-            onPress={() => setShowLinkBrand(true)}
-          >
-            <Ionicons name="link-outline" size={20} color={colors.textSecondary} />
-            <View style={s.toggleInfo}>
-              <Text style={[s.toggleLabel, { color: colors.text }]}>Link Your Brand</Text>
-              <Text style={[s.toggleSub, { color: colors.textMuted }]}>Appear on your brand's page on Designup</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </Pressable>
+            ) : (
+              <Pressable
+                style={[s.settingsNavRow, { backgroundColor: colors.surface }]}
+                onPress={() => { Analytics.linkBrandTapped(); setShowLinkBrand(true); }}
+              >
+                <Ionicons name="link-outline" size={20} color={colors.textSecondary} />
+                <View style={s.toggleInfo}>
+                  <Text style={[s.toggleLabel, { color: colors.text }]}>Link Your Brand</Text>
+                  <Text style={[s.toggleSub, { color: colors.textMuted }]}>Appear on your brand's page on Designup</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+            )}
+          </>
         )}
 
-        {/* ── SETTINGS ──────────────────────────────────────────────────── */}
+        {/* ── INVITE TO CONNECT ─────────────────────────────────────────── */}
         <View style={[s.sectionHeader, { marginTop: Spacing.lg }]}>
-          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>SETTINGS</Text>
+          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>GROW YOUR NETWORK</Text>
         </View>
-
-        {/* Theme toggle */}
-        <View style={[s.toggleRow, { backgroundColor: colors.surface }]}>
-          <Ionicons name={isDark ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.textSecondary} />
-          <View style={s.toggleInfo}>
-            <Text style={[s.toggleLabel, { color: colors.text }]}>{isDark ? 'Dark Mode' : 'Light Mode'}</Text>
-            <Text style={[s.toggleSub, { color: colors.textMuted }]}>Switch the full app appearance</Text>
-          </View>
-          <Switch
-            value={isDark}
-            onValueChange={toggleTheme}
-            trackColor={{ false: colors.border, true: colors.accent + '88' }}
-            thumbColor={isDark ? colors.accent : colors.textMuted}
-          />
-        </View>
-
-        {/* ── HELP & SUPPORT ────────────────────────────────────────────── */}
         <Pressable
           style={[s.settingsNavRow, { backgroundColor: colors.surface }]}
-          onPress={() => setShowHelpModal(true)}
+          onPress={() => { Analytics.inviteToConnectTapped(); setInvitePhone(''); setInviteSent(false); setShowInvite(true); }}
+        >
+          <Ionicons name="person-add-outline" size={20} color={colors.accent} />
+          <View style={s.toggleInfo}>
+            <Text style={[s.toggleLabel, { color: colors.text }]}>Invite to Connect</Text>
+            <Text style={[s.toggleSub, { color: colors.textMuted }]}>Bring someone onto the platform</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+
+        {/* ── SUPPORT ───────────────────────────────────────────────────── */}
+        <View style={[s.sectionHeader, { marginTop: Spacing.lg }]}>
+          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>SUPPORT</Text>
+        </View>
+        <Pressable
+          style={[s.settingsNavRow, { backgroundColor: colors.surface }]}
+          onPress={() => { Analytics.helpSupportOpened(); setShowHelpModal(true); }}
         >
           <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
           <View style={s.toggleInfo}>
@@ -406,72 +394,246 @@ if (!user) return null;
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </Pressable>
 
-        {/* ── DEMO MODE ─────────────────────────────────────────────────── */}
+        {/* ── SETTINGS ──────────────────────────────────────────────────── */}
         <View style={[s.sectionHeader, { marginTop: Spacing.lg }]}>
-          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>DEMO MODE</Text>
+          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>SETTINGS</Text>
         </View>
-        <View style={[s.infoBlurb, { backgroundColor: colors.surface }]}>
-          <Ionicons name="play-circle-outline" size={13} color={colors.textMuted} />
-          <Text style={[s.infoBlurbText, { color: colors.textMuted }]}>
-            Demo Mode simulates attending Index Mumbai 2025 without a real QR scanner. Use it to explore every feature of the app end-to-end.
-          </Text>
-        </View>
-        <View style={[s.toggleRow, { backgroundColor: colors.surface }]}>
-          <Ionicons name="play-circle-outline" size={20} color={isDemoMode ? colors.accent : colors.textSecondary} />
+        <View style={[s.settingsNavRow, { backgroundColor: colors.surface }]}>
+          <Ionicons name={isDark ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.textSecondary} />
           <View style={s.toggleInfo}>
-            <Text style={[s.toggleLabel, { color: colors.text }]}>Demo Mode</Text>
-            <Text style={[s.toggleSub, { color: colors.textMuted }]}>
-              {isDemoMode ? 'Active — Index Mumbai 2025 is simulated' : 'Off — enable to simulate a live show'}
-            </Text>
+            <Text style={[s.toggleLabel, { color: colors.text }]}>{isDark ? 'Dark Mode' : 'Light Mode'}</Text>
           </View>
           <Switch
-            value={isDemoMode}
-            onValueChange={handleDemoToggle}
+            value={isDark}
+            onValueChange={toggleTheme}
             trackColor={{ false: colors.border, true: colors.accent + '88' }}
-            thumbColor={isDemoMode ? colors.accent : colors.textMuted}
+            thumbColor={isDark ? colors.accent : colors.textMuted}
           />
         </View>
-
-        {/* ── DATA & RESETS ─────────────────────────────────────────────── */}
-        <View style={[s.sectionHeader, { marginTop: Spacing.lg }]}>
-          <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>DATA & RESETS</Text>
-        </View>
+        {user?.email === 'niveditasingh0124@gmail.com' && (
         <Pressable
-          style={[s.demoActionBtn, { backgroundColor: colors.surface }]}
+          style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
           onPress={() => {
-            resetDemoSaved();
-            Alert.alert('Saved Brands Reset', 'Your saved brands list is now cleared. Go to Saved tab to see the fresh state.');
+            const doReset = () => {
+              resetDemoConnections();
+              clearCardContacts();
+              // Also delete from Supabase so card contacts don't come back on refresh
+              if (user?.id) {
+                supabase.from('card_contacts').delete().eq('user_id', user.id).then(() => {});
+                supabase.from('connections').delete().eq('user_id', user.id).then(() => {});
+              }
+            };
+
+            if (Platform.OS === 'web') {
+              // Alert.alert maps to window.confirm on web which can be unreliable in PWAs
+              const ok = (globalThis as any).confirm?.(
+                'Simulate New User: clear all card contacts and scanned connections? Your profile stays intact.',
+              );
+              if (ok) doReset();
+            } else {
+              Alert.alert(
+                'Simulate New User',
+                'This will clear all your saved contacts and connections from this device. Your profile stays intact. Use this to test the first-time experience.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Clear All Contacts', style: 'destructive', onPress: doReset },
+                ],
+              );
+            }
           }}
         >
-          <Ionicons name="bookmark-outline" size={18} color={colors.textSecondary} />
-          <View style={s.demoActionInfo}>
-            <Text style={[s.demoActionLabel, { color: colors.text }]}>Reset Saved Brands</Text>
-            <Text style={[s.demoActionSub, { color: colors.textMuted }]}>Clear saved brands to see empty state</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
+          <Text style={[s.toggleLabel, { color: colors.textSecondary }]}>Simulate New User</Text>
         </Pressable>
-
+        )}
         <Pressable
-          style={[s.demoActionBtn, { backgroundColor: colors.surface }]}
+          style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
           onPress={() => {
-            resetDemoConnections();
-            Alert.alert('Connections Reset', 'Your connections list is now cleared. Go to Connections tab to see the fresh state.');
+            Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Sign Out', style: 'destructive', onPress: () => { Analytics.signedOut(); signOut(); } },
+            ]);
           }}
         >
-          <Ionicons name="people-outline" size={18} color={colors.textSecondary} />
-          <View style={s.demoActionInfo}>
-            <Text style={[s.demoActionLabel, { color: colors.text }]}>Reset Connections</Text>
-            <Text style={[s.demoActionSub, { color: colors.textMuted }]}>Clear all connections to see empty state</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </Pressable>
-
-        {/* Sign out */}
-        <Pressable style={[s.signOutBtn, { borderColor: colors.border }]} onPress={signOut}>
-          <Text style={[s.signOutText, { color: colors.textSecondary }]}>Sign Out</Text>
+          <Ionicons name="log-out-outline" size={20} color="#FF4444" />
+          <Text style={[s.toggleLabel, { color: '#FF4444' }]}>Sign Out</Text>
         </Pressable>
 
       </ScrollView>
+
+      {/* QR expanded modal */}
+      <Modal visible={qrExpanded} transparent animationType="fade" onRequestClose={() => setQrExpanded(false)}>
+        <Pressable style={s.qrOverlay} onPress={() => setQrExpanded(false)}>
+          <Text style={s.qrModalHint}>Let others save your details by scanning</Text>
+          <View style={[s.qrModal, { backgroundColor: colors.surface }]} onStartShouldSetResponder={() => true}>
+            <QRCode value={qrValue} size={240} backgroundColor={colors.surface} color={colors.text} />
+            <Text style={[s.qrModalName, { color: colors.text }]}>{user.first_name} {user.last_name}</Text>
+            <Text style={[s.qrModalSub, { color: colors.textSecondary }]}>
+              {[user.designation ?? user.profession, user.company_name].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+          <Pressable style={s.qrClose} onPress={() => setQrExpanded(false)}>
+            <Ionicons name="close-circle" size={36} color="rgba(255,255,255,0.9)" />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Card Preview Modal ───────────────────────────────────────── */}
+      <Modal visible={showCardPreview} animationType="slide" transparent>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { backgroundColor: colors.background }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: colors.text }]}>Your card preview</Text>
+              <Pressable onPress={() => setShowCardPreview(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 40 }}>
+
+              {/* Identity — matches ContactDetailPage gIdentity */}
+              <View style={s.previewIdentity}>
+                {user.profile_image_url ? (
+                  <Image source={{ uri: user.profile_image_url }} style={s.previewPhoto} />
+                ) : (
+                  <View style={[s.previewAvatarCircle, { backgroundColor: colors.accent + '22' }]}>
+                    <Text style={[s.previewAvatarText, { color: colors.accent }]}>{initials}</Text>
+                  </View>
+                )}
+                <Text style={[s.previewName, { color: colors.text }]}>{user.first_name} {user.last_name}</Text>
+                {user.company_name && <Text style={[s.previewCompany, { color: colors.accent }]}>{user.company_name}</Text>}
+                {user.designation && <Text style={[s.previewDesig, { color: colors.textMuted }]}>{user.designation}</Text>}
+                {user.city && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+                    <Text style={[s.previewDesig, { color: colors.textMuted }]}>
+                      {user.city}{user.country ? `, ${user.country}` : ''}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* CONTACT section */}
+              {(user.phone || user.email) && (
+                <View style={{ gap: 6 }}>
+                  <Text style={[s.previewSectionLabel, { color: colors.textMuted }]}>CONTACT</Text>
+                  <View style={[s.previewSectionCard, { backgroundColor: colors.surface }]}>
+                    {user.phone && (
+                      <View style={s.previewRow}>
+                        <Ionicons name="call-outline" size={18} color={colors.textSecondary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.previewRowLabel, { color: colors.textMuted }]}>Phone</Text>
+                          <Text style={[s.previewRowValue, { color: colors.text }]}>{user.phone}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {user.phone && user.email && <View style={[s.previewDivider, { backgroundColor: colors.border }]} />}
+                    {user.email && (
+                      <View style={s.previewRow}>
+                        <Ionicons name="mail-outline" size={18} color={colors.textSecondary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.previewRowLabel, { color: colors.textMuted }]}>Email</Text>
+                          <Text style={[s.previewRowValue, { color: colors.text }]}>{user.email}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* ONLINE section */}
+              {(user.instagram_handle || user.linkedin_url || user.website_url) && (
+                <View style={{ gap: 6 }}>
+                  <Text style={[s.previewSectionLabel, { color: colors.textMuted }]}>ONLINE</Text>
+                  <View style={[s.previewSectionCard, { backgroundColor: colors.surface }]}>
+                    {user.instagram_handle && (
+                      <View style={s.previewRow}>
+                        <Ionicons name="logo-instagram" size={18} color={colors.textSecondary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.previewRowLabel, { color: colors.textMuted }]}>Instagram</Text>
+                          <Text style={[s.previewRowValue, { color: colors.text }]}>@{user.instagram_handle}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {user.instagram_handle && user.linkedin_url && <View style={[s.previewDivider, { backgroundColor: colors.border }]} />}
+                    {user.linkedin_url && (
+                      <View style={s.previewRow}>
+                        <Ionicons name="logo-linkedin" size={18} color={colors.textSecondary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.previewRowLabel, { color: colors.textMuted }]}>LinkedIn</Text>
+                          <Text style={[s.previewRowValue, { color: colors.text }]}>{user.linkedin_url}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {user.linkedin_url && user.website_url && <View style={[s.previewDivider, { backgroundColor: colors.border }]} />}
+                    {user.website_url && (
+                      <View style={s.previewRow}>
+                        <Ionicons name="globe-outline" size={18} color={colors.textSecondary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.previewRowLabel, { color: colors.textMuted }]}>Website</Text>
+                          <Text style={[s.previewRowValue, { color: colors.text }]}>{user.website_url}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Invite to Connect Modal ───────────────────────────────────── */}
+      <Modal visible={showInvite} animationType="slide" transparent>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { backgroundColor: colors.background }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: colors.text }]}>Invite to Connect</Text>
+              <Pressable onPress={() => setShowInvite(false)}>
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <View style={{ padding: Spacing.lg, gap: Spacing.md }}>
+              {inviteSent ? (
+                <View style={{ alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl }}>
+                  <Ionicons name="checkmark-circle" size={52} color={colors.accent} />
+                  <Text style={[s.modalTitle, { color: colors.text, textAlign: 'center' }]}>Request noted!</Text>
+                  <Text style={{ color: colors.textMuted, textAlign: 'center', lineHeight: 22, fontSize: FontSize.sm, alignSelf: 'stretch' }}>
+                    We've saved this. Connect will open up to more users after beta — we'll reach out to them directly when it does.
+                  </Text>
+                  <Pressable style={[s.modalSaveBtn, { backgroundColor: colors.accent }]} onPress={() => setShowInvite(false)}>
+                    <Text style={s.modalSaveBtnText}>Done</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <Text style={[s.infoBlurbText, { color: colors.textMuted }]}>
+                    Enter their phone number. We'll reach out to them when Connect opens up after beta.
+                  </Text>
+                  <Text style={[s.editLabel, { color: colors.textMuted }]}>PHONE NUMBER</Text>
+                  <TextInput
+                    style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+                    placeholder="+91 98765 43210"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="phone-pad"
+                    value={invitePhone}
+                    onChangeText={setInvitePhone}
+                    autoFocus
+                  />
+                  <Pressable
+                    style={[s.modalSaveBtn, { backgroundColor: invitePhone.replace(/\D/g, '').length >= 10 ? colors.accent : colors.border }]}
+                    onPress={submitInvite}
+                    disabled={invitePhone.replace(/\D/g, '').length < 10 || inviteSubmitting}
+                  >
+                    <Text style={s.modalSaveBtnText}>{inviteSubmitting ? 'Saving…' : 'Send Invite'}</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Edit Details Modal ───────────────────────────────────────── */}
       <Modal visible={showEditDetails} animationType="slide" transparent>
@@ -483,47 +645,19 @@ if (!user) return null;
                 <Ionicons name="close" size={22} color={colors.text} />
               </Pressable>
             </View>
-            <ScrollView contentContainerStyle={s.modalScroll}>
-              <Text style={[s.editLabel, { color: colors.textMuted }]}>FIRST NAME</Text>
-              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editFirstName} onChangeText={setEditFirstName} placeholder="First name" placeholderTextColor={colors.textMuted} />
-              <Text style={[s.editLabel, { color: colors.textMuted }]}>LAST NAME</Text>
-              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editLastName} onChangeText={setEditLastName} placeholder="Last name" placeholderTextColor={colors.textMuted} />
-              <Text style={[s.editLabel, { color: colors.textMuted }]}>DESIGNATION</Text>
-              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editDesignation} onChangeText={setEditDesignation} placeholder="Principal Designer" placeholderTextColor={colors.textMuted} />
-              <Text style={[s.editLabel, { color: colors.textMuted }]}>COMPANY</Text>
-              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editCompany} onChangeText={setEditCompany} placeholder="Studio Forma" placeholderTextColor={colors.textMuted} />
-              <Text style={[s.editLabel, { color: colors.textMuted }]}>CITY</Text>
-              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editCity} onChangeText={setEditCity} placeholder="Mumbai" placeholderTextColor={colors.textMuted} />
-
-              <Text style={[s.editLabel, { color: colors.textMuted }]}>COUNTRY</Text>
-              <Pressable
-                style={[s.pickerSelector, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                onPress={() => { setShowCountryPicker((v) => !v); setShowProfessionPicker(false); }}
-              >
-                <Text style={[s.pickerSelectorText, { color: editCountry ? colors.text : colors.textMuted }]}>
-                  {editCountry || 'Select country'}
-                </Text>
-                <Ionicons name={showCountryPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
-              </Pressable>
-              {showCountryPicker && (
-                <View style={[s.pickerList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  {COUNTRIES.map((c) => (
-                    <Pressable
-                      key={c}
-                      style={[s.pickerItem, editCountry === c && { backgroundColor: colors.accent + '18' }]}
-                      onPress={() => { setEditCountry(c); setShowCountryPicker(false); }}
-                    >
-                      <Text style={[s.pickerItemText, { color: editCountry === c ? colors.accent : colors.text }]}>{c}</Text>
-                      {editCountry === c && <Ionicons name="checkmark" size={16} color={colors.accent} />}
-                    </Pressable>
-                  ))}
-                </View>
-              )}
+            <ScrollView
+              contentContainerStyle={s.modalScroll}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              automaticallyAdjustKeyboardInsets
+            >
+              <Text style={[s.editLabel, { color: colors.textMuted }]}>FULL NAME</Text>
+              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editFullName} onChangeText={setEditFullName} placeholder="Priya Sharma" placeholderTextColor={colors.textMuted} />
 
               <Text style={[s.editLabel, { color: colors.textMuted }]}>PROFESSION</Text>
               <Pressable
                 style={[s.pickerSelector, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                onPress={() => { setShowProfessionPicker((v) => !v); setShowCountryPicker(false); }}
+                onPress={() => setShowProfessionPicker((v) => !v)}
               >
                 <Text style={[s.pickerSelectorText, { color: editProfession ? colors.text : colors.textMuted }]}>
                   {editProfession || 'Select profession'}
@@ -544,6 +678,27 @@ if (!user) return null;
                   ))}
                 </View>
               )}
+              {editProfession === 'Other' && (
+                <TextInput
+                  style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border, marginTop: 8 }]}
+                  value={editCustomProfession}
+                  onChangeText={setEditCustomProfession}
+                  placeholder="Describe your role"
+                  placeholderTextColor={colors.textMuted}
+                />
+              )}
+
+              <Text style={[s.editLabel, { color: colors.textMuted }]}>COMPANY</Text>
+              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editCompany} onChangeText={setEditCompany} placeholder="Studio Forma" placeholderTextColor={colors.textMuted} />
+
+              <Text style={[s.editLabel, { color: colors.textMuted }]}>DESIGNATION</Text>
+              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editDesignation} onChangeText={setEditDesignation} placeholder="Principal Designer" placeholderTextColor={colors.textMuted} />
+
+              <Text style={[s.editLabel, { color: colors.textMuted }]}>ADDRESS</Text>
+              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editAddress} onChangeText={setEditAddress} placeholder="12 North Drive, Bandra West" placeholderTextColor={colors.textMuted} />
+
+              <Text style={[s.editLabel, { color: colors.textMuted }]}>CITY</Text>
+              <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editCity} onChangeText={setEditCity} placeholder="Mumbai" placeholderTextColor={colors.textMuted} />
 
               <Text style={[s.editLabel, { color: colors.textMuted }]}>EMAIL</Text>
               <TextInput style={[s.editInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} value={editEmail} onChangeText={setEditEmail} placeholder="priya@studio.com" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
@@ -577,20 +732,22 @@ if (!user) return null;
               <Pressable
                 style={[s.modalSaveBtn, { backgroundColor: colors.accent }]}
                 onPress={() => {
+                  const nameParts = editFullName.trim().split(/\s+/);
                   updateUser({
-                    first_name: editFirstName.trim(),
-                    last_name: editLastName.trim(),
-                    designation: editDesignation.trim() || undefined,
+                    first_name: nameParts[0] ?? '',
+                    last_name: nameParts.slice(1).join(' '),
+                    profession: editProfession === 'Other' ? (editCustomProfession.trim() || undefined) : (editProfession || undefined),
                     company_name: editCompany.trim() || undefined,
+                    designation: editDesignation.trim() || undefined,
+                    address: editAddress.trim() || undefined,
                     city: editCity.trim() || undefined,
-                    country: editCountry || undefined,
-                    profession: editProfession || undefined,
                     email: editEmail.trim() || undefined,
                     instagram_handle: editInstagram.trim() || undefined,
                     linkedin_url: editLinkedin.trim() || undefined,
                     website_url: editWebsite.trim() || undefined,
                     other_url: editOtherUrl.trim() || undefined,
                   });
+                  Analytics.profileSaved();
                   setShowEditDetails(false);
                 }}
               >
@@ -603,7 +760,7 @@ if (!user) return null;
 
       {/* ── Help & Support Modal ─────────────────────────────────────────── */}
       <Modal visible={showHelpModal} animationType="slide" transparent onRequestClose={() => { setShowHelpModal(false); setQueryDone(false); setQueryText(''); }}>
-        <View style={s.modalOverlay}>
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[s.helpModal, { backgroundColor: colors.background }]}>
             {/* Header */}
             <View style={s.queryModalHeader}>
@@ -613,25 +770,24 @@ if (!user) return null;
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
               {/* FAQ */}
               <Text style={[s.helpModalSection, { color: colors.textMuted }]}>FREQUENTLY ASKED QUESTIONS</Text>
               {[
-                { q: 'How do I scan a brand at a booth?', a: 'Open the Scan tab and point your camera at the QR code displayed at any brand booth. The brand will be saved to your Saved tab instantly.' },
-                { q: 'How do I exchange contacts with someone?', a: "Ask them to show their Designup QR (from their Profile), then scan it via the Scan tab. Both of you will appear in each other's Connects." },
-                { q: 'Why is my exhibition not showing as active?', a: 'You need to scan the entry QR at the venue gate to check in. Once scanned, the exhibition becomes active on your Home screen.' },
-                { q: 'Can I use the app without attending an exhibition?', a: 'Yes — enable Demo Mode in Settings to explore all features of the app with a simulated exhibition.' },
-                { q: 'How do I update my visiting card?', a: 'Tap "Edit Details" on your visiting card in the Profile page. Changes are reflected immediately across the app.' },
+                { q: 'How do I share my digital visiting card?', a: 'Go to the Profile tab and tap on your QR code. Show it to someone — they scan it with their phone camera or the Connect app and your card is saved instantly.' },
+                { q: 'How do I scan someone\'s card?', a: 'Open the Scan tab and point your camera at their QR code. Their contact saves to your Connects automatically.' },
+                { q: 'How do I scan a physical visiting card?', a: 'Tap the card icon in the Scan tab to switch to card scan mode. Point your camera at any printed visiting card — the details are read and saved to your contacts.' },
+                { q: 'Why is my profile showing "Create your visiting card" every time I log in?', a: 'Make sure you completed all required fields (name, profession, company, phone) on the profile setup screen. If the issue persists, reach out via the query box below.' },
+                { q: 'How do I update my details on my visiting card?', a: 'Tap "Edit Details" on your card in the Profile tab. Changes update immediately.' },
+                { q: 'Is my data private?', a: 'Yes. Your contact details are only shared when you explicitly exchange QR cards with someone.' },
               ].map((item, i) => (
                 <FaqItem key={i} question={item.q} answer={item.a} colors={colors} />
               ))}
+            </ScrollView>
 
-              {/* Send Query */}
-              <Text style={[s.helpModalSection, { color: colors.textMuted, marginTop: Spacing.xl }]}>HAVE A QUESTION?</Text>
-              <Text style={[s.helpModalSub, { color: colors.textMuted }]}>
-                Didn't find what you were looking for? Send us a message.
-              </Text>
-              <Text style={[s.queryLabel, { color: colors.textMuted }]}>YOUR MESSAGE</Text>
+            {/* Send Query — always visible at bottom */}
+            <View style={[s.queryFooter, { borderTopColor: colors.border }]}>
+              <Text style={[s.helpModalSection, { color: colors.textMuted, marginTop: 0, marginBottom: Spacing.sm }]}>HAVE A QUESTION?</Text>
               <TextInput
                 style={[s.queryInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
                 value={queryText}
@@ -639,25 +795,16 @@ if (!user) return null;
                 placeholder="Type your question or feedback here..."
                 placeholderTextColor={colors.textMuted}
                 multiline
-                numberOfLines={5}
+                numberOfLines={3}
                 textAlignVertical="top"
                 maxLength={1000}
               />
-              <Text style={[s.queryCharCount, { color: colors.textMuted }]}>{queryText.length}/1000</Text>
-
-              {user?.email ? (
-                <View style={[s.queryFromRow, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="mail-outline" size={13} color={colors.textMuted} />
-                  <Text style={[s.queryFromText, { color: colors.textMuted }]}>
-                    Reply will go to <Text style={{ color: colors.text }}>{user.email}</Text>
-                  </Text>
-                </View>
-              ) : (
-                <Text style={[s.queryNoteText, { color: colors.textMuted }]}>
-                  Add your email in profile to receive a reply.
+              <View style={[s.queryFromRow, { backgroundColor: colors.surface }]}>
+                <Ionicons name="mail-outline" size={13} color={colors.textMuted} />
+                <Text style={[s.queryFromText, { color: colors.textMuted }]}>
+                  We'll reply via the Connect support team
                 </Text>
-              )}
-
+              </View>
               {queryDone ? (
                 <View style={[s.querySuccessInline, { backgroundColor: colors.surface }]}>
                   <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
@@ -675,9 +822,9 @@ if (!user) return null;
                   <Text style={s.querySubmitBtnText}>{querySubmitting ? 'Sending...' : 'Send Query'}</Text>
                 </Pressable>
               )}
-            </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
 
@@ -777,7 +924,7 @@ function FaqItem({ question, answer, colors }: { question: string; answer: strin
 function makeStyles(colors: any) {
   return StyleSheet.create({
     root: { flex: 1 },
-    header: { paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.sm },
+    header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
     headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
     scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 100, gap: Spacing.sm },
 
@@ -834,14 +981,17 @@ function makeStyles(colors: any) {
     qrHint: { fontSize: FontSize.xs },
 
     qrOverlay: {
-      position: 'absolute', top: 0, left: -Spacing.lg, right: -Spacing.lg,
-      bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)',
-      alignItems: 'center', justifyContent: 'center', zIndex: 100,
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
+      alignItems: 'center', justifyContent: 'center', gap: Spacing.lg,
     },
-    qrModal: { borderRadius: Radius.xl, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md },
-    qrModalName: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
-    qrModalId: { fontSize: FontSize.sm },
-    qrClose: { position: 'absolute', top: Spacing.md, right: Spacing.md, padding: Spacing.sm },
+    qrModal: {
+      borderRadius: Radius.xl, padding: Spacing.xl,
+      alignItems: 'center', gap: Spacing.md, width: 300,
+    },
+    qrModalHint: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.55)', textAlign: 'center', letterSpacing: 0.3 },
+    qrModalName: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center' },
+    qrModalSub: { fontSize: FontSize.sm, textAlign: 'center' },
+    qrClose: { alignItems: 'center', justifyContent: 'center', padding: Spacing.sm },
 
     settingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg },
     settingInfo: { flex: 1 },
@@ -867,7 +1017,7 @@ function makeStyles(colors: any) {
 
     // Modals
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' },
-    modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '85%', width: '100%', maxWidth: 390 },
+    modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '92%', width: '100%', maxWidth: 390 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, paddingBottom: Spacing.sm },
     modalTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
     modalScroll: { padding: Spacing.lg, paddingBottom: 60, gap: Spacing.sm },
@@ -877,7 +1027,7 @@ function makeStyles(colors: any) {
     editInputPrefix: { fontSize: FontSize.md, fontWeight: FontWeight.medium, marginRight: 4 },
     editInputInner: { flex: 1, fontSize: FontSize.md },
     editSectionDivider: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, letterSpacing: 1, marginTop: Spacing.xl, marginBottom: Spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.lg },
-    modalSaveBtn: { paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center', marginTop: Spacing.md },
+    modalSaveBtn: { paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center', marginTop: Spacing.md, width: '100%' },
     modalSaveBtnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
     usernameInputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, height: 50 },
     usernameAt: { fontSize: FontSize.md, fontWeight: FontWeight.medium, marginRight: 4 },
@@ -949,6 +1099,9 @@ function makeStyles(colors: any) {
     },
     helpModalSub: { fontSize: FontSize.sm, lineHeight: 20, marginBottom: Spacing.md },
 
+    queryFooter: {
+      borderTopWidth: 1, paddingTop: Spacing.md, paddingBottom: Spacing.lg,
+    },
     querySuccessInline: {
       flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
       borderRadius: Radius.md, padding: Spacing.md,
@@ -996,5 +1149,23 @@ function makeStyles(colors: any) {
       marginBottom: Spacing.md,
     },
     shareQrBtnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+
+    // Card preview modal — mirrors ContactDetailPage in connections.tsx
+    previewIdentity: { gap: 4, paddingBottom: Spacing.sm },
+    previewPhoto: { width: 56, height: 56, borderRadius: 28, marginBottom: Spacing.sm },
+    previewAvatarCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm },
+    previewAvatarText: { fontSize: FontSize.xl, fontWeight: FontWeight.bold },
+    previewName: { fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.3 },
+    previewCompany: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+    previewDesig: { fontSize: FontSize.sm },
+    previewSectionLabel: { fontSize: 10, fontWeight: FontWeight.semibold, letterSpacing: 1 },
+    previewSectionCard: { borderRadius: Radius.lg, overflow: 'hidden' },
+    previewRow: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+      paddingHorizontal: Spacing.lg, paddingVertical: 13,
+    },
+    previewRowLabel: { fontSize: 10, fontWeight: FontWeight.semibold, letterSpacing: 0.3, marginBottom: 1 },
+    previewRowValue: { fontSize: FontSize.sm },
+    previewDivider: { height: StyleSheet.hairlineWidth, marginLeft: 50 },
   });
 }

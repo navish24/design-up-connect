@@ -1,9 +1,13 @@
-import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Tabs, router } from 'expo-router';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, Radius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { isBeta } from '../../lib/betaConfig';
+import { Analytics } from '../../lib/analytics';
+import { useEffect } from 'react';
 
 type TabIconProps = {
   name: keyof typeof Ionicons.glyphMap;
@@ -18,53 +22,69 @@ function TabIcon({ name, color, label, focused, isScan }: TabIconProps) {
 
   if (isScan) {
     return (
-      <View style={[styles.scanButton, { backgroundColor: colors.accent }]}>
-        <Ionicons name={name} size={26} color="#FFF" />
+      <View style={styles.tabItem}>
+        <View style={[styles.scanPill, { backgroundColor: focused ? colors.accent : colors.accent + '28' }]}>
+          <Ionicons name={name} size={20} color={focused ? '#FFF' : colors.accent} />
+        </View>
+        <Text style={[styles.tabLabel, { color: focused ? colors.accent : colors.textSecondary, fontWeight: focused ? '700' : '500' }]}>
+          Scanner
+        </Text>
       </View>
     );
   }
 
   return (
     <View style={styles.tabItem}>
-      <Ionicons name={name} size={22} color={color} />
-      <Text style={[styles.tabLabel, { color }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{label}</Text>
+      <View style={[styles.tabIconWrap, focused && { backgroundColor: colors.accent + '20' }]}>
+        <Ionicons name={name} size={22} color={color} />
+      </View>
+      <Text style={[styles.tabLabel, { color, fontWeight: focused ? '700' : '500' }]} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
 
-// Shared with scan.tsx so it can restore the exact same style when un-hiding
-// the tab bar — passing `undefined` to setOptions overwrites this default
-// instead of falling back to it, leaving the bar with no theming.
-export function getTabBarStyle(colors: ReturnType<typeof useTheme>['colors']) {
+export function getTabBarStyle(colors: ReturnType<typeof useTheme>['colors'], bottomInset = 0) {
   return {
     backgroundColor: colors.tabBar,
     borderTopColor: colors.border,
     borderTopWidth: 1,
-    height: 80,
-    paddingBottom: 16,
+    height: 76 + bottomInset,
+    paddingBottom: 10 + bottomInset,
     paddingTop: 8,
   };
 }
 
 export default function AppLayout() {
   const { colors } = useTheme();
+  const { user, isLoading } = useAuth();
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace('/(auth)/welcome');
+    }
+  }, [user, isLoading]);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: getTabBarStyle(colors),
+        tabBarStyle: getTabBarStyle(colors, Platform.OS === 'web' ? 0 : insets.bottom),
         tabBarShowLabel: false,
+        tabBarItemStyle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
       }}
     >
       <Tabs.Screen
         name="index"
+        listeners={{ focus: () => Analytics.tabViewed('home') }}
         options={{
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'home' : 'home-outline'} color={color} label="Home" focused={focused} />
           ),
           tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: colors.textMuted,
+          tabBarInactiveTintColor: colors.textSecondary,
         }}
       />
       <Tabs.Screen
@@ -75,37 +95,40 @@ export default function AppLayout() {
             <TabIcon name={focused ? 'bookmark' : 'bookmark-outline'} color={color} label="Saved" focused={focused} />
           ),
           tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: colors.textMuted,
+          tabBarInactiveTintColor: colors.textSecondary,
         }}
       />
       <Tabs.Screen
         name="scan"
+        listeners={{ focus: () => Analytics.tabViewed('scan') }}
         options={{
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name="scan" color={color} label="Scan" focused={focused} isScan />
           ),
           tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: colors.textMuted,
+          tabBarInactiveTintColor: colors.textSecondary,
         }}
       />
       <Tabs.Screen
         name="connections"
+        listeners={{ focus: () => Analytics.tabViewed('connections') }}
         options={{
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'people' : 'people-outline'} color={color} label="Connects" focused={focused} />
           ),
           tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: colors.textMuted,
+          tabBarInactiveTintColor: colors.textSecondary,
         }}
       />
       <Tabs.Screen
         name="profile"
+        listeners={{ focus: () => Analytics.tabViewed('profile') }}
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} label="Profile" focused={focused} />
+            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} label="Card" focused={focused} />
           ),
           tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: colors.textMuted,
+          tabBarInactiveTintColor: colors.textSecondary,
         }}
       />
     </Tabs>
@@ -114,27 +137,27 @@ export default function AppLayout() {
 
 const styles = StyleSheet.create({
   tabItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    width: 64,
+  },
+  tabIconWrap: {
+    width: 40,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabLabel: {
     fontSize: 11,
-    width: 64,
     textAlign: 'center',
   },
-  scanButton: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
+  scanPill: {
+    width: 52,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#00B4B4',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
   },
 });

@@ -9,7 +9,9 @@
         "EXPO_PUBLIC_IS_BETA": "true"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease",
+        "withoutCredentials": false
       }
     },
     "beta-ios": {
@@ -28,7 +30,17 @@
     },
     "production": {
       "android": {
-        "buildType": "aab"
+        "buildType": "app-bundle"
+      }
+    },
+    "production-apk": {
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview-ios": {
+      "ios": {
+        "simulator": true
       }
     }
   }

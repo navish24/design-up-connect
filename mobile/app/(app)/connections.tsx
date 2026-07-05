@@ -1,8 +1,11 @@
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  Alert, ToastAndroid, Platform, Image, Modal,
+  Alert, ToastAndroid, Platform, Image, Modal, Linking,
 } from 'react-native';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment, useCallback, useRef } from 'react';
+import { supabase } from '../../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isBeta } from '../../lib/betaConfig';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,15 +14,66 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import NotesModal from '../../components/NotesModal';
+import { Analytics } from '../../lib/analytics';
 import type { Connection, CardContact } from '../../types';
 
-async function copyToClipboard(value: string, label: string) {
-  await Clipboard.setStringAsync(value);
-  if (Platform.OS === 'android') {
-    ToastAndroid.show(`${label} copied`, ToastAndroid.SHORT);
+function openExternal(url: string) {
+  if (Platform.OS === 'web') {
+    (globalThis as any).window?.open(url, '_blank', 'noopener,noreferrer');
   } else {
-    Alert.alert('Copied', `${label} copied to clipboard`);
+    Linking.openURL(url).catch(() => {});
   }
+}
+
+function openWhatsApp(phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  Analytics.contactIconTapped('whatsapp');
+  openExternal(`https://wa.me/${digits}`);
+}
+
+function openLink(label: string, value: string) {
+  Analytics.contactIconTapped(
+    label === 'LinkedIn' ? 'linkedin'
+    : label === 'Instagram' ? 'instagram'
+    : 'website'
+  );
+  let url: string;
+  if (label === 'Instagram') url = `https://instagram.com/${value.replace(/^@/, '')}`;
+  else if (label === 'Facebook') url = value.includes('facebook.com') ? (value.startsWith('http') ? value : `https://${value}`) : `https://facebook.com/${value}`;
+  else if (label === 'Twitter/X') url = (value.includes('twitter.com') || value.includes('x.com')) ? (value.startsWith('http') ? value : `https://${value}`) : `https://x.com/${value}`;
+  else url = value.startsWith('http') ? value : `https://${value}`;
+  openExternal(url);
+}
+
+async function copyToClipboard(value: string, label: string, onSuccess?: () => void) {
+  try {
+    await Clipboard.setStringAsync(value);
+    onSuccess?.();
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(`${label} copied`, ToastAndroid.SHORT);
+    }
+  } catch {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Could not copy', 'Please copy the text manually.');
+    }
+  }
+}
+
+function CopyButton({ value, label, size = 16, style }: { value: string; label: string; size?: number; style?: any }) {
+  const { colors } = useTheme();
+  const [copied, setCopied] = useState(false);
+  return (
+    <Pressable
+      onPress={() => copyToClipboard(value, label, () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })}
+      hitSlop={8}
+      style={style}
+    >
+      <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={size} color={copied ? '#4CAF50' : colors.textMuted} />
+    </Pressable>
+  );
 }
 
 // ── PLACEHOLDER DATA ──────────────────────────────────────────────────────────
@@ -56,48 +110,94 @@ const MOCK_CONNECTIONS: Connection[] = [
 
 type ActiveView =
   | { type: 'list' }
-  | { type: 'nexgild_detail'; connection: Connection }
+  | { type: 'connect_detail'; connection: Connection }
   | { type: 'card_detail'; contact: CardContact };
 
 export default function ConnectionsScreen() {
   const { colors } = useTheme();
-  const { demoConnectionsReset, demoAddedConnections, notes, addNote, cardContacts, deleteCardContact, updateCardContact } = useAuth();
+  const { demoConnectionsReset, demoAddedConnections, notes, addNote, cardContacts, deleteCardContact, updateCardContact, user } = useAuth();
   const router = useRouter();
+  const { top: topInset } = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [activeView, setActiveView] = useState<ActiveView>({ type: 'list' });
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
+  const exchangingRef = useRef<Set<string>>(new Set());
+
+  // Reset to list whenever the Connects tab gains focus (handles both tab switching
+  // and tapping the Connects icon while already on it)
+  useFocusEffect(
+    useCallback(() => {
+      setActiveView({ type: 'list' });
+    }, [])
+  );
   const s = makeStyles(colors);
 
-  const handleExchangeContact = (connId: string, userName: string) => {
+  const handleExchangeContact = async (connId: string, userName: string) => {
+    if (exchangingRef.current.has(connId)) return; // prevent double-tap
+    exchangingRef.current.add(connId);
+    Analytics.exchangeContactTapped('list');
+
+    // connId is "demo-{uuid}" — extract the target user's real Supabase ID
+    const targetUserId = connId.startsWith('demo-') ? connId.slice(5) : connId;
+    const isRealUser = targetUserId.length === 36 && targetUserId.includes('-');
+
+    if (user?.id && isRealUser) {
+      // Use RPC so the insert runs as postgres (SECURITY DEFINER),
+      // bypassing the RLS policy that blocks inserting rows owned by another user.
+      const { error } = await supabase.rpc('exchange_contact', {
+        target_user_id: targetUserId,
+        exh_id: null,
+      });
+      if (error) {
+        exchangingRef.current.delete(connId);
+        Alert.alert('Error', `Couldn't share contact: ${error.message}`);
+        return;
+      }
+    }
+
     setMutualIds((prev) => new Set([...prev, connId]));
-    Alert.alert('Contact Shared', `Your contact has been shared with ${userName}`);
+    exchangingRef.current.delete(connId);
+
+    // Show feedback: toast on Android, Alert on iOS/web
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(`Contact shared with ${userName}`, ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Contact Shared', `Your contact has been shared with ${userName}. They'll see you in their connections.`);
+    }
   };
 
-  // Compute full Nexgild connections list reactively from context
+  // Compute full connections list reactively from context
   const allConnections = useMemo<Connection[]>(() => {
     if (demoConnectionsReset) return [];
-    const addedConns: Connection[] = (demoAddedConnections as any[]).map((person) => ({
-      id: `demo-${person.id}`,
-      user: {
-        id: person.id,
-        full_name: person.full_name,
-        designup_user_id: person.id,
-        designation: person.designation,
-        company_name: person.company,
-        email: person.email,
-        phone: person.phone,
-        city: person.city,
-      },
-      brand_name: person.company,
-      brand_id: person.brand_id,
-      connection_type: 'networking' as const,
-      scope: 'personal' as const,
-      is_mutual: false,
-      to_contact_shared: true,
-      from_contact_shared: false,
-      created_at: new Date().toISOString(),
-    }));
-    const all = [...MOCK_CONNECTIONS, ...addedConns];
+    const addedConns: Connection[] = (demoAddedConnections as any[]).map((person) => {
+      // loadConnections stores full Connection objects; addDemoConnection stores flat objects
+      if (person.user && typeof person.user === 'object') {
+        const id = String(person.id);
+        return { ...person, id: id.startsWith('demo-') ? id : `demo-${id}` } as Connection;
+      }
+      return {
+        id: `demo-${person.id}`,
+        user: {
+          id: person.id,
+          full_name: person.full_name,
+          designup_user_id: person.designup_user_id ?? person.id,
+          designation: person.designation,
+          company_name: person.company_name ?? person.company,
+          email: person.email,
+          phone: person.phone,
+          city: person.city,
+        },
+        brand_name: person.company_name ?? person.company,
+        brand_id: person.brand_id,
+        connection_type: 'networking' as const,
+        scope: 'personal' as const,
+        is_mutual: false,
+        to_contact_shared: true,
+        from_contact_shared: false,
+        created_at: new Date().toISOString(),
+      };
+    });
+    const all = isBeta ? addedConns : [...MOCK_CONNECTIONS, ...addedConns];
     return all.map((c) =>
       mutualIds.has(c.id) ? { ...c, is_mutual: true, from_contact_shared: true } : c
     );
@@ -120,12 +220,13 @@ export default function ConnectionsScreen() {
     const q = search.toLowerCase();
     if (!q) return true;
     const allValues = c.fields.map((f) => f.value.toLowerCase()).join(' ');
-    return allValues.includes(q) || c.notes.toLowerCase().includes(q);
+    const modalNotes = (notes[c.id] ?? []).map((n) => n.text).join(' ').toLowerCase();
+    return allValues.includes(q) || c.notes.toLowerCase().includes(q) || modalNotes.includes(q);
   });
 
   // ── Detail views ────────────────────────────────────────────────────────────
 
-  if (activeView.type === 'nexgild_detail') {
+  if (activeView.type === 'connect_detail') {
     const currentConn = allConnections.find((c) => c.id === activeView.connection.id) ?? activeView.connection;
     return (
       <ContactDetailPage
@@ -158,16 +259,8 @@ export default function ConnectionsScreen() {
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={s.header}>
-        <Text style={[s.headerTitle, { color: colors.text }]}>Designup Connect</Text>
-        {/* Scan Card shortcut */}
-        <Pressable
-          style={[s.scanCardBtn, { backgroundColor: colors.accent }]}
-          onPress={() => router.push('/(app)/scan?cardMode=1' as any)}
-        >
-          <Ionicons name="card-outline" size={15} color="#FFF" />
-          <Text style={s.scanCardBtnText}>Scan Card</Text>
-        </Pressable>
+      <View style={[s.header, { paddingTop: topInset + 12 }]}>
+        <Text style={[s.headerTitle, { color: colors.text }]}>Connects</Text>
       </View>
 
       <View style={s.searchWrap}>
@@ -178,23 +271,23 @@ export default function ConnectionsScreen() {
             placeholder="Search by name, brand, role, city, notes"
             placeholderTextColor={colors.textMuted}
             value={search}
-            onChangeText={setSearch}
+            onChangeText={(t) => { setSearch(t); if (t.length > 0) Analytics.connectionSearched(t); }}
           />
         </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* ── Nexgild connections section ── */}
+        {/* ── Connections section ── */}
         {filteredConnections.length > 0 && (
           <>
-            <Text style={[s.sectionHeader, { color: colors.textMuted }]}>NEXGILD CONNECTIONS</Text>
+            <Text style={[s.sectionHeader, { color: colors.textMuted }]}>CONNECTIONS</Text>
             {filteredConnections.map((conn) => (
               <ConnectionCard
                 key={conn.id}
                 connection={conn}
                 colors={colors}
-                onPress={() => setActiveView({ type: 'nexgild_detail', connection: conn })}
+                onPress={() => setActiveView({ type: 'connect_detail', connection: conn })}
                 onExchange={(id, name) => handleExchangeContact(id, name)}
                 notes={notes[conn.id] ?? []}
                 search={search}
@@ -228,8 +321,8 @@ export default function ConnectionsScreen() {
             <Text style={[s.emptyTitle, { color: colors.text }]}>No connections yet</Text>
             <Text style={[s.emptyBody, { color: colors.textSecondary }]}>
               {isBeta
-                ? 'Everyone you\'ve connected with appears here — scan a visiting card or a Nexgild QR to get started.'
-                : 'Scan a QR code to connect with someone on Nexgild, or tap "Scan Card" to save a physical visiting card.'}
+                ? 'Everyone you\'ve connected with appears here — scan a visiting card or a Connect QR to get started.'
+                : 'Scan a QR code to connect with someone on Connect, or tap "Scan Card" to save a physical visiting card.'}
             </Text>
             <Pressable
               style={[s.emptyCardBtn, { backgroundColor: colors.accent }]}
@@ -321,6 +414,11 @@ function CardContactCard({ contact, colors, onPress, search }: {
 
 // ── Card contact detail page ──────────────────────────────────────────────────
 
+const IDENTITY_LABELS = new Set(['Name', 'Company', 'Designation']);
+const CONTACT_LABELS_SET = new Set(['Phone', 'WhatsApp', 'Email']);
+const ONLINE_LABELS_SET = new Set(['Website', 'Instagram', 'LinkedIn', 'Twitter/X', 'Facebook', 'Behance', 'YouTube', 'Social Handle']);
+const LOCATION_LABELS_SET = new Set(['Address']);
+
 function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, notes, onAddNote }: {
   contact: CardContact;
   colors: any;
@@ -331,16 +429,32 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
   onAddNote: (text: string) => void;
 }) {
   const s = makeStyles(colors);
+  const { top: topInset } = useSafeAreaInsets();
   const [showNotes, setShowNotes] = useState(false);
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
 
-  const nameField = contact.fields.find((f) => f.label === 'Name');
-  const fieldsToShow = contact.fields.filter((f) => f.label !== 'Name');
+  const name = contact.fields.find((f) => f.label === 'Name')?.value ?? 'Unknown';
+  const company = contact.fields.find((f) => f.label === 'Company')?.value;
+  const designation = contact.fields.find((f) => f.label === 'Designation')?.value;
+
+  const contactFields = contact.fields.filter((f) => CONTACT_LABELS_SET.has(f.label));
+  const onlineFields = contact.fields.filter((f) => ONLINE_LABELS_SET.has(f.label));
+  const locationFields = contact.fields.filter((f) => LOCATION_LABELS_SET.has(f.label));
+  const otherFields = contact.fields.filter(
+    (f) => !IDENTITY_LABELS.has(f.label) && !CONTACT_LABELS_SET.has(f.label) &&
+            !ONLINE_LABELS_SET.has(f.label) && !LOCATION_LABELS_SET.has(f.label)
+  );
 
   const handleDelete = () => {
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).window?.confirm(`Remove ${name} from your card directory?`)) {
+        onDelete(contact.id);
+      }
+      return;
+    }
     Alert.alert(
       'Delete Contact',
-      `Remove ${nameField?.value ?? 'this contact'} from your card directory? The card image will also be deleted.`,
+      `Remove ${name} from your card directory? The card image will also be deleted.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => onDelete(contact.id) },
@@ -350,107 +464,131 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={s.detailHeader}>
+      <View style={[s.detailHeader, { paddingTop: topInset + 12 }]}>
         <Pressable onPress={onBack} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
-        <Text style={[s.headerTitle, { color: colors.text }]}>Designup Connect</Text>
+        <Text style={[s.headerTitle, { color: colors.text }]}>Connects</Text>
         <Pressable onPress={handleDelete} hitSlop={8}>
           <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={s.detailScroll}>
-
-        {/* Card image(s) */}
-        {contact.card_image_uri && (
-          <View style={s.detailCardImageRow}>
-            <Pressable onPress={() => setExpandedUri(contact.card_image_uri)} style={s.detailCardImageWrap}>
-              <Image source={{ uri: contact.card_image_uri }} style={s.detailCardImage} resizeMode="contain" />
-              <View style={[s.expandHint, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-                <Ionicons name="expand-outline" size={12} color="#FFF" />
-                <Text style={s.expandHintText}>Front</Text>
-              </View>
-            </Pressable>
-            {contact.card_image_uri_back && (
-              <Pressable onPress={() => setExpandedUri(contact.card_image_uri_back)} style={s.detailCardImageWrap}>
-                <Image source={{ uri: contact.card_image_uri_back }} style={s.detailCardImage} resizeMode="contain" />
-                <View style={[s.expandHint, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-                  <Ionicons name="expand-outline" size={12} color="#FFF" />
-                  <Text style={s.expandHintText}>Back</Text>
-                </View>
+        {/* Name + card thumbnails side by side (matches VariantC test layout) */}
+        <View style={s.gTopRow}>
+          <View style={{ flex: 1, gap: 4, justifyContent: 'center' }}>
+            <Text style={[s.gName, { color: colors.text }]}>{name}</Text>
+            {company && <Text style={[s.gCompany, { color: colors.accent }]}>{company}</Text>}
+            {designation && <Text style={[s.gDesignation, { color: colors.textMuted }]}>{designation}</Text>}
+            <View style={[s.gCardBadge, { backgroundColor: colors.surfaceElevated }]}>
+              <Ionicons name="card-outline" size={11} color={colors.textMuted} />
+              <Text style={[s.gCardBadgeText, { color: colors.textMuted }]}>Physical visiting card</Text>
+            </View>
+          </View>
+          {contact.card_image_uri && (
+            <View style={s.gThumbStack}>
+              <Pressable onPress={() => setExpandedUri(contact.card_image_uri)} style={s.gThumb}>
+                <Image source={{ uri: contact.card_image_uri! }} style={s.gThumbImg} resizeMode="cover" />
+                <Text style={s.gThumbLabel}>Front</Text>
               </Pressable>
-            )}
-          </View>
-        )}
-        {expandedUri && (
-          <Modal visible transparent animationType="fade">
-            <Pressable style={s.lightboxOverlay} onPress={() => setExpandedUri(null)}>
-              <Image source={{ uri: expandedUri }} style={s.lightboxImage} resizeMode="contain" />
-              <Pressable style={s.lightboxClose} onPress={() => setExpandedUri(null)}>
-                <Ionicons name="close" size={22} color="#FFF" />
-              </Pressable>
-            </Pressable>
-          </Modal>
-        )}
-
-        {/* Name + notes CTA */}
-        <View style={[s.visitingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[s.visitingAvatar, { backgroundColor: colors.surfaceElevated }]}>
-            <Text style={[s.visitingAvatarText, { color: colors.textSecondary }]}>
-              {nameField
-                ? nameField.value.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-                : '?'}
-            </Text>
-          </View>
-          <Text style={[s.visitingName, { color: colors.text }]}>
-            {nameField?.value ?? 'Unknown'}
-          </Text>
-
-          {/* Physical card badge */}
-          <View style={[s.detailCardBadge, { backgroundColor: colors.surfaceElevated }]}>
-            <Ionicons name="card-outline" size={11} color={colors.textMuted} />
-            <Text style={[s.detailCardBadgeText, { color: colors.textMuted }]}>Physical visiting card</Text>
-          </View>
-
-          <Pressable
-            style={[s.cardNotesBtn, { borderColor: colors.gold, backgroundColor: colors.background }]}
-            onPress={() => setShowNotes(true)}
-          >
-            <Ionicons name="create-outline" size={13} color={colors.gold} />
-            <Text style={[s.cardNotesBtnText, { color: colors.gold }]}>
-              {notes.length > 0 ? `${notes.length} Note${notes.length > 1 ? 's' : ''}` : 'Notes'}
-            </Text>
-          </Pressable>
-
-          {contact.notes.trim().length > 0 && (
-            <Text style={[s.scanNote, { color: colors.textSecondary }]}>{contact.notes}</Text>
+              {contact.card_image_uri_back && (
+                <Pressable onPress={() => setExpandedUri(contact.card_image_uri_back)} style={[s.gThumb, { marginTop: -18 }]}>
+                  <Image source={{ uri: contact.card_image_uri_back! }} style={s.gThumbImg} resizeMode="cover" />
+                  <Text style={s.gThumbLabel}>Back</Text>
+                </Pressable>
+              )}
+            </View>
           )}
         </View>
 
-        {/* All fields */}
-        <View style={[s.contactSection, { backgroundColor: colors.surface }]}>
-          {fieldsToShow.map((field, idx) => (
-            <FieldDetailRow
-              key={idx}
-              field={field}
-              colors={colors}
-              isLast={idx === fieldsToShow.length - 1}
-            />
-          ))}
+        {contactFields.length > 0 && (
+          <GroupedSection label="CONTACT" colors={colors} s={s}>
+            {contactFields.map((f, i) => (
+              <Fragment key={i}>
+                <GroupedFieldRow field={f} colors={colors} s={s} />
+                {i < contactFields.length - 1 && <View style={[s.gDivider, { backgroundColor: colors.border }]} />}
+              </Fragment>
+            ))}
+          </GroupedSection>
+        )}
+
+        {onlineFields.length > 0 && (
+          <GroupedSection label="ONLINE" colors={colors} s={s}>
+            {onlineFields.map((f, i) => (
+              <Fragment key={i}>
+                <GroupedFieldRow field={f} colors={colors} s={s} />
+                {i < onlineFields.length - 1 && <View style={[s.gDivider, { backgroundColor: colors.border }]} />}
+              </Fragment>
+            ))}
+          </GroupedSection>
+        )}
+
+        {locationFields.length > 0 && (
+          <GroupedSection label="LOCATION" colors={colors} s={s}>
+            {locationFields.map((f, i) => (
+              <Fragment key={i}>
+                <GroupedFieldRow field={f} colors={colors} s={s} />
+                {i < locationFields.length - 1 && <View style={[s.gDivider, { backgroundColor: colors.border }]} />}
+              </Fragment>
+            ))}
+          </GroupedSection>
+        )}
+
+        {otherFields.length > 0 && (
+          <GroupedSection label="OTHER" colors={colors} s={s}>
+            {otherFields.map((f, i) => (
+              <Fragment key={i}>
+                <GroupedFieldRow field={f} colors={colors} s={s} />
+                {i < otherFields.length - 1 && <View style={[s.gDivider, { backgroundColor: colors.border }]} />}
+              </Fragment>
+            ))}
+          </GroupedSection>
+        )}
+
+        {/* Notes */}
+        <View style={s.gSectionWrap}>
+          <Text style={[s.gSectionLabel, { color: colors.textMuted }]}>NOTES</Text>
+          <View style={[s.gSectionCard, { backgroundColor: colors.surface }]}>
+            {contact.notes.trim().length > 0 && (
+              <>
+                <View style={s.gRow}>
+                  <Ionicons name="create-outline" size={17} color={colors.gold} />
+                  <Text style={[s.gRowValue, { color: colors.textSecondary, flex: 1, lineHeight: 20 }]}>{contact.notes}</Text>
+                </View>
+                <View style={[s.gDivider, { backgroundColor: colors.border }]} />
+              </>
+            )}
+            <Pressable style={s.gRow} onPress={() => setShowNotes(true)}>
+              <Ionicons name="add-circle-outline" size={17} color={colors.accent} />
+              <Text style={[s.gRowValue, { color: colors.accent, flex: 1 }]}>
+                {notes.length > 0 ? `View ${notes.length} note${notes.length > 1 ? 's' : ''}` : 'Add a note'}
+              </Text>
+              <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+            </Pressable>
+          </View>
         </View>
 
-        {/* Scanned at */}
         <Text style={[s.scannedAt, { color: colors.textMuted }]}>
           Scanned {new Date(contact.scanned_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
         </Text>
       </ScrollView>
 
+      {expandedUri && (
+        <Modal visible transparent animationType="fade">
+          <Pressable style={s.lightboxOverlay} onPress={() => setExpandedUri(null)}>
+            <Image source={{ uri: expandedUri }} style={s.lightboxImage} resizeMode="contain" />
+            <Pressable style={s.lightboxClose} onPress={() => setExpandedUri(null)}>
+              <Ionicons name="close" size={22} color="#FFF" />
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
       <NotesModal
         visible={showNotes}
         onClose={() => setShowNotes(false)}
-        entityName={nameField?.value ?? 'Contact'}
+        entityName={name}
         notes={notes}
         onAddNote={onAddNote}
         colors={colors}
@@ -477,10 +615,13 @@ const FIELD_ICONS: Record<string, string> = {
   Other: 'ellipsis-horizontal-outline',
 };
 
+const LINKABLE_FIELDS = new Set(['Website', 'Instagram', 'LinkedIn']);
+
 function FieldDetailRow({ field, colors, isLast }: { field: import('../../types').CardContactField; colors: any; isLast: boolean }) {
   const s = makeStyles(colors);
   const icon = FIELD_ICONS[field.label] ?? 'ellipsis-horizontal-outline';
   const isCopyable = ['Phone', 'WhatsApp', 'Email', 'Website', 'LinkedIn', 'Instagram', 'Twitter/X'].includes(field.label);
+  const isLinkable = LINKABLE_FIELDS.has(field.label);
 
   return (
     <View style={[s.contactRow, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
@@ -489,16 +630,57 @@ function FieldDetailRow({ field, colors, isLast }: { field: import('../../types'
         <Text style={[s.contactFieldLabel, { color: colors.textMuted }]}>{field.label}</Text>
         <Text style={[s.contactValue, { color: colors.text }]}>{field.value}</Text>
       </View>
-      {isCopyable && (
-        <Pressable onPress={() => copyToClipboard(field.value, field.label)} hitSlop={8}>
-          <Ionicons name="copy-outline" size={16} color={colors.textMuted} />
+      {isLinkable && (
+        <Pressable onPress={() => openLink(field.label, field.value)} hitSlop={8}>
+          <Ionicons name="open-outline" size={16} color={colors.textMuted} />
         </Pressable>
       )}
+      {isCopyable && <CopyButton value={field.value} label={field.label} size={16} />}
     </View>
   );
 }
 
-// ── Nexgild connection components (unchanged from before) ─────────────────────
+// ── Grouped design helpers ────────────────────────────────────────────────────
+
+function GroupedSection({ label, children, colors, s }: { label: string; children: React.ReactNode; colors: any; s: any }) {
+  return (
+    <View style={s.gSectionWrap}>
+      <Text style={[s.gSectionLabel, { color: colors.textMuted }]}>{label}</Text>
+      <View style={[s.gSectionCard, { backgroundColor: colors.surface }]}>{children}</View>
+    </View>
+  );
+}
+
+function GroupedFieldRow({ field, colors, s }: { field: import('../../types').CardContactField; colors: any; s: any }) {
+  const icon = FIELD_ICONS[field.label] ?? 'ellipsis-horizontal-outline';
+  const isPhone = field.label === 'Phone' || field.label === 'WhatsApp';
+  const isLinkable = ONLINE_LABELS_SET.has(field.label) && field.label !== 'Social Handle';
+  const isCopyable = CONTACT_LABELS_SET.has(field.label);
+  const multiLine = field.label === 'Address' || field.label === 'Other';
+
+  return (
+    <View style={[s.gRow, multiLine && { alignItems: 'flex-start' }]}>
+      <Ionicons name={icon as any} size={18} color={colors.textSecondary} style={multiLine ? { marginTop: 2 } : undefined} />
+      <View style={{ flex: 1 }}>
+        <Text style={[s.gRowLabel, { color: colors.textMuted }]}>{field.label}</Text>
+        <Text style={[s.gRowValue, { color: colors.text }]} numberOfLines={multiLine ? 5 : 1}>{field.value}</Text>
+      </View>
+      {isPhone && (
+        <Pressable onPress={() => openWhatsApp(field.value)} hitSlop={8}>
+          <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+        </Pressable>
+      )}
+      {isLinkable && (
+        <Pressable onPress={() => openLink(field.label, field.value)} hitSlop={8} style={isPhone ? { marginLeft: 10 } : undefined}>
+          <Ionicons name="open-outline" size={16} color={colors.accent} />
+        </Pressable>
+      )}
+      {(isPhone || isCopyable) && <CopyButton value={field.value} label={field.label} size={15} style={{ marginLeft: 8 }} />}
+    </View>
+  );
+}
+
+// ── Connection components ─────────────────────────────────────────────────────
 
 function ConnectionCard({ connection, colors, onPress, onExchange, notes = [], search = '' }: {
   connection: Connection; colors: any; onPress: () => void;
@@ -582,17 +764,18 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
   router: ReturnType<typeof useRouter>;
 }) {
   const s = makeStyles(colors);
+  const { top: topInset } = useSafeAreaInsets();
   const { user } = connection;
   const [showNotes, setShowNotes] = useState(false);
   const [photoExpanded, setPhotoExpanded] = useState(false);
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={s.detailHeader}>
+      <View style={[s.detailHeader, { paddingTop: topInset + 12 }]}>
         <Pressable onPress={onBack} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
-        <Text style={[s.headerTitle, { color: colors.text }]}>Designup Connect</Text>
+        <Text style={[s.headerTitle, { color: colors.text }]}>Connects</Text>
         <View style={{ width: 30 }} />
       </View>
 
@@ -608,72 +791,138 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
           </Modal>
         )}
 
-        <View style={[s.visitingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {user.profile_image_url ? (
-            <Pressable onPress={() => setPhotoExpanded(true)}>
-              <Image source={{ uri: user.profile_image_url }} style={s.visitingAvatarPhoto} />
+        {/* Identity */}
+        <View style={s.gIdentity}>
+          {user.profile_image_url && (
+            <Pressable onPress={() => setPhotoExpanded(true)} style={s.gProfileThumb}>
+              <Image source={{ uri: user.profile_image_url }} style={s.gProfileThumbImg} />
             </Pressable>
-          ) : (
-            <View style={[s.visitingAvatar, { backgroundColor: '#E8EAE6' }]}>
-              <Text style={[s.visitingAvatarText, { color: '#6B7280' }]}>
-                {user.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-              </Text>
-            </View>
           )}
-          <Text style={[s.visitingName, { color: colors.text }]}>{user.full_name}</Text>
+          <Text style={[s.gName, { color: colors.text }]}>{user.full_name}</Text>
           {connection.brand_name && (
-            <Text style={[s.visitingBrand, { color: colors.textMuted }]}>{connection.brand_name}</Text>
+            <Text style={[s.gCompany, { color: colors.accent }]}>{connection.brand_name}</Text>
           )}
           {user.designation && (
-            <Text style={[s.visitingDesig, { color: colors.textSecondary }]}>{user.designation}</Text>
+            <Text style={[s.gDesignation, { color: colors.textMuted }]}>{user.designation}</Text>
           )}
           {user.city && (
-            <Text style={[s.visitingCity, { color: colors.textMuted }]}>{user.city}</Text>
+            <View style={s.gCityRow}>
+              <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+              <Text style={[s.gDesignation, { color: colors.textMuted }]}>{user.city}</Text>
+            </View>
           )}
-          <Pressable
-            style={[s.cardNotesBtn, { borderColor: colors.gold, backgroundColor: colors.background }]}
-            onPress={() => setShowNotes(true)}
-          >
-            <Ionicons name="create-outline" size={13} color={colors.gold} />
-            <Text style={[s.cardNotesBtnText, { color: colors.gold }]}>
-              {notes.length > 0 ? `${notes.length} Note${notes.length > 1 ? 's' : ''}` : 'Notes'}
-            </Text>
-          </Pressable>
         </View>
 
-        <View style={[s.contactSection, { backgroundColor: colors.surface }]}>
-          {user.email && <ContactRow icon="mail-outline" label="Email" value={user.email} colors={colors} />}
-          {user.phone && <ContactRow icon="call-outline" label="Phone" value={user.phone} colors={colors} />}
-          {user.linkedin_url && <ContactRow icon="logo-linkedin" label="LinkedIn" value={user.linkedin_url} colors={colors} clickable={false} />}
-          {user.instagram_handle && <ContactRow icon="logo-instagram" label="Instagram" value={`@${user.instagram_handle}`} colors={colors} clickable={false} />}
-          {user.website_url && <ContactRow icon="globe-outline" label="Website" value={user.website_url} colors={colors} />}
-        </View>
-
-        {connection.brand_id && connection.brand_name && (
-          <Pressable
-            style={[s.linkedBrandSection, { backgroundColor: colors.surface }]}
-            onPress={() => router.push(`/brand/${connection.brand_id}` as any)}
-          >
-            <View style={[s.linkedBrandInitial, { backgroundColor: colors.accent + '22' }]}>
-              <Text style={[s.linkedBrandInitialText, { color: colors.accent }]}>
-                {connection.brand_name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={s.linkedBrandInfo}>
-              <Text style={[s.linkedBrandLabel, { color: colors.textMuted }]}>Represents</Text>
-              <Text style={[s.linkedBrandName, { color: colors.text }]}>{connection.brand_name}</Text>
-            </View>
-            <Text style={[s.linkedBrandView, { color: colors.accent }]}>View →</Text>
-          </Pressable>
+        {/* CONTACT */}
+        {(user.phone || user.email) && (
+          <GroupedSection label="CONTACT" colors={colors} s={s}>
+            {user.phone && (
+              <View style={s.gRow}>
+                <Ionicons name="call-outline" size={18} color={colors.textSecondary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.gRowLabel, { color: colors.textMuted }]}>Phone</Text>
+                  <Text style={[s.gRowValue, { color: colors.text }]}>{user.phone}</Text>
+                </View>
+                <Pressable onPress={() => openWhatsApp(user.phone!)} hitSlop={8}>
+                  <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                </Pressable>
+                <CopyButton value={user.phone!} label="Phone" size={15} style={{ marginLeft: 10 }} />
+              </View>
+            )}
+            {user.phone && user.email && <View style={[s.gDivider, { backgroundColor: colors.border }]} />}
+            {user.email && (
+              <View style={s.gRow}>
+                <Ionicons name="mail-outline" size={18} color={colors.textSecondary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.gRowLabel, { color: colors.textMuted }]}>Email</Text>
+                  <Text style={[s.gRowValue, { color: colors.text }]}>{user.email}</Text>
+                </View>
+                <CopyButton value={user.email!} label="Email" size={15} />
+              </View>
+            )}
+          </GroupedSection>
         )}
 
-        {!connection.is_mutual && (
-          <Pressable
-            style={[s.bigExchangeBtn, { backgroundColor: colors.accent, borderColor: colors.accent }]}
-            onPress={() => onExchange(connection.id, connection.user.full_name)}
-          >
-            <Text style={[s.bigExchangeText, { color: '#FFF' }]}>Exchange Contact</Text>
+        {/* ONLINE */}
+        {(user.instagram_handle || user.linkedin_url || user.website_url) && (
+          <GroupedSection label="ONLINE" colors={colors} s={s}>
+            {user.instagram_handle && (
+              <Pressable style={s.gRow} onPress={() => openLink('Instagram', user.instagram_handle!)}>
+                <Ionicons name="logo-instagram" size={18} color={colors.textSecondary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.gRowLabel, { color: colors.textMuted }]}>Instagram</Text>
+                  <Text style={[s.gRowValue, { color: colors.text }]}>@{user.instagram_handle}</Text>
+                </View>
+                <Ionicons name="open-outline" size={15} color={colors.accent} />
+              </Pressable>
+            )}
+            {user.instagram_handle && user.linkedin_url && <View style={[s.gDivider, { backgroundColor: colors.border }]} />}
+            {user.linkedin_url && (
+              <Pressable style={s.gRow} onPress={() => openLink('LinkedIn', user.linkedin_url!)}>
+                <Ionicons name="logo-linkedin" size={18} color={colors.textSecondary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.gRowLabel, { color: colors.textMuted }]}>LinkedIn</Text>
+                  <Text style={[s.gRowValue, { color: colors.text }]}>{user.linkedin_url}</Text>
+                </View>
+                <Ionicons name="open-outline" size={15} color={colors.accent} />
+              </Pressable>
+            )}
+            {user.linkedin_url && user.website_url && <View style={[s.gDivider, { backgroundColor: colors.border }]} />}
+            {user.website_url && (
+              <Pressable style={s.gRow} onPress={() => openLink('Website', user.website_url!)}>
+                <Ionicons name="globe-outline" size={18} color={colors.textSecondary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.gRowLabel, { color: colors.textMuted }]}>Website</Text>
+                  <Text style={[s.gRowValue, { color: colors.text }]}>{user.website_url}</Text>
+                </View>
+                <Ionicons name="open-outline" size={15} color={colors.accent} />
+              </Pressable>
+            )}
+          </GroupedSection>
+        )}
+
+        {/* REPRESENTS */}
+        {connection.brand_id && connection.brand_name && (
+          <View style={s.gSectionWrap}>
+            <Text style={[s.gSectionLabel, { color: colors.textMuted }]}>REPRESENTS</Text>
+            <Pressable style={[s.gSectionCard, { backgroundColor: colors.surface }]}
+              onPress={() => router.push(`/brand/${connection.brand_id}` as any)}>
+              <View style={s.gRow}>
+                <View style={[s.gBrandLetter, { backgroundColor: colors.accent + '22' }]}>
+                  <Text style={[s.gBrandLetterText, { color: colors.accent }]}>{connection.brand_name[0]}</Text>
+                </View>
+                <Text style={[s.gRowValue, { flex: 1, color: colors.text }]}>{connection.brand_name}</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+              </View>
+            </Pressable>
+          </View>
+        )}
+
+        {/* NOTES */}
+        <View style={s.gSectionWrap}>
+          <Text style={[s.gSectionLabel, { color: colors.textMuted }]}>NOTES</Text>
+          <Pressable style={[s.gSectionCard, { backgroundColor: colors.surface }]} onPress={() => setShowNotes(true)}>
+            <View style={s.gRow}>
+              <Ionicons name="create-outline" size={18} color={notes.length > 0 ? colors.gold : colors.textMuted} />
+              <Text style={[s.gRowValue, { flex: 1, color: notes.length > 0 ? colors.text : colors.textMuted }]}>
+                {notes.length > 0 ? `${notes.length} note${notes.length > 1 ? 's' : ''}` : 'Add a note'}
+              </Text>
+              <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+            </View>
           </Pressable>
+        </View>
+
+        {/* Exchange Contact pill */}
+        {!connection.is_mutual && (
+          <View style={s.gActions}>
+            <Pressable
+              style={[s.gExchangePill, { borderColor: colors.accent }]}
+              onPress={() => { Analytics.exchangeContactTapped('detail'); onExchange(connection.id, connection.user.full_name); }}
+            >
+              <Ionicons name="swap-horizontal-outline" size={16} color={colors.accent} />
+              <Text style={[s.gExchangePillText, { color: colors.accent }]}>Exchange Contact</Text>
+            </Pressable>
+          </View>
         )}
       </ScrollView>
 
@@ -691,6 +940,7 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
 
 function ContactRow({ icon, label, value, colors, clickable = true }: any) {
   const s = makeStyles(colors);
+  const isLinkable = LINKABLE_FIELDS.has(label);
   return (
     <View style={[s.contactRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
       <Ionicons name={icon} size={18} color={colors.textSecondary} />
@@ -698,11 +948,12 @@ function ContactRow({ icon, label, value, colors, clickable = true }: any) {
         <Text style={[s.contactFieldLabel, { color: colors.textMuted }]}>{label}</Text>
         <Text style={[s.contactValue, { color: colors.text }]} numberOfLines={1}>{value}</Text>
       </View>
-      {clickable && (
-        <Pressable onPress={() => copyToClipboard(value, label)} hitSlop={8}>
-          <Ionicons name="copy-outline" size={16} color={colors.textMuted} />
+      {isLinkable && (
+        <Pressable onPress={() => openLink(label, value)} hitSlop={8}>
+          <Ionicons name="open-outline" size={16} color={colors.textMuted} />
         </Pressable>
       )}
+      {clickable && <CopyButton value={value} label={label} size={16} />}
     </View>
   );
 }
@@ -713,7 +964,7 @@ function makeStyles(colors: any) {
   return StyleSheet.create({
     root: { flex: 1 },
     header: {
-      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.sm,
+      paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
     headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
@@ -767,7 +1018,7 @@ function makeStyles(colors: any) {
     // Detail page
     detailHeader: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.md,
+      paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md,
     },
     backBtn: { padding: 4 },
     detailScroll: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 100 },
@@ -800,6 +1051,13 @@ function makeStyles(colors: any) {
     contactFieldLabel: { fontSize: 10, fontWeight: FontWeight.medium, letterSpacing: 0.2, marginBottom: 1 },
     contactValue: { fontSize: FontSize.sm },
     scannedAt: { fontSize: FontSize.xs, textAlign: 'center' },
+
+    whatsappBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: Spacing.sm, backgroundColor: '#25D366',
+      paddingVertical: 14, borderRadius: Radius.md,
+    },
+    whatsappBtnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
 
     bigExchangeBtn: { paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center', borderWidth: 1.5 },
     bigExchangeText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
@@ -848,5 +1106,39 @@ function makeStyles(colors: any) {
       paddingHorizontal: Spacing.lg, paddingVertical: 12, borderRadius: Radius.md, marginTop: Spacing.sm,
     },
     emptyCardBtnText: { color: '#FFF', fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+
+    // Grouped (C) design styles
+    gTopRow: { flexDirection: 'row', gap: Spacing.md, alignItems: 'flex-start' },
+    gThumbStack: { gap: 0, alignItems: 'flex-end' },
+    gThumb: { width: 110, height: 68, borderRadius: 8, overflow: 'hidden', backgroundColor: '#000' },
+    gThumbImg: { width: '100%', height: '100%' },
+    gThumbLabel: { position: 'absolute', bottom: 4, right: 6, fontSize: 9, color: '#FFF', fontWeight: FontWeight.semibold, backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
+    gIdentity: { gap: 4, paddingBottom: Spacing.md },
+    gProfileThumb: { width: 56, height: 56, borderRadius: 28, overflow: 'hidden', marginBottom: Spacing.sm },
+    gProfileThumbImg: { width: '100%', height: '100%' },
+    gName: { fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.3 },
+    gCompany: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+    gDesignation: { fontSize: FontSize.sm },
+    gCityRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    gCardBadge: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: Spacing.md, paddingVertical: 4,
+      borderRadius: Radius.full, alignSelf: 'flex-start', marginTop: Spacing.sm,
+    },
+    gCardBadgeText: { fontSize: FontSize.xs },
+    gSectionWrap: { gap: 6 },
+    gSectionLabel: { fontSize: 10, fontWeight: FontWeight.semibold, letterSpacing: 1 },
+    gSectionCard: { borderRadius: Radius.lg, overflow: 'hidden' },
+    gRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: 13 },
+    gRowLabel: { fontSize: 10, fontWeight: FontWeight.semibold, letterSpacing: 0.3, marginBottom: 1 },
+    gRowValue: { fontSize: FontSize.sm },
+    gDivider: { height: StyleSheet.hairlineWidth, marginLeft: 50 },
+    gBrandLetter: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    gBrandLetterText: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
+    gActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
+    gWaChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.full, backgroundColor: '#25D366' },
+    gWaChipText: { color: '#FFF', fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+    gExchangePill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: Radius.full, borderWidth: 1.5 },
+    gExchangePillText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
   });
 }

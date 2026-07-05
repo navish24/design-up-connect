@@ -37,10 +37,20 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "name": "Designup Connect",
+      "shortName": "Connect",
+      "description": "Your digital visiting card and networking companion.",
+      "themeColor": "#6A9888",
+      "backgroundColor": "#0A0A0A",
+      "display": "standalone",
+      "orientation": "portrait",
+      "scope": "/",
+      "startUrl": "/"
     },
     "plugins": [
       "expo-router",
+      "expo-web-browser",
       [
         "expo-camera",
         {
@@ -54,7 +64,9 @@
             "deploymentTarget": "16.0"
           },
           "android": {
-            "minSdkVersion": 23
+            "minSdkVersion": 24,
+            "enableShrinkResources": false,
+            "enableProguardInReleaseBuilds": false
           }
         }
       ],

@@ -137,7 +137,6 @@ function _resolveLocalAsset(filename: string): ReturnType<typeof require> | unde
   // Metro resolves require() statically, so every entry must be a literal.
   const LOCAL_ASSETS: Record<string, ReturnType<typeof require>> = {
     'venue-map.png': require('../assets/venue-map.png'),
-    'venue-map.jpg': require('../assets/venue-map.jpg'),
   };
 
   const asset = LOCAL_ASSETS[filename];

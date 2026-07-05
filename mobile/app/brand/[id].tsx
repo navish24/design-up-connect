@@ -941,7 +941,7 @@ function makeStyles(_colors?: any) {
     root: { flex: 1 },
     header: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.sm,
+      paddingHorizontal: Spacing.lg, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.sm,
     },
     headerTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
     backBtn: { padding: 4, width: 30 },
@@ -1140,7 +1140,7 @@ function makeStyles(_colors?: any) {
       backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, padding: 8,
     },
     galleryHeader: {
-      paddingTop: 56, paddingBottom: Spacing.md,
+      paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.md,
       paddingHorizontal: Spacing.lg, paddingRight: 60,
     },
     galleryTitle: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.bold },

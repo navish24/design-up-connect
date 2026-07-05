@@ -13,8 +13,7 @@ export default function Index() {
     );
   }
 
-  // PLACEHOLDER: mock user is always set, so this always goes to (app)
-  // In production: if no session → redirect to (auth)/welcome
   if (!user) return <Redirect href="/(auth)/welcome" />;
+  if (!user.profile_complete) return <Redirect href="/(auth)/profile-setup" />;
   return <Redirect href="/(app)" />;
 }

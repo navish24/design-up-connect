@@ -1,19 +1,33 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Pressable, Image,
-  ScrollView, Modal, ActivityIndicator,
+  ScrollView, Modal, ActivityIndicator, LogBox, Platform,
 } from 'react-native';
+import { isInAppBrowser } from '../../lib/inAppBrowser';
+import InAppBrowserOverlay from '../../components/InAppBrowserOverlay';
+import WebQRScanner from '../../components/WebQRScanner';
+import WebCardScanner, { type WebCardScannerHandle } from '../../components/WebCardScanner';
+
+LogBox.ignoreLogs([
+  'Warning: Camera',
+  'ExpoCamera',
+  '[expo-camera]',
+  'Open debugger',
+]);
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { getTabBarStyle } from './_layout';
 import { Ionicons } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { processScan } from '../../lib/supabase';
+import { Analytics } from '../../lib/analytics';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
-import { recognizeCardText, parseCardFields } from '../../lib/cardOcr';
+import { recognizeCardText, recognizeCardTextWeb, parseCardFields } from '../../lib/cardOcr';
 import { cardScanStore } from '../../lib/cardScanStore';
 import type { ScanResult } from '../../types';
 
@@ -31,7 +45,9 @@ type ScanState =
 // Only process QRs that belong to this app; silently ignore everything else
 // (website links, social QRs, etc. printed on physical visiting cards).
 const isDesignupQR = (payload: string): boolean =>
-  payload.startsWith('https://nexgild.com/') ||
+  payload.startsWith('https://connect-designup.vercel.app/') ||
+  payload.startsWith('https://connect.designup.in/') || // legacy
+  payload.startsWith('https://designup.in/') || // legacy
   payload.startsWith('designup://') ||
   // Legacy / dev formats kept for backward compatibility
   payload.startsWith('booth:') ||
@@ -40,61 +56,177 @@ const isDesignupQR = (payload: string): boolean =>
 
 const HOW_IT_WORKS = [
   {
+    icon: 'people-outline' as const,
+    label: 'Connect with people',
+    description:
+      "Scan someone's Connect QR to save their digital visiting card instantly — no number sharing, no typing.",
+  },
+  {
     icon: 'card-outline' as const,
     label: 'Scan physical visiting cards',
     description:
       'Tap "Scan Visiting Card", place the card flat and capture it. Contacts are saved and organised automatically.',
   },
-  {
-    icon: 'people-outline' as const,
-    label: 'Connect with people',
-    description:
-      "Scan someone's Nexgild personal QR to exchange digital visiting cards instantly — no number sharing needed.",
-  },
-  {
-    icon: 'storefront-outline' as const,
-    label: 'Save a brand (coming soon)',
-    description:
-      "At an exhibition, point at a brand's booth QR to save their catalogue and stay updated on new products.",
-  },
 ];
+
+// Compress any image file (JPEG, PNG, HEIC) to a small JPEG base64 string.
+// Uses URL.createObjectURL so iOS Safari can decode HEIC natively via its image engine.
+async function compressImageToBase64(file: any, maxPx = 1200): Promise<string> {
+  const g = globalThis as any;
+  const blobToBase64 = (blob: any): Promise<string> =>
+    new Promise((res, rej) => {
+      const r = new g.FileReader();
+      r.onload = (e: any) => { const b = (e.target?.result as string ?? '').split(',')[1]; b ? res(b) : rej(new Error('read')); };
+      r.onerror = rej;
+      r.readAsDataURL(blob);
+    });
+
+  return new Promise((resolve, reject) => {
+    const objectUrl = g.URL.createObjectURL(file);
+    const img = new g.Image();
+    img.onload = () => {
+      g.URL.revokeObjectURL(objectUrl);
+      try {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height, 1));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = g.document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('no canvas')); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob: any) => {
+          if (!blob) { reject(new Error('toBlob')); return; }
+          blobToBase64(blob).then(resolve, reject);
+        }, 'image/jpeg', 0.85);
+      } catch (err) { reject(err); }
+    };
+    img.onerror = () => {
+      g.URL.revokeObjectURL(objectUrl);
+      reject(new Error('img load failed'));
+    };
+    img.src = objectUrl;
+  });
+}
 
 export default function ScanScreen() {
   const { colors } = useTheme();
   const { activeExhibitionId, user, addDemoSavedBrand, addDemoConnection, setActiveExhibition } =
     useAuth();
   const [permission, requestPermission] = useCameraPermissions();
+  const isFocused = useIsFocused();
+  const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
+  const navigation = useNavigation();
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [showMyQR, setShowMyQR] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
+  const [scanError, setScanError] = useState<string>('');
+  const [isGalleryImporting, setIsGalleryImporting] = useState(false);
+  const [isCaptureProcessing, setIsCaptureProcessing] = useState(false);
+  const [scanView, setScanView] = useState<'choice' | 'card' | 'qr'>('choice');
+  const [showInfo, setShowInfo] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [webTorchSupported, setWebTorchSupported] = useState(false);
   const isProcessing = useRef(false);
+  const webCardScannerRef = useRef<WebCardScannerHandle>(null);
+  const webGalleryInputRef = useRef<any>(null);
+  const webGalleryHandlerRef = useRef<(e: any) => void>(() => {});
 
-  const handleGalleryImport = async () => {
-    setIsImporting(true);
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 0.9,
-      });
-      if (result.canceled || !result.assets?.[0]) { setIsImporting(false); return; }
+  useEffect(() => {
+    if (!isFocused) {
+      setScanState('idle');
+      setScanResult(null);
+      isProcessing.current = false;
+      setScanView('choice');
+    }
+  }, [isFocused]);
+
+  // Hide tab bar when inside card or QR scanner — restore on choice screen
+  useEffect(() => {
+    navigation.setOptions({
+      tabBarStyle: scanView !== 'choice'
+        ? { display: 'none' }
+        : getTabBarStyle(colors, Platform.OS === 'web' ? 0 : bottomInset),
+    });
+  }, [scanView, colors, bottomInset, navigation]);
+
+  // Reset torch and web torch support detection when switching scanner modes
+  useEffect(() => {
+    setTorchOn(false);
+    if (Platform.OS === 'web') setWebTorchSupported(false);
+  }, [scanView]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const g = globalThis as any;
+    if (!g.document) return;
+
+    const style = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;';
+
+    // Gallery input — shows photo library picker on iOS
+    const gal = g.document.createElement('input');
+    gal.type = 'file'; gal.accept = 'image/*';
+    gal.style.cssText = style;
+    g.document.body.appendChild(gal);
+    webGalleryInputRef.current = gal;
+    const galHandler = (e: any) => webGalleryHandlerRef.current(e);
+    gal.addEventListener('change', galHandler);
+
+    return () => {
+      gal.removeEventListener('change', galHandler);
+      try { g.document.body.removeChild(gal); } catch (_) {}
+    };
+  }, []);
+
+  const handleGalleryImport = () => {
+    Analytics.galleryImportTapped();
+    if (Platform.OS === 'web') {
+      webGalleryInputRef.current?.click();
+      return;
+    }
+    // Native: ImagePicker + ML Kit OCR
+    setIsGalleryImporting(true);
+    ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.9,
+    }).then(async (result) => {
+      if (result.canceled || !result.assets?.[0]) { setIsGalleryImporting(false); return; }
       const imageUri = result.assets[0].uri;
       const blocks = await recognizeCardText(imageUri);
       const fields = parseCardFields(blocks);
       cardScanStore.set({ imageUri, backImageUri: null, fields, isBlurry: blocks.length < 2 });
-      setIsImporting(false);
+      setIsGalleryImporting(false);
       router.push('/card-review');
-    } catch {
-      setIsImporting(false);
-    }
+    }).catch(() => setIsGalleryImporting(false));
   };
+
+  // Gallery handler ref — uses web OCR (same pipeline as camera capture)
+  webGalleryHandlerRef.current = async (e: any) => {
+    const file = e.target?.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    setIsGalleryImporting(true);
+    try {
+      const imageBase64 = await compressImageToBase64(file);
+      const imageDataUrl = `data:image/jpeg;base64,${imageBase64}`;
+      let blocks: any[] = [];
+      try { blocks = await recognizeCardTextWeb(imageBase64); } catch (_) {}
+      const fields = parseCardFields(blocks);
+      cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+      Analytics.cardScanned(fields.length > 0);
+      setIsGalleryImporting(false);
+      router.push('/card-review');
+    } catch { setIsGalleryImporting(false); }
+  };
+
+
 
   const s = makeStyles(colors);
 
   const resetToIdle = () => {
     setScanState('idle');
     setScanResult(null);
+    setScanError('');
     isProcessing.current = false;
   };
 
@@ -106,8 +238,9 @@ export default function ScanScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     try {
-      const result: ScanResult = await processScan(data, activeExhibitionId);
+      const result: ScanResult = await processScan(data, activeExhibitionId, user?.id ?? null);
       setScanResult(result);
+      Analytics.qrScanned(result.scan_type as any);
 
       if (result.scan_type === 'booth') {
         if (result.action === 'already_saved') {
@@ -137,7 +270,7 @@ export default function ScanScreen() {
         if (result.connection) {
           const u = result.connection.user;
           addDemoConnection({
-            id: u.designup_user_id,
+            id: (u as any).id ?? u.designup_user_id,
             full_name: u.full_name,
             designation: u.designation ?? '',
             company: u.company_name ?? '',
@@ -158,28 +291,38 @@ export default function ScanScreen() {
           router.replace('/(app)');
         }, 2000);
       }
-    } catch {
+    } catch (err: any) {
+      setScanError(err?.message ?? 'unknown error');
       setScanState('error');
-      setTimeout(resetToIdle, 2000);
+      // No auto-dismiss — user must tap "Try Again" so they can read the error
     }
   };
 
-  // ── No permission ─────────────────────────────────────────────────────────
-  if (!permission) return <View style={[s.root, { backgroundColor: colors.background }]} />;
+  // ── Web: in-app browser guard (app-wide guard in _layout.tsx is primary) ──
+  if (Platform.OS === 'web' && isInAppBrowser()) {
+    return <InAppBrowserOverlay />;
+  }
 
-  if (!permission.granted) {
-    return (
-      <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
-        <Ionicons name="camera-outline" size={56} color={colors.textSecondary} />
-        <Text style={[s.permTitle, { color: colors.text }]}>Camera Access Required</Text>
-        <Text style={[s.permBody, { color: colors.textSecondary }]}>
-          Designup Connect needs camera access to scan booth QR codes and visiting cards.
-        </Text>
-        <Pressable style={[s.btn, { backgroundColor: colors.accent }]} onPress={requestPermission}>
-          <Text style={s.btnText}>Allow Camera</Text>
-        </Pressable>
-      </View>
-    );
+  // ── Native-only: camera permission guard ──────────────────────────────────
+  // On web, WebQRScanner manages its own getUserMedia permission; card mode uses
+  // the file picker (no camera permission needed until the user taps the QR tab).
+  if (Platform.OS !== 'web') {
+    if (!permission) return <View style={[s.root, { backgroundColor: colors.background }]} />;
+
+    if (!permission.granted) {
+      return (
+        <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
+          <Ionicons name="camera-off-outline" size={56} color={colors.textSecondary} />
+          <Text style={[s.permTitle, { color: colors.text }]}>Camera Access Required</Text>
+          <Text style={[s.permBody, { color: colors.textSecondary }]}>
+            Connect needs camera access to scan QR codes and visiting cards.
+          </Text>
+          <Pressable style={[s.btn, { backgroundColor: colors.accent }]} onPress={requestPermission}>
+            <Text style={s.btnText}>Allow Camera</Text>
+          </Pressable>
+        </View>
+      );
+    }
   }
 
   // ── Scanning overlay ──────────────────────────────────────────────────────
@@ -326,240 +469,338 @@ export default function ScanScreen() {
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
         <Ionicons name="alert-circle-outline" size={48} color="#FF4444" />
         <Text style={[s.successTitle, { color: colors.text }]}>Couldn't connect</Text>
-        <Text style={[s.successSub, { color: colors.textSecondary }]}>Try scanning again</Text>
+        <Text style={[s.successSub, { color: colors.textSecondary }]} selectable>{scanError || 'Try scanning again'}</Text>
+        <Pressable
+          style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
+          onPress={resetToIdle}
+        >
+          <Text style={s.btnText}>Try Again</Text>
+        </Pressable>
       </View>
     );
   }
 
-  // ── Main scanner UI ───────────────────────────────────────────────────────
-  return (
-    <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={s.header}>
-        <Text style={[s.headerTitle, { color: colors.text }]}>Designup Connect</Text>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Live viewfinder — always on for QR detection */}
-        <View style={s.cameraWrap}>
-          <CameraView
-            style={s.camera}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={scanState === 'idle' ? handleBarCodeScanned : undefined}
-          >
-            <View style={s.scanFrameWrap}>
-              <View style={s.scanFrame}>
-                <View style={[s.corner, s.cornerTL, { borderColor: colors.accent }]} />
-                <View style={[s.corner, s.cornerTR, { borderColor: colors.accent }]} />
-                <View style={[s.corner, s.cornerBL, { borderColor: colors.accent }]} />
-                <View style={[s.corner, s.cornerBR, { borderColor: colors.accent }]} />
-              </View>
-              <Text style={s.scanHint}>Point at any Nexgild QR code to save</Text>
-            </View>
-          </CameraView>
+  // ── Choice screen ─────────────────────────────────────────────────────────
+  if (scanView === 'choice') {
+    return (
+      <View style={[s.root, { backgroundColor: colors.background }]}>
+        <View style={[s.header, { paddingTop: topInset + 12 }]}>
+          <Text style={[s.headerTitle, { color: colors.text }]}>Scanner</Text>
+          <Pressable onPress={() => setShowInfo(true)} hitSlop={12}>
+            <Ionicons name="information-circle-outline" size={22} color={colors.textMuted} />
+          </Pressable>
         </View>
 
-        <View style={s.below}>
-          {/* Scan Visiting Card — primary CTA */}
+        <View style={s.choiceWrap}>
           <Pressable
-            style={[s.scanCardBtn, { backgroundColor: colors.accent }]}
-            onPress={() => router.push('/card-scanner')}
+            style={[s.choiceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setScanView('card'); }}
           >
-            <Ionicons name="card-outline" size={18} color="#FFF" />
-            <Text style={s.scanCardBtnText}>Scan Visiting Card</Text>
+            <View style={[s.choiceIconWrap, { backgroundColor: colors.accent + '18' }]}>
+              <Ionicons name="card-outline" size={36} color={colors.accent} />
+            </View>
+            <Text style={[s.choiceTitle, { color: colors.text }]}>Scan a visiting card</Text>
+            <Text style={[s.choiceSub, { color: colors.textMuted }]}>Auto-reads name, phone and email</Text>
           </Pressable>
 
-          {/* Import from Gallery */}
           <Pressable
-            style={[s.galleryBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={handleGalleryImport}
-            disabled={isImporting}
+            style={[s.choiceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setScanView('qr'); }}
           >
-            {isImporting ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : (
-              <>
-                <Ionicons name="images-outline" size={18} color={colors.textSecondary} />
-                <Text style={[s.galleryBtnText, { color: colors.textSecondary }]}>Import from Gallery</Text>
-              </>
-            )}
+            <View style={[s.choiceIconWrap, { backgroundColor: colors.accent + '18' }]}>
+              <Ionicons name="qr-code-outline" size={36} color={colors.accent} />
+            </View>
+            <Text style={[s.choiceTitle, { color: colors.text }]}>Scan a Connect QR</Text>
+            <Text style={[s.choiceSub, { color: colors.textMuted }]}>Saves their contact instantly</Text>
           </Pressable>
+        </View>
 
-          <View style={[s.divider, { backgroundColor: colors.border }]} />
-
-          {/* My Visiting QR */}
-          <Pressable
-            style={[s.qrRow, { backgroundColor: colors.surface }]}
-            onPress={() => setShowMyQR(true)}
-          >
-            <Ionicons name="qr-code-outline" size={22} color={colors.accent} />
-            <Text style={[s.qrRowText, { color: colors.text }]}>My Visiting QR</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-
-          <View style={[s.divider, { backgroundColor: colors.border }]} />
-
-          {/* How it works */}
-          <View style={s.howSection}>
-            <Text style={[s.howHeading, { color: colors.textMuted }]}>HOW IT WORKS</Text>
-            {HOW_IT_WORKS.map((item) => (
-              <View key={item.label} style={s.howItem}>
-                <View style={[s.howIconWrap, { backgroundColor: colors.accent + '18' }]}>
-                  <Ionicons name={item.icon} size={20} color={colors.accent} />
+        <Modal visible={showInfo} transparent animationType="slide" onRequestClose={() => setShowInfo(false)}>
+          <Pressable style={s.infoBackdrop} onPress={() => setShowInfo(false)} />
+          <View style={[s.infoSheet, { backgroundColor: colors.surface }]}>
+            <View style={[s.infoSheetHandle, { backgroundColor: colors.border }]} />
+            <View style={s.infoSheetHeaderRow}>
+              <Text style={[s.infoSheetTitle, { color: colors.text }]}>How it works</Text>
+              <Pressable onPress={() => setShowInfo(false)} hitSlop={12}><Ionicons name="close" size={20} color={colors.textMuted} /></Pressable>
+            </View>
+            {[
+              { n: '1', line: 'Choose "Scan a visiting card" to read paper cards' },
+              { n: '2', line: 'Choose "Scan a Connect QR" to connect with someone on Connect' },
+              { n: '3', line: "Card scan auto-captures when steady; QR saves the moment it's detected" },
+            ].map((item, i, arr) => (
+              <View key={item.n}>
+                <View style={s.infoStep}>
+                  <View style={[s.infoStepNum, { backgroundColor: colors.accent }]}><Text style={s.infoStepNumText}>{item.n}</Text></View>
+                  <Text style={[s.infoStepLine, { color: colors.text }]}>{item.line}</Text>
                 </View>
-                <View style={s.howContent}>
-                  <Text style={[s.howLabel, { color: colors.text }]}>{item.label}</Text>
-                  <Text style={[s.howDesc, { color: colors.textMuted }]}>{item.description}</Text>
-                </View>
+                {i < arr.length - 1 && <View style={[s.infoRule, { backgroundColor: colors.border }]} />}
               </View>
             ))}
           </View>
-        </View>
-      </ScrollView>
+        </Modal>
+      </View>
+    );
+  }
 
-      {/* My Visiting QR modal */}
-      <Modal visible={showMyQR} animationType="slide" transparent>
-        <View style={s.myQrOverlay}>
-          <View style={[s.myQrModal, { backgroundColor: colors.surface }]}>
-            <Text style={[s.myQrTitle, { color: colors.text }]}>My Visiting QR</Text>
-            <Text style={[s.myQrSub, { color: colors.textSecondary }]}>
-              Ask others to scan this to connect with you
-            </Text>
-            <View style={[s.myQrBox, { backgroundColor: colors.background }]}>
-              <QRCode
-                value={`user:${user?.id ?? 'user-001'}`}
-                size={200}
-                backgroundColor={colors.background}
-                color={colors.text}
-              />
-            </View>
-            {user?.designup_user_id && user.designup_user_id !== 'demo_user' && (
-              <Text style={[s.myQrId, { color: colors.accent }]}>@{user.designup_user_id}</Text>
-            )}
+  // ── Card mode ─────────────────────────────────────────────────────────────
+  if (scanView === 'card') {
+    return (
+      <View style={[s.root, { backgroundColor: '#000' }]}>
+        <View style={[s.modeHeader, { paddingTop: topInset + 12 }]}>
+          <Pressable onPress={() => setScanView('choice')} hitSlop={12}>
+            <Ionicons name="arrow-back" size={22} color="#FFF" />
+          </Pressable>
+          <Text style={[s.modeHeaderTitle, { color: '#FFF' }]}>Visiting Card</Text>
+          <View style={{ width: 22 }} />
+        </View>
+
+        {/* Full-bleed camera — no container, fills remaining space */}
+        <View style={{ flex: 1 }}>
+          {Platform.OS === 'web' ? (
+            <WebCardScanner
+              ref={webCardScannerRef}
+              active={isFocused && !isCaptureProcessing}
+              autoCapture
+              torchOn={torchOn}
+              onTorchSupportChange={setWebTorchSupported}
+              onCapture={async (base64Jpeg) => {
+                setIsCaptureProcessing(true);
+                const imageDataUrl = `data:image/jpeg;base64,${base64Jpeg}`;
+                let blocks: any[] = [];
+                try { blocks = await recognizeCardTextWeb(base64Jpeg); } catch (_) {}
+                const fields = parseCardFields(blocks);
+                cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+                Analytics.cardScanned(fields.length > 0);
+                setIsCaptureProcessing(false);
+                router.push('/card-review');
+              }}
+            />
+          ) : isFocused ? (
+            <CameraView style={s.camera} facing="back" active enableTorch={torchOn}>
+              <View style={s.cardBracketOverlay}>
+                <View style={s.cardBracket}>
+                  <View style={[s.cCorner, s.cCornerTL, { borderColor: colors.accent }]} />
+                  <View style={[s.cCorner, s.cCornerTR, { borderColor: colors.accent }]} />
+                  <View style={[s.cCorner, s.cCornerBL, { borderColor: colors.accent }]} />
+                  <View style={[s.cCorner, s.cCornerBR, { borderColor: colors.accent }]} />
+                </View>
+              </View>
+            </CameraView>
+          ) : (
+            <View style={[s.camera, { backgroundColor: '#000' }]} />
+          )}
+        </View>
+
+        {/* Round icon buttons */}
+        <View style={[s.roundBtnRow, { paddingBottom: bottomInset + 36 }]}>
+          <View style={s.roundBtnItem}>
             <Pressable
-              style={[s.myQrClose, { backgroundColor: colors.accent }]}
-              onPress={() => setShowMyQR(false)}
+              style={[s.roundBtnSm, { backgroundColor: 'rgba(255,255,255,0.12)' }]}
+              onPress={handleGalleryImport}
+              disabled={isGalleryImporting || isCaptureProcessing}
             >
-              <Text style={s.myQrCloseText}>Close</Text>
+              {isGalleryImporting
+                ? <ActivityIndicator size="small" color="#FFF" />
+                : <Ionicons name="images-outline" size={22} color="#FFF" />
+              }
             </Pressable>
+            <Text style={s.roundBtnLabel}>Upload Card</Text>
+          </View>
+
+          <View style={s.roundBtnItem}>
+            <Pressable
+              style={[s.roundBtnLg, { backgroundColor: colors.accent, opacity: isCaptureProcessing ? 0.7 : 1 }]}
+              disabled={isCaptureProcessing || isGalleryImporting}
+              onPress={() => {
+                Analytics.captureCardTapped();
+                if (Platform.OS === 'web') { webCardScannerRef.current?.capture(); }
+                else { router.push('/card-scanner'); }
+              }}
+            >
+              {isCaptureProcessing
+                ? <ActivityIndicator size="small" color="#FFF" />
+                : <Ionicons name="camera-outline" size={30} color="#FFF" />
+              }
+            </Pressable>
+            <Text style={s.roundBtnLabel}>Capture Card</Text>
+          </View>
+
+          {(Platform.OS !== 'web' || webTorchSupported) && (
+            <View style={s.roundBtnItem}>
+              <Pressable
+                style={[s.roundBtnSm, { backgroundColor: torchOn ? 'rgba(255,224,102,0.25)' : 'rgba(255,255,255,0.12)' }]}
+                onPress={() => setTorchOn(v => !v)}
+              >
+                <Ionicons name={torchOn ? 'flashlight' : 'flashlight-outline'} size={22} color={torchOn ? '#FFE066' : '#FFF'} />
+              </Pressable>
+              <Text style={s.roundBtnLabel}>Torch</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  // ── QR mode (full-screen camera) ──────────────────────────────────────────
+  return (
+    <View style={[s.root, { backgroundColor: '#000' }]}>
+      {Platform.OS === 'web' ? (
+        <WebQRScanner
+          active={isFocused && scanState === 'idle'}
+          onScan={(data) => handleBarCodeScanned({ data })}
+          torchOn={torchOn}
+          onTorchSupportChange={setWebTorchSupported}
+        />
+      ) : isFocused ? (
+        <CameraView
+          style={{ flex: 1 }}
+          facing="back"
+          active
+          enableTorch={torchOn}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={scanState === 'idle' ? handleBarCodeScanned : undefined}
+        >
+          <View style={[s.cardFrameWrap, { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+            <View style={[s.qrFrame, { borderColor: colors.accent + '50' }]}>
+              <View style={[s.cCorner, s.cCornerTL, { borderColor: colors.accent }]} />
+              <View style={[s.cCorner, s.cCornerTR, { borderColor: colors.accent }]} />
+              <View style={[s.cCorner, s.cCornerBL, { borderColor: colors.accent }]} />
+              <View style={[s.cCorner, s.cCornerBR, { borderColor: colors.accent }]} />
+            </View>
+          </View>
+        </CameraView>
+      ) : (
+        <View style={{ flex: 1, backgroundColor: '#000' }} />
+      )}
+      {/* Header overlay — matches card mode pattern */}
+      <View style={[s.qrHeader, { paddingTop: topInset + 12 }]}>
+        <Pressable onPress={() => setScanView('choice')} hitSlop={12}>
+          <Ionicons name="arrow-back" size={22} color="#FFF" />
+        </Pressable>
+        <Text style={s.qrHeaderTitle}>Connect QR</Text>
+        <View style={{ width: 22 }} />
+      </View>
+      {/* Torch button — absolute positioned at bottom */}
+      {(Platform.OS !== 'web' || webTorchSupported) && (
+        <View style={[s.qrTorchRow, { paddingBottom: bottomInset + 36 }]}>
+          <View style={s.roundBtnItem}>
+            <Pressable
+              style={[s.roundBtnSm, { backgroundColor: torchOn ? 'rgba(255,224,102,0.25)' : 'rgba(255,255,255,0.12)' }]}
+              onPress={() => setTorchOn(v => !v)}
+            >
+              <Ionicons name={torchOn ? 'flashlight' : 'flashlight-outline'} size={22} color={torchOn ? '#FFE066' : '#FFF'} />
+            </Pressable>
+            <Text style={s.roundBtnLabel}>Torch</Text>
           </View>
         </View>
-      </Modal>
+      )}
     </View>
   );
+
 }
 
 function makeStyles(colors: any) {
   return StyleSheet.create({
     root: { flex: 1 },
     center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl },
+
+    // Choice screen
     header: {
-      paddingHorizontal: Spacing.lg,
-      paddingTop: 56,
-      paddingBottom: Spacing.md,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md,
     },
     headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+    choiceWrap: { flex: 1, padding: Spacing.lg, gap: Spacing.md, justifyContent: 'center' },
+    choiceCard: {
+      flex: 1, borderRadius: Radius.lg, borderWidth: 1,
+      alignItems: 'center', justifyContent: 'center',
+      gap: Spacing.sm, paddingVertical: Spacing.xl, paddingHorizontal: Spacing.lg,
+    },
+    choiceIconWrap: {
+      width: 72, height: 72, borderRadius: 22,
+      alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm,
+    },
+    choiceTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, textAlign: 'center' },
+    choiceSub: { fontSize: FontSize.sm, textAlign: 'center', lineHeight: 18 },
 
-    // Viewfinder
-    cameraWrap: { width: '100%', height: 420 },
+    // Mode headers (card / QR modes)
+    modeHeader: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md,
+    },
+    modeHeaderTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+
+    // Camera
     camera: { flex: 1 },
-    scanFrameWrap: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.3)',
-      gap: Spacing.md,
+    // Card mode — native bracket overlay (corner brackets only, no border)
+    cardBracketOverlay: {
+      flex: 1, alignItems: 'center', justifyContent: 'center',
     },
-    scanFrame: {
-      width: 200,
-      height: 200,
-      position: 'relative',
+    cardBracket: { width: 300, height: 188, position: 'relative' as any },
+    // QR frame (kept for QR mode)
+    cardFrameWrap: {
+      flex: 1, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.28)', gap: Spacing.md,
     },
-    corner: {
-      position: 'absolute',
-      width: 22,
-      height: 22,
-      borderWidth: 3,
+    qrFrame: { width: 200, height: 200, borderRadius: 10, borderWidth: 1, position: 'relative' },
+    // Shared corner bracket pieces (used by both card and QR modes)
+    cCorner: { position: 'absolute', width: 28, height: 28, borderWidth: 3 },
+    cCornerTL: { top: -2, left: -2, borderBottomWidth: 0, borderRightWidth: 0 },
+    cCornerTR: { top: -2, right: -2, borderBottomWidth: 0, borderLeftWidth: 0 },
+    cCornerBL: { bottom: -2, left: -2, borderTopWidth: 0, borderRightWidth: 0 },
+    cCornerBR: { bottom: -2, right: -2, borderTopWidth: 0, borderLeftWidth: 0 },
+
+    // Card mode — round icon buttons
+    roundBtnRow: {
+      flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end',
+      gap: 48, paddingTop: 28, backgroundColor: '#000',
     },
-    cornerTL: { top: 0, left: 0, borderBottomWidth: 0, borderRightWidth: 0 },
-    cornerTR: { top: 0, right: 0, borderBottomWidth: 0, borderLeftWidth: 0 },
-    cornerBL: { bottom: 0, left: 0, borderTopWidth: 0, borderRightWidth: 0 },
-    cornerBR: { bottom: 0, right: 0, borderTopWidth: 0, borderLeftWidth: 0 },
-    scanHint: {
-      color: '#FFF',
-      fontSize: FontSize.sm,
-      backgroundColor: 'rgba(0,0,0,0.55)',
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 6,
-      borderRadius: Radius.full,
-      overflow: 'hidden',
+    roundBtnItem: { alignItems: 'center', gap: 8 },
+    roundBtnLg: {
+      width: 72, height: 72, borderRadius: 36,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    roundBtnSm: {
+      width: 56, height: 56, borderRadius: 28,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    roundBtnLabel: { color: '#FFF', fontSize: FontSize.xs, fontWeight: FontWeight.medium },
+
+    // QR mode header overlay
+    qrHeader: {
+      position: 'absolute' as any,
+      top: 0, left: 0, right: 0,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md,
+    },
+    qrHeaderTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: '#FFF' },
+    // QR mode torch button row — absolute, bottom of screen
+    qrTorchRow: {
+      position: 'absolute' as any,
+      bottom: 0, left: 0, right: 0,
+      flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end',
+      paddingTop: 20,
     },
 
-    // Below camera
-    below: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 120 },
+    // Info bottom sheet
+    infoBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+    infoSheet: {
+      borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      paddingHorizontal: Spacing.lg, paddingBottom: 40, paddingTop: Spacing.md, gap: Spacing.sm,
+    },
+    infoSheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: Spacing.sm },
+    infoSheetHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
+    infoSheetTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+    infoStep: {
+      flexDirection: 'row', gap: Spacing.md,
+      paddingHorizontal: Spacing.md, paddingVertical: 12, alignItems: 'flex-start',
+    },
+    infoStepNum: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+    infoStepNumText: { color: '#FFF', fontSize: 11, fontWeight: FontWeight.bold },
+    infoStepLine: { fontSize: FontSize.sm, flex: 1 },
+    infoRule: { height: StyleSheet.hairlineWidth, marginLeft: Spacing.md + 22 + Spacing.md },
 
-    scanCardBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Spacing.sm,
-      paddingVertical: 16,
-      borderRadius: Radius.md,
-    },
-    scanCardBtnText: {
-      color: '#FFF',
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.semibold,
-    },
-
-    galleryBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Spacing.sm,
-      paddingVertical: 14,
-      borderRadius: Radius.md,
-      borderWidth: 1,
-    },
-    galleryBtnText: {
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.medium,
-    },
-
-    divider: { height: StyleSheet.hairlineWidth, marginVertical: 4 },
-
-    qrRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.md,
-      padding: Spacing.md,
-      borderRadius: Radius.md,
-    },
-    qrRowText: { flex: 1, fontSize: FontSize.md, fontWeight: FontWeight.medium },
-
-    // How it works
-    howSection: { gap: Spacing.md },
-    howHeading: {
-      fontSize: 11,
-      fontWeight: FontWeight.semibold,
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-      marginBottom: 4,
-    },
-    howItem: { flexDirection: 'row', gap: Spacing.md, alignItems: 'flex-start' },
-    howIconWrap: {
-      width: 40,
-      height: 40,
-      borderRadius: Radius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexShrink: 0,
-    },
-    howContent: { flex: 1, gap: 2 },
-    howLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
-    howDesc: { fontSize: FontSize.xs, lineHeight: 18 },
-
-    // Saving / scanning states
+    // Scanning / saving states
     savingIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm },
     scanningOverlay: { alignItems: 'center', gap: Spacing.lg },
     scanningIcon: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
@@ -573,40 +814,16 @@ function makeStyles(colors: any) {
     productImg: { flex: 1, height: 140, borderRadius: Radius.md },
     boothTag: {
       flexDirection: 'row', alignItems: 'center', gap: 4,
-      paddingHorizontal: Spacing.md, paddingVertical: 6,
-      borderRadius: Radius.full,
+      paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: Radius.full,
     },
     boothTagText: { fontSize: FontSize.sm },
-    outlineBtn: {
-      width: '100%', paddingVertical: 14, borderRadius: Radius.md,
-      borderWidth: 1.5, alignItems: 'center',
-    },
+    outlineBtn: { width: '100%', paddingVertical: 14, borderRadius: Radius.md, borderWidth: 1.5, alignItems: 'center' },
     outlineBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
     btn: { width: '100%', paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
     btnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
-
     textBtn: { marginTop: Spacing.sm, alignItems: 'center', paddingVertical: Spacing.sm },
     textBtnText: { fontSize: FontSize.sm },
-
-    // Permission
     permTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center', marginTop: Spacing.lg },
     permBody: { fontSize: FontSize.md, textAlign: 'center', lineHeight: 22, marginVertical: Spacing.lg },
-
-    // My QR modal
-    myQrOverlay: {
-      flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
-      justifyContent: 'flex-end', alignItems: 'center',
-    },
-    myQrModal: {
-      borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      padding: Spacing.xl, alignItems: 'center', gap: Spacing.md,
-      paddingBottom: 40, width: '100%',
-    },
-    myQrTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold },
-    myQrSub: { fontSize: FontSize.sm, textAlign: 'center' },
-    myQrBox: { padding: Spacing.lg, borderRadius: Radius.lg },
-    myQrId: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
-    myQrClose: { width: '100%', paddingVertical: 14, borderRadius: Radius.md, alignItems: 'center', marginTop: Spacing.sm },
-    myQrCloseText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
   });
 }

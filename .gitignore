@@ -55,3 +55,4 @@ dashboard/build/
 
 # Testing
 coverage/
+.vercel

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
@@ -35,7 +35,7 @@ export default function SuccessScreen() {
       <View style={s.topSection}>
         <Ionicons name="checkmark-circle" size={48} color={colors.accent} />
         <Text style={[s.headline, { color: colors.text }]}>
-          {isBeta ? 'Your Nexgild card\nis ready.' : 'Your discovery pass\nis ready'}
+          {isBeta ? 'Your digital visiting\ncard is ready.' : 'Your discovery pass\nis ready'}
         </Text>
         <Text style={[s.sub, { color: colors.textSecondary }]}>
           {isBeta
@@ -116,7 +116,7 @@ export default function SuccessScreen() {
 function makeStyles(colors: any) {
   return StyleSheet.create({
     root: { flex: 1 },
-    scroll: { paddingHorizontal: Spacing.lg, paddingTop: 72, paddingBottom: 60 },
+    scroll: { paddingHorizontal: Spacing.lg, paddingTop: Platform.OS === 'web' ? 20 : 72, paddingBottom: 60 },
 
     topSection: { alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xl },
     headline: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, textAlign: 'center', lineHeight: 32 },

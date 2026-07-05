@@ -1,7 +1,7 @@
 // Exhibition Detail + Ticket + Explore screen
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  Image, Modal, TextInput, Alert, Dimensions,
+  Image, Modal, TextInput, Alert, Dimensions, Platform,
 } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 
@@ -844,7 +844,7 @@ function makeStyles(colors: any) {
     root: { flex: 1 },
     header: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.sm,
+      paddingHorizontal: Spacing.lg, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.sm,
     },
     backBtn: { width: 30, padding: 4 },
     headerTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold },

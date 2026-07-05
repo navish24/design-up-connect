@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import { useState, useMemo } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -95,7 +95,7 @@ export default function NotificationsScreen() {
 function makeStyles(colors: any) {
   return StyleSheet.create({
     root: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingTop: 56, paddingBottom: Spacing.sm },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.sm },
     backBtn: { width: 30, padding: 4 },
     headerTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg },

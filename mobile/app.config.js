@@ -34,6 +34,9 @@ module.exports = {
     // Read them with process.env.EXPO_PUBLIC_IS_BETA at runtime.
     extra: {
       isBeta: IS_BETA,
+      eas: {
+        projectId: '493cdee9-7e90-4a06-a0d7-3289f6a82322',
+      },
     },
   },
 };

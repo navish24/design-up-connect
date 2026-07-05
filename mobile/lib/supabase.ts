@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { Analytics } from './analytics';
 
 // ─── PLACEHOLDER CONFIG ────────────────────────────────────────────────────────
 // Replace these with your actual Supabase project values from:
@@ -8,35 +10,38 @@ const SUPABASE_URL = 'https://frbozqaqmcwuxfvadhxl.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZyYm96cWFxbWN3dXhmdmFkaHhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTYzMzAsImV4cCI6MjA5MTk3MjMzMH0.Vw08afQN-2gWEMgp3lxsq_KMPeUZcovVJ3sklcXUbuk';
 // ──────────────────────────────────────────────────────────────────────────────
 
-// Secure storage adapter — tokens stored in device keychain (iOS) / keystore (Android)
+// Native: tokens stored in device keychain (iOS) / keystore (Android)
 const SecureStoreAdapter = {
   getItem: (key: string) => SecureStore.getItemAsync(key),
   setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
+// Web: expo-secure-store has no web implementation — use localStorage instead
+const LocalStorageAdapter = {
+  getItem: (key: string) => Promise.resolve((globalThis as any).localStorage?.getItem(key) ?? null),
+  setItem: (key: string, value: string) => {
+    (globalThis as any).localStorage?.setItem(key, value);
+    return Promise.resolve();
+  },
+  removeItem: (key: string) => {
+    (globalThis as any).localStorage?.removeItem(key);
+    return Promise.resolve();
+  },
+};
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: SecureStoreAdapter,
+    storage: Platform.OS === 'web' ? LocalStorageAdapter : SecureStoreAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
 
 // ─── Helper: Process QR scan ──────────────────────────────────────────────────
-// Calls the POST /functions/v1/scan Edge Function.
-// In placeholder mode returns mock data so the UI can be tested without a backend.
-export async function processScan(qrData: string, activeExhibitionId: string | null) {
-  // PLACEHOLDER: When Supabase is connected, replace this block with:
-  // const { data, error } = await supabase.functions.invoke('scan', {
-  //   body: { qr_data: qrData, active_exhibition_id: activeExhibitionId }
-  // });
-  // if (error) throw error;
-  // return data;
-
-  // Mock responses for development — each QR returns the correct brand / person
-  await new Promise((r) => setTimeout(r, 800)); // simulate network delay
+export async function processScan(qrData: string, activeExhibitionId: string | null, currentUserId?: string | null) {
+  if (!qrData || qrData.length > 500) throw new Error('invalid_qr');
 
   // ── Exhibition lookup — mirrors data/exhibitions.ts IDs ──────────────────
   const DEMO_EXHIBITIONS: Record<string, string> = {
@@ -126,9 +131,15 @@ export async function processScan(qrData: string, activeExhibitionId: string | n
     throw new Error('Brand not found');
   }
 
+  // ── User QR: URL formats  https://connect.designup.in/u/<id>  ───────────────
+  if (qrData.startsWith('https://connect-designup.vercel.app/u/') || qrData.startsWith('https://connect.designup.in/u/') || qrData.startsWith('https://designup.in/u/')) {
+    const userId = qrData.split('/u/')[1]?.split('?')[0].trim() ?? '';
+    return processScan(`user:${userId}`, activeExhibitionId);
+  }
+
   // ── User QR: format  user:<user_id>  ─────────────────────────────────────
   if (qrData.startsWith('user:')) {
-    const userId = qrData.split(':')[1] ?? 'u-priya';
+    const userId = qrData.split(':')[1] ?? '';
     const DEMO_USERS: Record<string, { full_name: string; designation: string; company_name: string; designup_user_id: string; email: string; phone: string; city: string; brand_id?: string }> = {
       'u-priya':  { full_name: 'Priya Sharma',  designation: 'Principal Designer', company_name: 'Studio Forma',        designup_user_id: 'priya_sharma',  email: 'priya@studioforma.com',   phone: '+91 98765 43210', city: 'Mumbai',    brand_id: 'b03' },
       'u-arjun':  { full_name: 'Arjun Mehta',   designation: 'Sales Manager',      company_name: 'Lumina Lighting',     designup_user_id: 'arjun_mehta',   email: 'arjun@lumina.in',         phone: '+91 87654 32109', city: 'Mumbai',    brand_id: 'b01' },
@@ -137,16 +148,72 @@ export async function processScan(qrData: string, activeExhibitionId: string | n
       'u-meera':  { full_name: 'Meera Nair',    designation: 'Creative Director',  company_name: 'Bloom Art Studio',    designup_user_id: 'meera_nair',    email: 'meera@bloomart.in',       phone: '+91 54321 09876', city: 'Bangalore', brand_id: 'b11' },
       'u-vikram': { full_name: 'Vikram Bose',   designation: 'Head of Sales',      company_name: 'Arterra Tiles',       designup_user_id: 'vikram_bose',   email: 'vikram@arterra.in',       phone: '+91 43210 98765', city: 'Chennai',   brand_id: 'b08' },
     };
-    const u = DEMO_USERS[userId] ?? DEMO_USERS['u-priya'];
+
+    // Demo user — return immediately without hitting DB
+    if (DEMO_USERS[userId]) {
+      const u = DEMO_USERS[userId];
+      return {
+        scan_type: 'user' as const,
+        action: 'connection_created' as const,
+        connection: { id: `conn-${userId}`, user: u, contact_shared: true, is_mutual: false },
+      };
+    }
+
+    // Real user — look up from Supabase
+    // Prefer the userId passed from AuthContext; fall back to supabase.auth.getUser()
+    let scannerUserId = currentUserId ?? null;
+    if (!scannerUserId) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      scannerUserId = authUser?.id ?? null;
+    }
+    if (!scannerUserId) throw new Error('not_authenticated');
+
+    // Check if already connected
+    const { count } = await supabase
+      .from('connections')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', scannerUserId)
+      .eq('connected_user_id', userId);
+
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id')
+      .eq('id', userId)
+      .single();
+
+    if (profileErr || !profile) throw new Error(`Profile not found for user ${userId}. Error: ${profileErr?.message ?? 'no row returned'}`);
+
+    const userShape = {
+      id: userId,
+      full_name: `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim(),
+      designation: profile.designation ?? undefined,
+      company_name: profile.company_name ?? undefined,
+      designup_user_id: profile.designup_user_id ?? '',
+      email: profile.email ?? undefined,
+      phone: profile.phone ?? undefined,
+      city: profile.city ?? undefined,
+    };
+
+    if (count && count > 0) {
+      return {
+        scan_type: 'user' as const,
+        action: 'already_connected' as const,
+        connection: { id: `conn-${userId}`, user: userShape, contact_shared: true, is_mutual: false },
+      };
+    }
+
+    const { error: insertErr } = await supabase.from('connections').insert({
+      user_id: scannerUserId,
+      connected_user_id: userId,
+      exhibition_id: activeExhibitionId,
+    });
+    if (insertErr) throw new Error(`Failed to save connection: ${insertErr.message}`);
+    Analytics.connectionMade({ isFirstConnection: (count ?? 0) === 0 });
+
     return {
       scan_type: 'user' as const,
       action: 'connection_created' as const,
-      connection: {
-        id: `conn-${userId}`,
-        user: u,
-        contact_shared: true,
-        is_mutual: false,
-      },
+      connection: { id: `conn-${userId}`, user: userShape, contact_shared: true, is_mutual: false },
     };
   }
 
