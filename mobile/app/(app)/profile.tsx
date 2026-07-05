@@ -31,52 +31,8 @@ export default function ProfileScreen() {
   const [invitePhone, setInvitePhone] = useState('');
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-  const syncCardsToCloud = async () => {
-    setSyncing(true);
-    setSyncStatus(null);
-    try {
-      const g = globalThis as any;
-      const raw = g.localStorage?.getItem('card_contacts_v1');
-      if (!raw) { setSyncStatus('No local cards found. Open this page in Safari browser (not home screen app) where you scanned the cards.'); return; }
-      let cards: any[];
-      try { cards = JSON.parse(raw); } catch { setSyncStatus('Could not read local cards.'); return; }
-      if (!cards.length) { setSyncStatus('Local card list is empty.'); return; }
-
-      // Fix non-UUID ids before upserting (Supabase requires UUID type)
-      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      let needsUpdate = false;
-      cards = cards.map((c: any) => {
-        if (!uuidRe.test(c.id)) { needsUpdate = true; return { ...c, id: crypto.randomUUID() }; }
-        return c;
-      });
-      if (needsUpdate) g.localStorage.setItem('card_contacts_v1', JSON.stringify(cards));
-
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) { setSyncStatus('Not logged in.'); return; }
-      const { error } = await supabase.from('card_contacts').upsert(
-        cards.map((c: any) => ({
-          id: c.id,
-          user_id: authUser.id,
-          scanned_at: c.scanned_at,
-          fields: c.fields,
-          notes: c.notes ?? '',
-          tags: c.tags ?? [],
-          connect_user_id: c.connect_user_id ?? null,
-        })),
-        { onConflict: 'id' },
-      );
-      if (error) setSyncStatus(`Sync failed: ${error.message}`);
-      else setSyncStatus(`Done — ${cards.length} card(s) uploaded to cloud.`);
-    } catch (e: any) {
-      setSyncStatus(`Error: ${e?.message ?? 'Unknown error'}`);
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const submitInvite = async () => {
     const phone = invitePhone.trim();
@@ -492,18 +448,7 @@ if (isLoading) {
           <Text style={[s.toggleLabel, { color: colors.textSecondary }]}>Simulate New User</Text>
         </Pressable>
         )}
-        <Pressable
-          style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
-          onPress={() => { setSyncing(true); setSyncStatus('Starting…'); void syncCardsToCloud(); }}
-        >
-          <Ionicons name="cloud-upload-outline" size={20} color={colors.accent} />
-          <View style={{ flex: 1 }}>
-            <Text style={[s.toggleLabel, { color: colors.accent }]}>{syncing ? 'Syncing…' : 'Sync Cards to Cloud'}</Text>
-            {syncStatus ? <Text style={[s.toggleSub, { color: colors.textMuted }]}>{syncStatus}</Text> : null}
-          </View>
-        </Pressable>
-
-        {confirmSignOut ? (
+{confirmSignOut ? (
           <View style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm, gap: Spacing.sm }]}>
             <Ionicons name="log-out-outline" size={20} color="#FF4444" />
             <Text style={[s.toggleLabel, { color: colors.text, flex: 1 }]}>Are you sure?</Text>
