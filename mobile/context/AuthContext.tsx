@@ -125,6 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [showProfileNudge, setShowProfileNudge] = useState(false);
   const [cardContacts, setCardContacts] = useState<CardContact[]>([]);
   const [cardContactsLoaded, setCardContactsLoaded] = useState(false);
+  const cardContactsRef = useRef<CardContact[]>([]);
+  useEffect(() => { cardContactsRef.current = cardContacts; }, [cardContacts]);
 
   // Load persisted saved brands on mount
   useEffect(() => {
@@ -158,41 +160,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(CARD_CONTACTS_KEY, JSON.stringify(cardContacts));
   }, [cardContacts, cardContactsLoaded]);
 
-  // Sync local-only contacts → Supabase once both AsyncStorage and auth are ready.
-  // This recovers cards scanned before RLS was set up, and cards scanned in a
-  // different browser/storage context (e.g. Safari vs PWA).
-  const didSyncUp = useRef(false);
+
+  // Load card contacts only after BOTH auth AND AsyncStorage are ready.
+  // This prevents the race where loadCardContacts runs before local cards are loaded,
+  // sees an empty cardContacts, and skips the Supabase sync entirely.
   useEffect(() => {
-    if (!cardContactsLoaded || !user?.id || didSyncUp.current) return;
-    didSyncUp.current = true;
-    if (cardContacts.length === 0) return;
-    const uid = user.id;
-    void supabase
-      .from('card_contacts')
-      .select('id')
-      .eq('user_id', uid)
-      .then(({ data: rows }) => {
-        const remoteIds = new Set((rows ?? []).map((r: any) => r.id));
-        const missing = cardContacts.filter((c) => !remoteIds.has(c.id));
-        if (missing.length === 0) return;
-        console.log('[didSyncUp] syncing', missing.length, 'local-only cards to Supabase');
-        supabase.from('card_contacts').upsert(
-          missing.map((c) => ({
-            id: c.id,
-            user_id: uid,
-            scanned_at: c.scanned_at,
-            fields: c.fields,
-            notes: c.notes,
-            tags: c.tags,
-            connect_user_id: c.connect_user_id ?? null,
-          })),
-          { onConflict: 'id' },
-        ).then(({ error: syncErr }) => {
-          if (syncErr) console.error('[didSyncUp] upsert failed:', syncErr.message);
-          else console.log('[didSyncUp] sync complete');
-        });
-      });
-  }, [cardContactsLoaded, user?.id]);
+    if (!user?.id || !cardContactsLoaded) return;
+    void loadCardContacts(user.id);
+  }, [user?.id, cardContactsLoaded, loadCardContacts]);
 
   // Load persisted connections on mount
   useEffect(() => {
@@ -213,6 +188,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Real Supabase auth ───────────────────────────────────────────────────────
 
   const loadCardContacts = useCallback(async (userId: string) => {
+    // Read current local cards from ref — always up to date regardless of render timing
+    const local = cardContactsRef.current;
+
     const { data: rows, error: ccError } = await supabase
       .from('card_contacts')
       .select('id, scanned_at, fields, notes, tags, connect_user_id')
@@ -221,49 +199,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (ccError) console.error('[loadCardContacts] query failed:', ccError.message);
 
     const remoteIds = new Set((rows ?? []).map((r: any) => r.id));
+    const localOnly = local.filter((c) => !remoteIds.has(c.id));
 
-    setCardContacts((prev) => {
-      // Contacts that exist locally but not in Supabase (saved before RLS was set up,
-      // or while offline). Upload them now so they survive context switches (e.g. PWA).
-      const localOnly = prev.filter((c) => !remoteIds.has(c.id));
-      if (localOnly.length > 0) {
-        void supabase.from('card_contacts').upsert(
-          localOnly.map((c) => ({
-            id: c.id,
-            user_id: userId,
-            scanned_at: c.scanned_at,
-            fields: c.fields,
-            notes: c.notes,
-            tags: c.tags,
-            connect_user_id: c.connect_user_id ?? null,
-          })),
-          { onConflict: 'id' },
-        );
-      }
-
-      if (!rows || rows.length === 0) return prev; // Supabase empty — keep local
-
-      // Merge remote rows with local image URIs (images are device-only)
-      const localById: Record<string, CardContact> = {};
-      for (const c of prev) localById[c.id] = c;
-
-      const remote = rows.map((r: any) => ({
-        id: r.id,
-        source: 'card_scan' as const,
-        scanned_at: r.scanned_at,
-        card_image_uri: localById[r.id]?.card_image_uri ?? null,
-        card_image_uri_back: localById[r.id]?.card_image_uri_back ?? null,
-        fields: r.fields ?? [],
-        notes: r.notes ?? '',
-        tags: r.tags ?? [],
-        connect_user_id: r.connect_user_id ?? null,
-      }));
-
-      // Combine: remote + any local-only contacts, newest first
-      return [...localOnly, ...remote].sort(
-        (a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime(),
+    // Upload local-only cards to Supabase (await so PWA sees them on next load)
+    let finalRows = rows ?? [];
+    if (localOnly.length > 0) {
+      console.log('[loadCardContacts] uploading', localOnly.length, 'local-only cards to Supabase');
+      const { error: syncErr } = await supabase.from('card_contacts').upsert(
+        localOnly.map((c) => ({
+          id: c.id,
+          user_id: userId,
+          scanned_at: c.scanned_at,
+          fields: c.fields,
+          notes: c.notes,
+          tags: c.tags,
+          connect_user_id: c.connect_user_id ?? null,
+        })),
+        { onConflict: 'id' },
       );
-    });
+      if (syncErr) {
+        console.error('[loadCardContacts] sync failed:', syncErr.message);
+      } else {
+        console.log('[loadCardContacts] sync complete — re-querying');
+        const { data: fresh } = await supabase
+          .from('card_contacts')
+          .select('id, scanned_at, fields, notes, tags, connect_user_id')
+          .eq('user_id', userId)
+          .order('scanned_at', { ascending: false });
+        finalRows = fresh ?? finalRows;
+      }
+    }
+
+    if (finalRows.length === 0) return; // nothing in Supabase and nothing local to sync
+
+    // Merge remote rows with local image URIs (images are device-only, not in Supabase)
+    const localById: Record<string, CardContact> = {};
+    for (const c of local) localById[c.id] = c;
+
+    const merged = finalRows.map((r: any) => ({
+      id: r.id,
+      source: 'card_scan' as const,
+      scanned_at: r.scanned_at,
+      card_image_uri: localById[r.id]?.card_image_uri ?? null,
+      card_image_uri_back: localById[r.id]?.card_image_uri_back ?? null,
+      fields: r.fields ?? [],
+      notes: r.notes ?? '',
+      tags: r.tags ?? [],
+      connect_user_id: r.connect_user_id ?? null,
+    })).sort((a: any, b: any) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
+
+    setCardContacts(merged);
   }, []);
 
   const loadConnections = useCallback(async (userId: string) => {
@@ -346,7 +331,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         company: profile.company_name ?? '',
       });
       void loadConnections(userId);
-      void loadCardContacts(userId);
     }
 
     setIsLoading(false);
