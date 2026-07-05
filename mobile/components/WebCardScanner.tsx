@@ -38,6 +38,13 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
     return () => stopStream();
   }, [active]);
 
+  // When torch toggles, reset stability so we don't compare dark vs bright frames
+  useEffect(() => {
+    lastSampleRef.current = null;
+    stableStartRef.current = null;
+    setStabilityPct(0);
+  }, [torchOn]);
+
   // Apply or remove torch when the prop changes
   useEffect(() => {
     const track = streamRef.current?.getVideoTracks?.()[0];
@@ -348,6 +355,12 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
           </Text>
         </View>
       </View>
+      {/* Manual capture button — fallback if auto-capture doesn't fire */}
+      {permState === 'granted' && (
+        <Pressable style={s.manualBtn} onPress={capture}>
+          <View style={s.manualBtnInner} />
+        </Pressable>
+      )}
     </View>
   );
 });
@@ -363,6 +376,25 @@ const s = StyleSheet.create({
     backgroundColor: '#000',
     overflow: 'hidden' as any,
     position: 'relative' as any,
+  },
+  manualBtn: {
+    position: 'absolute' as any,
+    bottom: 28,
+    alignSelf: 'center',
+    left: '50%' as any,
+    marginLeft: -34,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manualBtnInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFF',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
