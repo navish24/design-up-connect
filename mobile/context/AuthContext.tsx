@@ -511,6 +511,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addCardContact = async (contact: CardContact) => {
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(contact.id)) contact = { ...contact, id: crypto.randomUUID() };
     setCardContacts((prev) => [contact, ...prev]);
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (authUser) {
