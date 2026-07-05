@@ -369,6 +369,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setDemoAddedConnections([]);
         setIsLoading(false);
       } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        setIsLoading(true); // hold the auth guard while profile loads
         void loadProfile(session.user.id);
       }
     });
