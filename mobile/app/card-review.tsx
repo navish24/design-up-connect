@@ -220,16 +220,8 @@ export default function CardReviewScreen() {
       style={[s.root, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Header */}
-      <View style={[s.header, { borderBottomColor: colors.border, paddingTop: headerPaddingTop as any }]}>
-        <Pressable onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </Pressable>
-        <Text style={[s.headerTitle, { color: colors.text }]}>Review Card</Text>
-        <Pressable onPress={handleSave} style={s.headerBtn} hitSlop={8}>
-          <Text style={[s.headerSave, { color: colors.accent }]}>Save</Text>
-        </Pressable>
-      </View>
+      {/* Status bar spacer */}
+      <View style={{ paddingTop: headerPaddingTop as any }} />
 
       <ScrollView
         contentContainerStyle={s.scroll}
@@ -594,16 +586,6 @@ const LABEL_ICONS: Record<string, string> = {
 const s = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.sm },
-
-  // Header
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerBtn: { width: 44, alignItems: 'center' },
-  headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
-  headerSave: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
 
   // Scroll
   scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 120, gap: Spacing.md },
