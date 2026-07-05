@@ -495,10 +495,15 @@ if (isLoading) {
         <Pressable
           style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
           onPress={() => {
-            Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Sign Out', style: 'destructive', onPress: () => { Analytics.signedOut(); signOut(); } },
-            ]);
+            if (Platform.OS === 'web') {
+              Analytics.signedOut();
+              signOut();
+            } else {
+              Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign Out', style: 'destructive', onPress: () => { Analytics.signedOut(); signOut(); } },
+              ]);
+            }
           }}
         >
           <Ionicons name="log-out-outline" size={20} color="#FF4444" />
