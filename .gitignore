@@ -55,4 +55,9 @@ dashboard/build/
 
 # Testing
 coverage/
+
+# Vercel
 .vercel
+
+# Claude Code — personal memory, session transcripts, local settings
+.claude/
