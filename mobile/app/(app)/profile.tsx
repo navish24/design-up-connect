@@ -31,30 +31,40 @@ export default function ProfileScreen() {
   const [invitePhone, setInvitePhone] = useState('');
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const syncCardsToCloud = async () => {
-    const g = globalThis as any;
-    const raw = g.localStorage?.getItem('card_contacts_v1');
-    if (!raw) { Alert.alert('Sync', 'No local cards found in storage.'); return; }
-    let cards: any[];
-    try { cards = JSON.parse(raw); } catch { Alert.alert('Sync', 'Could not parse local cards.'); return; }
-    if (!cards.length) { Alert.alert('Sync', 'Local card list is empty.'); return; }
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) { Alert.alert('Sync', 'Not logged in.'); return; }
-    const { error } = await supabase.from('card_contacts').upsert(
-      cards.map((c: any) => ({
-        id: c.id,
-        user_id: authUser.id,
-        scanned_at: c.scanned_at,
-        fields: c.fields,
-        notes: c.notes ?? '',
-        tags: c.tags ?? [],
-        connect_user_id: c.connect_user_id ?? null,
-      })),
-      { onConflict: 'id' },
-    );
-    if (error) Alert.alert('Sync failed', error.message);
-    else Alert.alert('Sync complete', `${cards.length} card(s) uploaded to cloud.`);
+    setSyncing(true);
+    setSyncStatus(null);
+    try {
+      const g = globalThis as any;
+      const raw = g.localStorage?.getItem('card_contacts_v1');
+      if (!raw) { setSyncStatus('No local cards found. Tap this from the Safari browser (not PWA) where you originally scanned cards.'); return; }
+      let cards: any[];
+      try { cards = JSON.parse(raw); } catch { setSyncStatus('Could not read local cards.'); return; }
+      if (!cards.length) { setSyncStatus('Local card list is empty.'); return; }
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) { setSyncStatus('Not logged in.'); return; }
+      const { error } = await supabase.from('card_contacts').upsert(
+        cards.map((c: any) => ({
+          id: c.id,
+          user_id: authUser.id,
+          scanned_at: c.scanned_at,
+          fields: c.fields,
+          notes: c.notes ?? '',
+          tags: c.tags ?? [],
+          connect_user_id: c.connect_user_id ?? null,
+        })),
+        { onConflict: 'id' },
+      );
+      if (error) setSyncStatus(`Sync failed: ${error.message}`);
+      else setSyncStatus(`Done — ${cards.length} card(s) uploaded to cloud.`);
+    } catch (e: any) {
+      setSyncStatus(`Error: ${e?.message ?? 'Unknown error'}`);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const submitInvite = async () => {
@@ -474,9 +484,13 @@ if (isLoading) {
         <Pressable
           style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
           onPress={syncCardsToCloud}
+          disabled={syncing}
         >
           <Ionicons name="cloud-upload-outline" size={20} color={colors.accent} />
-          <Text style={[s.toggleLabel, { color: colors.accent }]}>Sync Cards to Cloud</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.toggleLabel, { color: colors.accent }]}>{syncing ? 'Syncing…' : 'Sync Cards to Cloud'}</Text>
+            {syncStatus ? <Text style={[s.toggleSub, { color: colors.textMuted }]}>{syncStatus}</Text> : null}
+          </View>
         </Pressable>
 
         <Pressable
