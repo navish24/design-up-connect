@@ -345,7 +345,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       !companyAssigned &&
       !DESIGNATION_RE.test(line) &&
       !PIN_RE.test(line) &&
-      /^[A-Z]/.test(line) &&
+      /^[A-Za-z]/.test(line) &&
       line.length <= 100 &&
       COMPANY_KEYWORD_RE.test(line) &&
       !ADDRESS_STRUCTURAL_RE.test(line)
@@ -514,8 +514,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   // (e.g. a city/pin line OCR'd separately). Allow digits so "Hyderabad - 500 004" qualifies.
   // Minimum length of 6 prevents short OCR garbage ("P.Q.", "Hum", etc.) from
   // being absorbed into the address just because they're adjacent to an address line.
+  // Personal-name shape: "First Last", "First M Last", "First M. Last" — don't absorb into address
+  const PERSON_NAME_SHAPE_RE = /^[A-Z][a-z]{2,}(?:\s+[A-Z]\.?|\s+[A-Z][a-z]{2,}){1,2}$/;
   const looksLikeAddressFragment = (text: string) =>
-    text.length >= 6 && text.length <= 60 && /^[A-Za-z0-9\s,.\-/]+$/.test(text);
+    text.length >= 6 && text.length <= 60 && /^[A-Za-z0-9\s,.\-/]+$/.test(text) && !PERSON_NAME_SHAPE_RE.test(text);
 
   for (const { idx, text } of otherEntries) {
     if (looksLikeAddressFragment(text) && (addressIdx.has(idx - 1) || addressIdx.has(idx + 1))) {
