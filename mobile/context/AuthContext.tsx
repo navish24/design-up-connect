@@ -161,14 +161,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [cardContacts, cardContactsLoaded]);
 
 
-  // Load card contacts only after BOTH auth AND AsyncStorage are ready.
-  // This prevents the race where loadCardContacts runs before local cards are loaded,
-  // sees an empty cardContacts, and skips the Supabase sync entirely.
-  useEffect(() => {
-    if (!user?.id || !cardContactsLoaded) return;
-    void loadCardContacts(user.id);
-  }, [user?.id, cardContactsLoaded, loadCardContacts]);
-
   // Load persisted connections on mount
   useEffect(() => {
     AsyncStorage.getItem(CONNECTIONS_KEY).then((raw) => {
@@ -250,6 +242,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setCardContacts(merged);
   }, []);
+
+  // Fire only after BOTH auth AND AsyncStorage are ready — defined after
+  // loadCardContacts so the dependency array captures the real function reference.
+  useEffect(() => {
+    if (!user?.id || !cardContactsLoaded) return;
+    void loadCardContacts(user.id);
+  }, [user?.id, cardContactsLoaded, loadCardContacts]);
 
   const loadConnections = useCallback(async (userId: string) => {
     const { data: rows } = await supabase
