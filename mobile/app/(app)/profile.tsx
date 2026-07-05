@@ -32,6 +32,31 @@ export default function ProfileScreen() {
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
 
+  const syncCardsToCloud = async () => {
+    const g = globalThis as any;
+    const raw = g.localStorage?.getItem('card_contacts_v1');
+    if (!raw) { Alert.alert('Sync', 'No local cards found in storage.'); return; }
+    let cards: any[];
+    try { cards = JSON.parse(raw); } catch { Alert.alert('Sync', 'Could not parse local cards.'); return; }
+    if (!cards.length) { Alert.alert('Sync', 'Local card list is empty.'); return; }
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) { Alert.alert('Sync', 'Not logged in.'); return; }
+    const { error } = await supabase.from('card_contacts').upsert(
+      cards.map((c: any) => ({
+        id: c.id,
+        user_id: authUser.id,
+        scanned_at: c.scanned_at,
+        fields: c.fields,
+        notes: c.notes ?? '',
+        tags: c.tags ?? [],
+        connect_user_id: c.connect_user_id ?? null,
+      })),
+      { onConflict: 'id' },
+    );
+    if (error) Alert.alert('Sync failed', error.message);
+    else Alert.alert('Sync complete', `${cards.length} card(s) uploaded to cloud.`);
+  };
+
   const submitInvite = async () => {
     const phone = invitePhone.trim();
     if (phone.replace(/\D/g, '').length < 10) return;
@@ -446,6 +471,14 @@ if (isLoading) {
           <Text style={[s.toggleLabel, { color: colors.textSecondary }]}>Simulate New User</Text>
         </Pressable>
         )}
+        <Pressable
+          style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
+          onPress={syncCardsToCloud}
+        >
+          <Ionicons name="cloud-upload-outline" size={20} color={colors.accent} />
+          <Text style={[s.toggleLabel, { color: colors.accent }]}>Sync Cards to Cloud</Text>
+        </Pressable>
+
         <Pressable
           style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
           onPress={() => {
