@@ -40,10 +40,20 @@ export default function ProfileScreen() {
     try {
       const g = globalThis as any;
       const raw = g.localStorage?.getItem('card_contacts_v1');
-      if (!raw) { setSyncStatus('No local cards found. Tap this from the Safari browser (not PWA) where you originally scanned cards.'); return; }
+      if (!raw) { setSyncStatus('No local cards found. Open this page in Safari browser (not home screen app) where you scanned the cards.'); return; }
       let cards: any[];
       try { cards = JSON.parse(raw); } catch { setSyncStatus('Could not read local cards.'); return; }
       if (!cards.length) { setSyncStatus('Local card list is empty.'); return; }
+
+      // Fix non-UUID ids before upserting (Supabase requires UUID type)
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      let needsUpdate = false;
+      cards = cards.map((c: any) => {
+        if (!uuidRe.test(c.id)) { needsUpdate = true; return { ...c, id: crypto.randomUUID() }; }
+        return c;
+      });
+      if (needsUpdate) g.localStorage.setItem('card_contacts_v1', JSON.stringify(cards));
+
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) { setSyncStatus('Not logged in.'); return; }
       const { error } = await supabase.from('card_contacts').upsert(

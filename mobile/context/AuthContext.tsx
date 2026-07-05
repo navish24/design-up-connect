@@ -181,7 +181,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadCardContacts = useCallback(async (userId: string) => {
     // Read current local cards from ref — always up to date regardless of render timing
-    const local = cardContactsRef.current;
+    let local = cardContactsRef.current;
+
+    // Fix non-UUID ids (cards saved before UUID enforcement)
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const needsFix = local.some((c) => !uuidRe.test(c.id));
+    if (needsFix) {
+      local = local.map((c) => uuidRe.test(c.id) ? c : { ...c, id: crypto.randomUUID() });
+      setCardContacts(local);
+    }
 
     const { data: rows, error: ccError } = await supabase
       .from('card_contacts')
