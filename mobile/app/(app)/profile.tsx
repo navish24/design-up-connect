@@ -483,8 +483,7 @@ if (isLoading) {
         )}
         <Pressable
           style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
-          onPress={syncCardsToCloud}
-          disabled={syncing}
+          onPress={() => { setSyncing(true); setSyncStatus('Starting…'); void syncCardsToCloud(); }}
         >
           <Ionicons name="cloud-upload-outline" size={20} color={colors.accent} />
           <View style={{ flex: 1 }}>
