@@ -24,6 +24,7 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   const videoRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
   const wantCameraRef = useRef(false);
+  const pauseUntilRef = useRef(0);
   const stabilityTimerRef = useRef<any>(null);
   const lastSampleRef = useRef<Uint8ClampedArray | null>(null);
   const stableStartRef = useRef<number | null>(null);
@@ -38,11 +39,12 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
     return () => stopStream();
   }, [active]);
 
-  // When torch toggles, reset stability so we don't compare dark vs bright frames
+  // When torch toggles: pause stability loop for 2s while camera exposure settles
   useEffect(() => {
     lastSampleRef.current = null;
     stableStartRef.current = null;
     setStabilityPct(0);
+    pauseUntilRef.current = Date.now() + 2000;
   }, [torchOn]);
 
   // Apply or remove torch when the prop changes
@@ -82,6 +84,11 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   const checkStabilityLoop = () => {
     const g = globalThis as any;
     if (!wantCameraRef.current || !autoCapture) return;
+    // Wait for camera exposure to settle after torch change
+    if (Date.now() < pauseUntilRef.current) {
+      stabilityTimerRef.current = g.setTimeout(checkStabilityLoop, 400);
+      return;
+    }
     const video = videoRef.current;
     if (!video || video.readyState < 2) {
       stabilityTimerRef.current = g.setTimeout(checkStabilityLoop, 400);
@@ -104,6 +111,9 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
       return;
     }
 
+    // Torch creates glare/noise so allow more pixel variation before calling it "moving"
+    const MAD_THRESHOLD = torchOn ? 26 : 18;
+
     if (lastSampleRef.current && lastSampleRef.current.length === data.length) {
       let diff = 0;
       for (let i = 0; i < data.length; i += 4) {
@@ -113,7 +123,7 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
       }
       const mad = diff / (data.length / 4) / 3;
 
-      if (mad < 18) {
+      if (mad < MAD_THRESHOLD) {
         if (!stableStartRef.current) stableStartRef.current = Date.now();
         const elapsed = Date.now() - stableStartRef.current;
         const pct = Math.min(100, Math.round((elapsed / 1500) * 100));
