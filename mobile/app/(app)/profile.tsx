@@ -33,6 +33,7 @@ export default function ProfileScreen() {
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   const syncCardsToCloud = async () => {
     setSyncing(true);
@@ -502,23 +503,26 @@ if (isLoading) {
           </View>
         </Pressable>
 
-        <Pressable
-          style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
-          onPress={() => {
-            if (Platform.OS === 'web') {
-              Analytics.signedOut();
-              signOut();
-            } else {
-              Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Sign Out', style: 'destructive', onPress: () => { Analytics.signedOut(); signOut(); } },
-              ]);
-            }
-          }}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#FF4444" />
-          <Text style={[s.toggleLabel, { color: '#FF4444' }]}>Sign Out</Text>
-        </Pressable>
+        {confirmSignOut ? (
+          <View style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm, gap: Spacing.sm }]}>
+            <Ionicons name="log-out-outline" size={20} color="#FF4444" />
+            <Text style={[s.toggleLabel, { color: colors.text, flex: 1 }]}>Are you sure?</Text>
+            <Pressable onPress={() => setConfirmSignOut(false)} style={{ paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ color: colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium }}>Cancel</Text>
+            </Pressable>
+            <Pressable onPress={() => { Analytics.signedOut(); signOut(); }} style={{ paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: Radius.md, backgroundColor: '#FF4444' }}>
+              <Text style={{ color: '#FFF', fontSize: FontSize.sm, fontWeight: FontWeight.medium }}>Sign Out</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            style={[s.settingsNavRow, { backgroundColor: colors.surface, marginTop: Spacing.sm }]}
+            onPress={() => setConfirmSignOut(true)}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#FF4444" />
+            <Text style={[s.toggleLabel, { color: '#FF4444' }]}>Sign Out</Text>
+          </Pressable>
+        )}
 
       </ScrollView>
 

@@ -1,6 +1,8 @@
-// EXPO_PUBLIC_* vars are inlined at build time by Metro/EAS.
-// In beta builds (APP_VARIANT=beta) this is "true"; in production it is unset.
-export const isBeta: boolean = process.env.EXPO_PUBLIC_IS_BETA === 'true';
+// Web (connect-designup.vercel.app) is always the beta/Connect experience.
+// Native: set EXPO_PUBLIC_IS_BETA=false to get the full Designup app.
+import { Platform } from 'react-native';
+export const isBeta: boolean =
+  Platform.OS === 'web' || process.env.EXPO_PUBLIC_IS_BETA === 'true';
 
 // Cloudinary — same account as the brand dashboard.
 // CLOUDINARY_UPLOAD_PRESET: create an unsigned preset in Cloudinary dashboard →
