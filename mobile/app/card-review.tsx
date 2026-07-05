@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderPaddingTop } from '../lib/safeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -27,7 +27,7 @@ function generateId() {
 
 export default function CardReviewScreen() {
   const { colors } = useTheme();
-  const { top: topInset } = useSafeAreaInsets();
+  const headerPaddingTop = useHeaderPaddingTop();
   const { addCardContact, updateCardContact, cardContacts } = useAuth();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -221,7 +221,7 @@ export default function CardReviewScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Header */}
-      <View style={[s.header, { borderBottomColor: colors.border, paddingTop: topInset + 12 }]}>
+      <View style={[s.header, { borderBottomColor: colors.border, paddingTop: headerPaddingTop as any }]}>
         <Pressable onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>

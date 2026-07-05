@@ -18,6 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderPaddingTop } from '../../lib/safeArea';
 import { router } from 'expo-router';
 import { getTabBarStyle } from './_layout';
 import { Ionicons } from '@expo/vector-icons';
@@ -115,7 +116,8 @@ export default function ScanScreen() {
     useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const isFocused = useIsFocused();
-  const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const headerPaddingTop = useHeaderPaddingTop();
   const navigation = useNavigation();
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -484,7 +486,7 @@ export default function ScanScreen() {
   if (scanView === 'choice') {
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
-        <View style={[s.header, { paddingTop: topInset + 12 }]}>
+        <View style={[s.header, { paddingTop: headerPaddingTop as any }]}>
           <Text style={[s.headerTitle, { color: colors.text }]}>Scanner</Text>
           <Pressable onPress={() => setShowInfo(true)} hitSlop={12}>
             <Ionicons name="information-circle-outline" size={22} color={colors.textMuted} />
@@ -546,7 +548,7 @@ export default function ScanScreen() {
   if (scanView === 'card') {
     return (
       <View style={[s.root, { backgroundColor: '#000' }]}>
-        <View style={[s.modeHeader, { paddingTop: topInset + 12 }]}>
+        <View style={[s.modeHeader, { paddingTop: headerPaddingTop as any }]}>
           <Pressable onPress={() => setScanView('choice')} hitSlop={12}>
             <Ionicons name="arrow-back" size={22} color="#FFF" />
           </Pressable>
@@ -673,7 +675,7 @@ export default function ScanScreen() {
         <View style={{ flex: 1, backgroundColor: '#000' }} />
       )}
       {/* Header overlay — matches card mode pattern */}
-      <View style={[s.qrHeader, { paddingTop: topInset + 12 }]}>
+      <View style={[s.qrHeader, { paddingTop: headerPaddingTop as any }]}>
         <Pressable onPress={() => setScanView('choice')} hitSlop={12}>
           <Ionicons name="arrow-back" size={22} color="#FFF" />
         </Pressable>

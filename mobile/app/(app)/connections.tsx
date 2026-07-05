@@ -5,7 +5,7 @@ import {
 import { useState, useMemo, Fragment, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderPaddingTop } from '../../lib/safeArea';
 import { isBeta } from '../../lib/betaConfig';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
@@ -149,7 +149,7 @@ export default function ConnectionsScreen() {
   const { colors } = useTheme();
   const { demoConnectionsReset, demoAddedConnections, notes, addNote, cardContacts, deleteCardContact, updateCardContact, user } = useAuth();
   const router = useRouter();
-  const { top: topInset } = useSafeAreaInsets();
+  const headerPaddingTop = useHeaderPaddingTop();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'cards' | 'connections' | 'notes'>('all');
   const [sortType, setSortType] = useState<SortType>('newest');
@@ -317,7 +317,7 @@ export default function ConnectionsScreen() {
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={[s.header, { paddingTop: topInset + 12 }]}>
+      <View style={[s.header, { paddingTop: headerPaddingTop as any }]}>
         <Text style={[s.headerTitle, { color: colors.text }]}>Connects</Text>
       </View>
 
@@ -567,7 +567,7 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
   onAddNote: (text: string) => void;
 }) {
   const s = makeStyles(colors);
-  const { top: topInset } = useSafeAreaInsets();
+  const headerPaddingTop = useHeaderPaddingTop();
   const [showNotes, setShowNotes] = useState(false);
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
 
@@ -602,7 +602,7 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={[s.detailHeader, { paddingTop: topInset + 12 }]}>
+      <View style={[s.detailHeader, { paddingTop: headerPaddingTop as any }]}>
         <Pressable onPress={onBack} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
@@ -902,14 +902,14 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
   router: ReturnType<typeof useRouter>;
 }) {
   const s = makeStyles(colors);
-  const { top: topInset } = useSafeAreaInsets();
+  const headerPaddingTop = useHeaderPaddingTop();
   const { user } = connection;
   const [showNotes, setShowNotes] = useState(false);
   const [photoExpanded, setPhotoExpanded] = useState(false);
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={[s.detailHeader, { paddingTop: topInset + 12 }]}>
+      <View style={[s.detailHeader, { paddingTop: headerPaddingTop as any }]}>
         <Pressable onPress={onBack} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>

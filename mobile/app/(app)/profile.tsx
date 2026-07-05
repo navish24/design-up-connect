@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, TextInput, Modal, FlatList, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Switch } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderPaddingTop } from '../../lib/safeArea';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { useState, useEffect } from 'react';
@@ -23,7 +23,7 @@ const PROFESSIONS = [
 export default function ProfileScreen() {
   const { colors, toggleTheme, isDark } = useTheme();
   const { user, updateUser, isLoading, signOut, resetDemoConnections, clearCardContacts } = useAuth();
-  const { top: topInset } = useSafeAreaInsets();
+  const headerPaddingTop = useHeaderPaddingTop();
 
   const [qrExpanded, setQrExpanded] = useState(false);
   const [showCardPreview, setShowCardPreview] = useState(false);
@@ -185,7 +185,7 @@ if (isLoading) {
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={[s.header, { paddingTop: topInset + 12 }]}>
+      <View style={[s.header, { paddingTop: headerPaddingTop as any }]}>
         <Text style={[s.headerTitle, { color: colors.text }]}>My Card</Text>
       </View>
 

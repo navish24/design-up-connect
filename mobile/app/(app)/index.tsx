@@ -1,5 +1,5 @@
 import { ScrollView, View, Text, StyleSheet, Pressable, Image, Modal, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderPaddingTop } from '../../lib/safeArea';
 import { useState, useEffect, useMemo } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -831,7 +831,7 @@ const POPUP_SHOWN_KEY = 'onboarding_popup_shown';
 
 function BetaHomeScreen() {
   const { colors } = useTheme();
-  const { top: topInset } = useSafeAreaInsets();
+  const headerPaddingTop = useHeaderPaddingTop();
   const { user, cardContacts, demoAddedConnections, updateUser, signOut, clearCardContacts, resetDemoConnections } = useAuth();
 
   const [qrExpanded, setQrExpanded] = useState(false);
@@ -972,7 +972,7 @@ function BetaHomeScreen() {
   return (
     <View style={[b.root, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[b.header, { paddingTop: topInset + 12 }]}>
+      <View style={[b.header, { paddingTop: headerPaddingTop as any }]}>
         <Text style={[b.headerTitle, { color: colors.text }]}>Home</Text>
       </View>
 
