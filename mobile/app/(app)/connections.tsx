@@ -124,10 +124,21 @@ const MOCK_CONNECTIONS: Connection[] = [
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
-type SortType = 'newest' | 'oldest' | 'az';
-const SORT_CYCLE: Record<SortType, SortType> = { newest: 'oldest', oldest: 'az', az: 'newest' };
-const SORT_LABEL: Record<SortType, string> = { newest: 'Newest', oldest: 'Oldest', az: 'A → Z' };
-const SORT_ICON: Record<SortType, string> = { newest: 'arrow-down-outline', oldest: 'arrow-up-outline', az: 'text-outline' };
+type SortType = 'newest' | 'oldest' | 'az' | 'za';
+const SORT_LABEL: Record<SortType, string> = { newest: 'New → Old', oldest: 'Old → New', az: 'A → Z', za: 'Z → A' };
+const FILTER_LABEL: Record<string, string> = { all: 'Filter', cards: 'Cards', connections: 'Connects', notes: 'Has Notes' };
+const FILTER_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'cards', label: 'Cards' },
+  { value: 'connections', label: 'Connects' },
+  { value: 'notes', label: 'Has Notes' },
+];
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'New → Old' },
+  { value: 'oldest', label: 'Old → New' },
+  { value: 'az', label: 'A → Z' },
+  { value: 'za', label: 'Z → A' },
+];
 
 type ActiveView =
   | { type: 'list' }
@@ -142,6 +153,8 @@ export default function ConnectionsScreen() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'cards' | 'connections' | 'notes'>('all');
   const [sortType, setSortType] = useState<SortType>('newest');
+  const [showFilterDrop, setShowFilterDrop] = useState(false);
+  const [showSortDrop, setShowSortDrop] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>({ type: 'list' });
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
   const exchangingRef = useRef<Set<string>>(new Set());
@@ -226,8 +239,6 @@ export default function ConnectionsScreen() {
     );
   }, [demoConnectionsReset, demoAddedConnections, mutualIds]);
 
-  const cycleSortType = () => setSortType((cur) => SORT_CYCLE[cur]);
-
   const filteredConnections = useMemo(() => {
     if (filterType === 'cards') return [];
     const q = search.toLowerCase();
@@ -248,6 +259,7 @@ export default function ConnectionsScreen() {
     if (sortType === 'newest') list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     else if (sortType === 'oldest') list = [...list].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     else if (sortType === 'az') list = [...list].sort((a, b) => a.user.full_name.localeCompare(b.user.full_name));
+    else if (sortType === 'za') list = [...list].sort((a, b) => b.user.full_name.localeCompare(a.user.full_name));
     return list;
   }, [allConnections, search, notes, filterType, sortType]);
 
@@ -266,6 +278,7 @@ export default function ConnectionsScreen() {
     if (sortType === 'newest') list = [...list].sort((a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
     else if (sortType === 'oldest') list = [...list].sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
     else if (sortType === 'az') list = [...list].sort((a, b) => getCardDisplayName(a.fields).localeCompare(getCardDisplayName(b.fields)));
+    else if (sortType === 'za') list = [...list].sort((a, b) => getCardDisplayName(b.fields).localeCompare(getCardDisplayName(a.fields)));
     return list;
   }, [cardContacts, search, notes, filterType, sortType]);
 
@@ -326,35 +339,78 @@ export default function ConnectionsScreen() {
         </View>
       </View>
 
-      {/* Filter + Sort bar */}
-      <View style={s.filterBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChips}>
-          {(['all', 'cards', 'connections', 'notes'] as const).map((f) => {
-            const labels = { all: 'All', cards: 'Cards', connections: 'Connects', notes: 'Has Notes' };
-            const active = filterType === f;
-            return (
-              <Pressable
-                key={f}
-                onPress={() => setFilterType(f)}
-                style={[s.filterChip, {
-                  backgroundColor: active ? colors.accent : colors.surface,
-                  borderColor: active ? colors.accent : colors.border,
-                }]}
-              >
-                <Text style={[s.filterChipText, { color: active ? '#FFF' : colors.textSecondary }]}>
-                  {labels[f]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+      {/* Backdrop — closes dropdowns when tapping outside */}
+      {(showFilterDrop || showSortDrop) && (
         <Pressable
-          onPress={cycleSortType}
-          style={[s.sortPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        >
-          <Ionicons name={SORT_ICON[sortType] as any} size={12} color={colors.textSecondary} />
-          <Text style={[s.sortPillText, { color: colors.textSecondary }]}>{SORT_LABEL[sortType]}</Text>
-        </Pressable>
+          style={[StyleSheet.absoluteFillObject, { zIndex: 10 }]}
+          onPress={() => { setShowFilterDrop(false); setShowSortDrop(false); }}
+        />
+      )}
+
+      {/* Filter + Sort dropdowns */}
+      <View style={[s.filterBar, { zIndex: 20 }]}>
+
+        {/* Filter CTA */}
+        <View style={{ position: 'relative' }}>
+          <Pressable
+            style={[s.dropBtn, {
+              backgroundColor: colors.surface,
+              borderColor: filterType !== 'all' ? colors.accent : colors.border,
+            }]}
+            onPress={() => { setShowFilterDrop((v) => !v); setShowSortDrop(false); }}
+          >
+            <Ionicons name="options-outline" size={14} color={filterType !== 'all' ? colors.accent : colors.textSecondary} />
+            <Text style={[s.dropBtnText, { color: filterType !== 'all' ? colors.accent : colors.textSecondary }]}>
+              {FILTER_LABEL[filterType]}
+            </Text>
+            <Ionicons name={showFilterDrop ? 'chevron-up' : 'chevron-down'} size={12} color={filterType !== 'all' ? colors.accent : colors.textMuted} />
+          </Pressable>
+          {showFilterDrop && (
+            <View style={[s.dropdown, { backgroundColor: colors.surface, borderColor: colors.border, left: 0 }]}>
+              {FILTER_OPTIONS.map((opt, i) => (
+                <Pressable
+                  key={opt.value}
+                  style={[s.dropItem, i < FILTER_OPTIONS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+                  onPress={() => { setFilterType(opt.value as any); setShowFilterDrop(false); }}
+                >
+                  <Text style={[s.dropItemText, { color: filterType === opt.value ? colors.accent : colors.text }]}>{opt.label}</Text>
+                  {filterType === opt.value && <Ionicons name="checkmark" size={16} color={colors.accent} />}
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Sort CTA */}
+        <View style={{ position: 'relative' }}>
+          <Pressable
+            style={[s.dropBtn, {
+              backgroundColor: colors.surface,
+              borderColor: sortType !== 'newest' ? colors.accent : colors.border,
+            }]}
+            onPress={() => { setShowSortDrop((v) => !v); setShowFilterDrop(false); }}
+          >
+            <Ionicons name="swap-vertical-outline" size={14} color={sortType !== 'newest' ? colors.accent : colors.textSecondary} />
+            <Text style={[s.dropBtnText, { color: sortType !== 'newest' ? colors.accent : colors.textSecondary }]}>
+              {SORT_LABEL[sortType]}
+            </Text>
+            <Ionicons name={showSortDrop ? 'chevron-up' : 'chevron-down'} size={12} color={sortType !== 'newest' ? colors.accent : colors.textMuted} />
+          </Pressable>
+          {showSortDrop && (
+            <View style={[s.dropdown, { backgroundColor: colors.surface, borderColor: colors.border, left: 0 }]}>
+              {SORT_OPTIONS.map((opt, i) => (
+                <Pressable
+                  key={opt.value}
+                  style={[s.dropItem, i < SORT_OPTIONS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+                  onPress={() => { setSortType(opt.value as SortType); setShowSortDrop(false); }}
+                >
+                  <Text style={[s.dropItemText, { color: sortType === opt.value ? colors.accent : colors.text }]}>{opt.label}</Text>
+                  {sortType === opt.value && <Ionicons name="checkmark" size={16} color={colors.accent} />}
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
@@ -1066,18 +1122,24 @@ function makeStyles(colors: any) {
       flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
       paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm,
     },
-    filterChips: { flexDirection: 'row', gap: Spacing.sm },
-    filterChip: {
-      paddingHorizontal: Spacing.md, paddingVertical: 6,
-      borderRadius: Radius.full, borderWidth: 1,
+    dropBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      paddingHorizontal: Spacing.md, paddingVertical: 9,
+      borderRadius: Radius.md, borderWidth: 1,
     },
-    filterChipText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
-    sortPill: {
-      flexDirection: 'row', alignItems: 'center', gap: 4,
-      paddingHorizontal: Spacing.sm, paddingVertical: 6,
-      borderRadius: Radius.full, borderWidth: 1,
+    dropBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },
+    dropdown: {
+      position: 'absolute', top: 42, zIndex: 30,
+      borderRadius: Radius.md, borderWidth: 1,
+      minWidth: 150,
+      shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 }, elevation: 8,
     },
-    sortPillText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
+    dropItem: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: Spacing.md, paddingVertical: 12,
+    },
+    dropItemText: { fontSize: FontSize.sm },
     scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
     sectionHeader: {
       fontSize: FontSize.xs, fontWeight: FontWeight.semibold,
