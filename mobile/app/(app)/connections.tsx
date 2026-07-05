@@ -124,6 +124,11 @@ const MOCK_CONNECTIONS: Connection[] = [
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
+type SortType = 'newest' | 'oldest' | 'az';
+const SORT_CYCLE: Record<SortType, SortType> = { newest: 'oldest', oldest: 'az', az: 'newest' };
+const SORT_LABEL: Record<SortType, string> = { newest: 'Newest', oldest: 'Oldest', az: 'A → Z' };
+const SORT_ICON: Record<SortType, string> = { newest: 'arrow-down-outline', oldest: 'arrow-up-outline', az: 'text-outline' };
+
 type ActiveView =
   | { type: 'list' }
   | { type: 'connect_detail'; connection: Connection }
@@ -135,6 +140,8 @@ export default function ConnectionsScreen() {
   const router = useRouter();
   const { top: topInset } = useSafeAreaInsets();
   const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'cards' | 'connections' | 'notes'>('all');
+  const [sortType, setSortType] = useState<SortType>('newest');
   const [activeView, setActiveView] = useState<ActiveView>({ type: 'list' });
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
   const exchangingRef = useRef<Set<string>>(new Set());
@@ -219,26 +226,48 @@ export default function ConnectionsScreen() {
     );
   }, [demoConnectionsReset, demoAddedConnections, mutualIds]);
 
-  const filteredConnections = allConnections.filter((c) => {
-    const q = search.toLowerCase();
-    if (!q) return true;
-    const connectionNotes = (notes[c.id] ?? []).map((n) => n.text).join(' ').toLowerCase();
-    return (
-      c.user.full_name.toLowerCase().includes(q) ||
-      (c.brand_name || '').toLowerCase().includes(q) ||
-      (c.user.designation || '').toLowerCase().includes(q) ||
-      (c.user.city || '').toLowerCase().includes(q) ||
-      connectionNotes.includes(q)
-    );
-  });
+  const cycleSortType = () => setSortType((cur) => SORT_CYCLE[cur]);
 
-  const filteredCards = cardContacts.filter((c) => {
+  const filteredConnections = useMemo(() => {
+    if (filterType === 'cards') return [];
     const q = search.toLowerCase();
-    if (!q) return true;
-    const allValues = c.fields.map((f) => f.value.toLowerCase()).join(' ');
-    const modalNotes = (notes[c.id] ?? []).map((n) => n.text).join(' ').toLowerCase();
-    return allValues.includes(q) || c.notes.toLowerCase().includes(q) || modalNotes.includes(q);
-  });
+    let list = allConnections.filter((c) => {
+      if (q) {
+        const connNotes = (notes[c.id] ?? []).map((n) => n.text).join(' ').toLowerCase();
+        if (
+          !c.user.full_name.toLowerCase().includes(q) &&
+          !(c.brand_name || '').toLowerCase().includes(q) &&
+          !(c.user.designation || '').toLowerCase().includes(q) &&
+          !(c.user.city || '').toLowerCase().includes(q) &&
+          !connNotes.includes(q)
+        ) return false;
+      }
+      if (filterType === 'notes') return (notes[c.id] ?? []).length > 0;
+      return true;
+    });
+    if (sortType === 'newest') list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    else if (sortType === 'oldest') list = [...list].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    else if (sortType === 'az') list = [...list].sort((a, b) => a.user.full_name.localeCompare(b.user.full_name));
+    return list;
+  }, [allConnections, search, notes, filterType, sortType]);
+
+  const filteredCards = useMemo(() => {
+    if (filterType === 'connections') return [];
+    const q = search.toLowerCase();
+    let list = cardContacts.filter((c) => {
+      if (q) {
+        const allValues = c.fields.map((f) => f.value.toLowerCase()).join(' ');
+        const modalNotes = (notes[c.id] ?? []).map((n) => n.text).join(' ').toLowerCase();
+        if (!allValues.includes(q) && !c.notes.toLowerCase().includes(q) && !modalNotes.includes(q)) return false;
+      }
+      if (filterType === 'notes') return c.notes.trim().length > 0 || (notes[c.id] ?? []).length > 0;
+      return true;
+    });
+    if (sortType === 'newest') list = [...list].sort((a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
+    else if (sortType === 'oldest') list = [...list].sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
+    else if (sortType === 'az') list = [...list].sort((a, b) => getCardDisplayName(a.fields).localeCompare(getCardDisplayName(b.fields)));
+    return list;
+  }, [cardContacts, search, notes, filterType, sortType]);
 
   // ── Detail views ────────────────────────────────────────────────────────────
 
@@ -289,7 +318,43 @@ export default function ConnectionsScreen() {
             value={search}
             onChangeText={(t) => { setSearch(t); if (t.length > 0) Analytics.connectionSearched(t); }}
           />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+            </Pressable>
+          )}
         </View>
+      </View>
+
+      {/* Filter + Sort bar */}
+      <View style={s.filterBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterChips}>
+          {(['all', 'cards', 'connections', 'notes'] as const).map((f) => {
+            const labels = { all: 'All', cards: 'Cards', connections: 'Connects', notes: 'Has Notes' };
+            const active = filterType === f;
+            return (
+              <Pressable
+                key={f}
+                onPress={() => setFilterType(f)}
+                style={[s.filterChip, {
+                  backgroundColor: active ? colors.accent : colors.surface,
+                  borderColor: active ? colors.accent : colors.border,
+                }]}
+              >
+                <Text style={[s.filterChipText, { color: active ? '#FFF' : colors.textSecondary }]}>
+                  {labels[f]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Pressable
+          onPress={cycleSortType}
+          style={[s.sortPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
+          <Ionicons name={SORT_ICON[sortType] as any} size={12} color={colors.textSecondary} />
+          <Text style={[s.sortPillText, { color: colors.textSecondary }]}>{SORT_LABEL[sortType]}</Text>
+        </Pressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
@@ -997,6 +1062,22 @@ function makeStyles(colors: any) {
       borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, height: 44,
     },
     searchInput: { flex: 1, fontSize: FontSize.md },
+    filterBar: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+      paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm,
+    },
+    filterChips: { flexDirection: 'row', gap: Spacing.sm },
+    filterChip: {
+      paddingHorizontal: Spacing.md, paddingVertical: 6,
+      borderRadius: Radius.full, borderWidth: 1,
+    },
+    filterChipText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
+    sortPill: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: Spacing.sm, paddingVertical: 6,
+      borderRadius: Radius.full, borderWidth: 1,
+    },
+    sortPillText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
     scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
     sectionHeader: {
       fontSize: FontSize.xs, fontWeight: FontWeight.semibold,

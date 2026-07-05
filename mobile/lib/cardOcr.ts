@@ -6,8 +6,9 @@ import { supabase } from './supabase';
 // Indian mobile:  +91 / 91 / 0 prefix (+ optional), then 6–9 leading digit, 9 more digits
 //                 Allows any pattern of spaces/dashes/dots between digit groups
 // International:   +country-code + digits
+// US format:       (NXX) NXX-XXXX or NXX-NXX-XXXX (area code in parens or not)
 const PHONE_RE =
-  /(?:\+91[ \t\-.]?|91[ \t\-.]?|0)?[6-9]\d(?:[ \t\-.]?\d){8}|\+\d{1,3}[ \t\-.]?\d{3,5}[ \t\-.]?\d{3,9}/g;
+  /(?:\+91[ \t\-.]?|91[ \t\-.]?|0)?[6-9]\d(?:[ \t\-.]?\d){8}|\+\d{1,3}[ \t\-.]?\d{3,5}[ \t\-.]?\d{3,9}|\(?\d{3}\)?[ \t\-.]?\d{3}[ \t\-.]?\d{4}(?!\d)/g;
 
 const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 
@@ -29,12 +30,12 @@ const YOUTUBE_RE = /youtube\.com\/(?:c\/|channel\/|@)[\w\-]+/gi;
 
 // Address cues
 const ADDRESS_KEYWORD_RE =
-  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|building|bhavan|house|tower|complex|industrial|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|view|vihar|puram|bazaar|bazar|market|mandal)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|chattarpur)\b|^\d+\s+[A-Z]/im;
+  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|building|bhavan|house|tower|complex|industrial|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|washington|illinois|california|new york|texas|florida|chicago|dc)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
 const PIN_RE = /\b[1-9]\d{5}\b/;
 
 // Designation keywords — "art" removed (too generic: matches "art collective" brand taglines)
 const DESIGNATION_RE =
-  /\b(founder|co-founder|ceo|cto|coo|cmo|cso|director|manager|architect|designer|engineer|consultant|associate|principal|partner|head|lead|senior|junior|intern|president|vice|vp|md|gm|dgm|cgm|officer|executive|strategist|illustrator|creative)\b/i;
+  /\b(founder|co-founder|ceo|cto|coo|cmo|cso|director|manager|architect|designer|engineer|consultant|associate|principal|partner|head|lead|senior|junior|intern|president|vice|vp|md|gm|dgm|cgm|officer|executive|strategist|illustrator|creative|senator|representative|minister|secretary|governor|attorney|commissioner|councillor|counsel|ambassador|deputy|spokesperson|chairman|chairperson|trustee|parliamentarian)\b/i;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -210,12 +211,15 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   );
   for (const m of phoneMatches) {
     if (isConsumed(m)) continue;
-    // Check the 30 chars before this match for a "WhatsApp" hint
+    // Check context around this match for "WhatsApp" or "fax" hints
     const idx = fullText.indexOf(m);
     const prefix = fullText.slice(Math.max(0, idx - 30), idx).toLowerCase();
+    const suffix = fullText.slice(idx + m.length, idx + m.length + 12).toLowerCase().trim();
     const label =
       prefix.includes('whatsapp') || prefix.includes('wa:') || prefix.includes('wa ')
         ? 'WhatsApp'
+        : prefix.includes('fax') || suffix.startsWith('fax')
+        ? 'Fax'
         : 'Phone';
     fields.push({ label, value: normalizePhone(m) });
     consume(m);
@@ -261,7 +265,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // A phone number that slipped past PHONE_RE (unusual spacing/format) is still
   // a phone number, not a Company/Other value — catch it before classification.
-  const PHONE_LIKE_RE = /^[+\d][\d\s\-().]{6,}$/;
+  const PHONE_LIKE_RE = /^[+\d(][\d\s\-().]{6,}$/;
   const isPhoneLike = (text: string) =>
     PHONE_LIKE_RE.test(text) && text.replace(/\D/g, '').length >= 7;
 
@@ -325,7 +329,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // Words that appear in firm/studio/brand names but not in personal names.
   const COMPANY_KEYWORD_RE =
-    /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|college|school|agency|agencies|co\.|corp)\b/i;
+    /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal)\b|\bstate\s+of\b/i;
 
   // Single-letter label prefix common on Indian cards: "M: ", "O: ", "W: ", "E: "
   const LABEL_PREFIX_RE = /^[A-Za-z]\s*:\s*/;
@@ -364,10 +368,11 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       return;
     }
 
-    // Phone: try stripping label prefix first (e.g. "O: 040-23 32 42 52" → "040-23 32 42 52")
-    const strippedForPhone = line.replace(LABEL_PREFIX_RE, '');
+    // Phone: try stripping label prefix and trailing "fax" word first
+    const isFaxLine = /\bfax\b/i.test(line);
+    const strippedForPhone = line.replace(LABEL_PREFIX_RE, '').replace(/\s*\bfax\b\s*$/i, '').trim();
     if (isPhoneLike(strippedForPhone)) {
-      fields.push({ label: 'Phone', value: strippedForPhone });
+      fields.push({ label: isFaxLine ? 'Fax' : 'Phone', value: strippedForPhone });
       return;
     }
 
@@ -403,19 +408,22 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // All-caps multi-word line — could be a company name OR a person's name printed
     // in uppercase (very common on Indian visiting cards).
     // Heuristic: if no name yet, the line is short (≤3 words), and it has no
-    // company-type keyword → treat as the person's Name. Otherwise → Company.
-    if (!companyAssigned && lineIsAllCaps && line.split(/\s+/).filter(Boolean).length >= 2) {
+    // company-type keyword → treat as the person's Name (regardless of whether a
+    // company was already found). Otherwise → Company if one isn't assigned yet.
+    if (lineIsAllCaps && line.split(/\s+/).filter(Boolean).length >= 2) {
       const wordCount = line.split(/\s+/).filter(Boolean).length;
       const hasCompanyKeyword = COMPANY_KEYWORD_RE.test(line);
       if (!nameAssigned && !hasCompanyKeyword && wordCount <= 3) {
         fields.unshift({ label: 'Name', value: line });
         nameAssigned = true;
-      } else {
+        return;
+      }
+      if (!companyAssigned) {
         const nameIdx = fields.findIndex((f) => f.label === 'Name');
         fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: line });
         companyAssigned = true;
+        return;
       }
-      return;
     }
 
     // Single-word all-caps line — brand logo header (e.g. "GUBI", "IKEA", "FLOS").
