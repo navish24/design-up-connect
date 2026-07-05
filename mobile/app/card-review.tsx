@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +27,7 @@ function generateId() {
 
 export default function CardReviewScreen() {
   const { colors } = useTheme();
+  const { top: topInset } = useSafeAreaInsets();
   const { addCardContact, updateCardContact, cardContacts } = useAuth();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -219,7 +221,7 @@ export default function CardReviewScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Header */}
-      <View style={[s.header, { borderBottomColor: colors.border }]}>
+      <View style={[s.header, { borderBottomColor: colors.border, paddingTop: topInset + 12 }]}>
         <Pressable onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
@@ -596,7 +598,7 @@ const s = StyleSheet.create({
   // Header
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: 12,
+    paddingHorizontal: Spacing.md, paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerBtn: { width: 44, alignItems: 'center' },
