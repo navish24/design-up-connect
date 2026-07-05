@@ -350,6 +350,7 @@ function CardContactCard({ contact, colors, onPress, search }: {
   const nameField = contact.fields.find((f) => f.label === 'Name');
   const companyField = contact.fields.find((f) => f.label === 'Company');
   const desigField = contact.fields.find((f) => f.label === 'Designation');
+  const displayName = nameField?.value || companyField?.value || 'Unknown';
   const date = new Date(contact.scanned_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   const initials = nameField
     ? nameField.value.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
@@ -374,7 +375,7 @@ function CardContactCard({ contact, colors, onPress, search }: {
 
       <View style={s.cardInfo}>
         <Text style={[s.userName, { color: colors.text }]}>
-          {nameField?.value ?? 'Unknown'}
+          {displayName}
         </Text>
         {companyField && (
           <Text style={[s.brandName, { color: colors.textSecondary }]}>{companyField.value}</Text>
@@ -433,8 +434,8 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
   const [showNotes, setShowNotes] = useState(false);
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
 
-  const name = contact.fields.find((f) => f.label === 'Name')?.value ?? 'Unknown';
   const company = contact.fields.find((f) => f.label === 'Company')?.value;
+  const name = contact.fields.find((f) => f.label === 'Name')?.value || company || 'Unknown';
   const designation = contact.fields.find((f) => f.label === 'Designation')?.value;
 
   const contactFields = contact.fields.filter((f) => CONTACT_LABELS_SET.has(f.label));

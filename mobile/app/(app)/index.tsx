@@ -866,7 +866,7 @@ function BetaHomeScreen() {
   const recentContacts = useMemo(() => {
     const cards = cardContacts.map((c) => ({
       id: c.id,
-      name: c.fields.find((f) => f.label === 'Name')?.value ?? 'Unknown',
+      name: c.fields.find((f) => f.label === 'Name')?.value || c.fields.find((f) => f.label === 'Company')?.value || 'Unknown',
       sub: [
         c.fields.find((f) => f.label === 'Designation')?.value,
         c.fields.find((f) => f.label === 'Company')?.value,
