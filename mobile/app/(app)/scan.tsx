@@ -28,6 +28,7 @@ import { useAuth } from '../../context/AuthContext';
 import { processScan } from '../../lib/supabase';
 import { Analytics } from '../../lib/analytics';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
+import jsQR from 'jsqr';
 import { recognizeCardText, recognizeCardTextWeb, parseCardFields } from '../../lib/cardOcr';
 import { cardScanStore } from '../../lib/cardScanStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -107,6 +108,35 @@ async function compressImageToBase64(file: any, maxPx = 1200): Promise<string> {
       g.URL.revokeObjectURL(objectUrl);
       reject(new Error('img load failed'));
     };
+    img.src = objectUrl;
+  });
+}
+
+// Decode a QR code from an image File using jsQR (web only).
+// Returns the decoded string or null if no QR code found.
+async function decodeQRFromFile(file: any): Promise<string | null> {
+  const g = globalThis as any;
+  return new Promise((resolve) => {
+    const objectUrl = g.URL.createObjectURL(file);
+    const img = new g.Image();
+    img.onload = () => {
+      g.URL.revokeObjectURL(objectUrl);
+      try {
+        const maxPx = 800;
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height, 1));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = g.document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const code = jsQR(imageData.data, w, h);
+        resolve(code?.data ?? null);
+      } catch { resolve(null); }
+    };
+    img.onerror = () => { g.URL.revokeObjectURL(objectUrl); resolve(null); };
     img.src = objectUrl;
   });
 }
@@ -212,17 +242,18 @@ export default function ScanScreen() {
     if (!file) return;
     setIsGalleryImporting(true);
     try {
+      // Try QR decode before OCR — handles screenshots of Connect QR pages without
+      // producing garbage card fields from surrounding UI text.
+      const qrData = await decodeQRFromFile(file);
+      if (qrData && isDesignupQR(qrData)) {
+        setIsGalleryImporting(false);
+        handleBarCodeScanned({ data: qrData });
+        return;
+      }
       const imageBase64 = await compressImageToBase64(file);
       const imageDataUrl = `data:image/jpeg;base64,${imageBase64}`;
       let blocks: any[] = [];
       try { blocks = await recognizeCardTextWeb(imageBase64); } catch (_) {}
-      // If OCR decoded a Connect QR URL from the image, process it as a QR scan
-      const qrLine = blocks.map((b: any) => b.text?.trim()).find((t: string) => t && isDesignupQR(t));
-      if (qrLine) {
-        setIsGalleryImporting(false);
-        handleBarCodeScanned({ data: qrLine });
-        return;
-      }
       const fields = parseCardFields(blocks);
       cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
       Analytics.cardScanned(fields.length > 0);
