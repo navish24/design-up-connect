@@ -160,6 +160,8 @@ export default function ScanScreen() {
   const [torchOn, setTorchOn] = useState(false);
   const [webTorchSupported, setWebTorchSupported] = useState(false);
   const [showCameraNotice, setShowCameraNotice] = useState(false);
+  const [noCardHint, setNoCardHint] = useState(false);
+  const noCardHintTimer = useRef<any>(null);
   const pendingScanView = useRef<'card' | 'qr'>('card');
   const isProcessing = useRef(false);
   const isManualCapture = useRef(false);
@@ -723,7 +725,10 @@ export default function ScanScreen() {
                 );
                 if (!hasContactInfo && !wasManual) {
                   setIsCaptureProcessing(false);
-                  return; // scanner restarts automatically via active prop
+                  setNoCardHint(true);
+                  if (noCardHintTimer.current) clearTimeout(noCardHintTimer.current);
+                  noCardHintTimer.current = setTimeout(() => setNoCardHint(false), 2500);
+                  return;
                 }
                 cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
                 Analytics.cardScanned(fields.length > 0);
@@ -746,6 +751,13 @@ export default function ScanScreen() {
             <View style={[s.camera, { backgroundColor: '#000' }]} />
           )}
         </View>
+
+        {/* No-card hint — shown briefly after auto-capture finds no phone/email */}
+        {noCardHint && (
+          <View style={s.noCardHint}>
+            <Text style={s.noCardHintText}>No card detected — place the card fully in the frame</Text>
+          </View>
+        )}
 
         {/* Round icon buttons */}
         <View style={[s.roundBtnRow, { paddingBottom: bottomInset + 36 }]}>
@@ -909,6 +921,19 @@ function makeStyles(colors: any) {
     cCornerBR: { bottom: -2, right: -2, borderTopWidth: 0, borderLeftWidth: 0 },
 
     // Card mode — round icon buttons
+    noCardHint: {
+      alignSelf: 'center',
+      backgroundColor: 'rgba(0,0,0,0.72)',
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 20,
+      marginBottom: 8,
+    },
+    noCardHintText: {
+      color: '#FFF',
+      fontSize: FontSize.sm,
+      textAlign: 'center',
+    },
     roundBtnRow: {
       flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end',
       gap: 48, paddingTop: 28, backgroundColor: '#000',
