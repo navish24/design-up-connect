@@ -130,6 +130,7 @@ export default function ScanScreen() {
   const [torchOn, setTorchOn] = useState(false);
   const [webTorchSupported, setWebTorchSupported] = useState(false);
   const [showCameraNotice, setShowCameraNotice] = useState(false);
+  const pendingScanView = useRef<'card' | 'qr'>('card');
   const isProcessing = useRef(false);
   const webCardScannerRef = useRef<WebCardScannerHandle>(null);
   const webGalleryInputRef = useRef<any>(null);
@@ -508,7 +509,7 @@ export default function ScanScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               if (Platform.OS === 'web') {
                 const seen = await AsyncStorage.getItem('camera_notice_seen');
-                if (!seen) { setShowCameraNotice(true); return; }
+                if (!seen) { pendingScanView.current = 'card'; setShowCameraNotice(true); return; }
               }
               setScanView('card');
             }}
@@ -522,7 +523,14 @@ export default function ScanScreen() {
 
           <Pressable
             style={[s.choiceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setScanView('qr'); }}
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              if (Platform.OS === 'web') {
+                const seen = await AsyncStorage.getItem('camera_notice_seen');
+                if (!seen) { pendingScanView.current = 'qr'; setShowCameraNotice(true); return; }
+              }
+              setScanView('qr');
+            }}
           >
             <View style={[s.choiceIconWrap, { backgroundColor: colors.accent + '18' }]}>
               <Ionicons name="qr-code-outline" size={36} color={colors.accent} />
@@ -582,14 +590,14 @@ export default function ScanScreen() {
             </View>
             <Text style={[s.infoSheetTitle, { color: colors.text, textAlign: 'center' }]}>Camera access notice</Text>
             <Text style={[s.noticeSub, { color: colors.textSecondary }]}>
-              The red bar at the top of your screen confirms your camera is active — this is iOS letting you know the app is using it to scan the card.{'\n\n'}It disappears as soon as you leave the scanner.
+              The red bar at the top of your screen confirms your camera is active — this is iOS letting you know the app is using it to scan.{'\n\n'}It disappears as soon as you leave the scanner.
             </Text>
             <Pressable
               style={[s.noticeCta, { backgroundColor: colors.accent }]}
               onPress={async () => {
                 await AsyncStorage.setItem('camera_notice_seen', '1');
                 setShowCameraNotice(false);
-                setScanView('card');
+                setScanView(pendingScanView.current);
               }}
             >
               <Text style={s.noticeCtaText}>Got it, open scanner</Text>
