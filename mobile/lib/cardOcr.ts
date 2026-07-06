@@ -259,9 +259,11 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       if (/^[a-zA-Z]{1,3}$/.test(line)) return false;
       // Drop pure bracket/paren lines — platform icon misreads like "()" or "( )"
       if (/^[\s()]+$/.test(line)) return false;
-      // Pipe "|" always means a separator was only partially stripped
-      // (e.g. "+91 484 270 OO90 | www.espravo.com" after phone/url stripping → "OO90 |")
-      if (/\|/.test(line)) return false;
+      // Trailing pipe = separator remnant after phone/URL was stripped (e.g. "OO90 |")
+      // Mid-line pipe is legitimate (e.g. "Founder | Principal Architect") — keep those.
+      if (/\|\s*$/.test(line)) return false;
+      // Common QR-code prompt text printed on cards — never contact data
+      if (/^(scan\s+me|scan\s+qr|qr\s+code|follow\s+me|click\s+here|tap\s+here)$/i.test(line)) return false;
       return true;
     });
 
