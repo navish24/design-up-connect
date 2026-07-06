@@ -549,10 +549,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteCardContact = async (id: string) => {
     setCardContacts((prev) => prev.filter((c) => c.id !== id));
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (authUser) {
-      await supabase.from('card_contacts').delete().eq('id', id).eq('user_id', authUser.id);
-    }
+    const { error } = await supabase.from('card_contacts').delete().eq('id', id);
+    if (error) console.error('[deleteCardContact] Supabase delete failed:', error.message);
   };
 
   const clearCardContacts = () => {
