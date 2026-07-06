@@ -30,6 +30,7 @@ import { Analytics } from '../../lib/analytics';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import { recognizeCardText, recognizeCardTextWeb, parseCardFields } from '../../lib/cardOcr';
 import { cardScanStore } from '../../lib/cardScanStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ScanResult } from '../../types';
 
 type ScanState =
@@ -128,6 +129,7 @@ export default function ScanScreen() {
   const [showInfo, setShowInfo] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [webTorchSupported, setWebTorchSupported] = useState(false);
+  const [showCameraNotice, setShowCameraNotice] = useState(false);
   const isProcessing = useRef(false);
   const webCardScannerRef = useRef<WebCardScannerHandle>(null);
   const webGalleryInputRef = useRef<any>(null);
@@ -200,38 +202,6 @@ export default function ScanScreen() {
       setIsGalleryImporting(false);
       router.push('/card-review');
     }).catch(() => setIsGalleryImporting(false));
-  };
-
-  // Web camera capture — opens native iOS camera via file input (no getUserMedia stream,
-  // so no red recording indicator in the status bar)
-  const handleWebCameraCapture = () => {
-    const g = globalThis as any;
-    if (!g.document) return;
-    const input = g.document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;';
-    g.document.body.appendChild(input);
-    const cleanup = () => { try { g.document.body.removeChild(input); } catch (_) {} };
-    input.onchange = async (e: any) => {
-      cleanup();
-      const file = e.target?.files?.[0];
-      if (!file) return;
-      setIsCaptureProcessing(true);
-      try {
-        const imageBase64 = await compressImageToBase64(file);
-        const imageDataUrl = `data:image/jpeg;base64,${imageBase64}`;
-        let blocks: any[] = [];
-        try { blocks = await recognizeCardTextWeb(imageBase64); } catch (_) {}
-        const fields = parseCardFields(blocks);
-        cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
-        Analytics.cardScanned(fields.length > 0);
-        setIsCaptureProcessing(false);
-        router.push('/card-review');
-      } catch { setIsCaptureProcessing(false); }
-    };
-    input.click();
   };
 
   // Gallery handler ref — uses web OCR (same pipeline as camera capture)
@@ -534,7 +504,14 @@ export default function ScanScreen() {
         <View style={s.choiceWrap}>
           <Pressable
             style={[s.choiceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setScanView('card'); }}
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              if (Platform.OS === 'web') {
+                const seen = await AsyncStorage.getItem('camera_notice_seen');
+                if (!seen) { setShowCameraNotice(true); return; }
+              }
+              setScanView('card');
+            }}
           >
             <View style={[s.choiceIconWrap, { backgroundColor: colors.accent + '18' }]}>
               <Ionicons name="card-outline" size={36} color={colors.accent} />
@@ -592,6 +569,33 @@ export default function ScanScreen() {
             ))}
           </View>
         </Modal>
+
+        {/* One-time camera notice — web/PWA only */}
+        <Modal visible={showCameraNotice} transparent animationType="slide" onRequestClose={() => setShowCameraNotice(false)}>
+          <Pressable style={s.infoBackdrop} onPress={() => setShowCameraNotice(false)} />
+          <View style={[s.infoSheet, { backgroundColor: colors.surface }]}>
+            <View style={[s.infoSheetHandle, { backgroundColor: colors.border }]} />
+            <View style={[s.noticeIconRow]}>
+              <View style={[s.noticeIconWrap, { backgroundColor: '#FF3B3020' }]}>
+                <Ionicons name="videocam-outline" size={28} color="#FF3B30" />
+              </View>
+            </View>
+            <Text style={[s.infoSheetTitle, { color: colors.text, textAlign: 'center' }]}>Camera access notice</Text>
+            <Text style={[s.noticeSub, { color: colors.textSecondary }]}>
+              The red bar at the top of your screen confirms your camera is active — this is iOS letting you know the app is using it to scan the card.{'\n\n'}It disappears as soon as you leave the scanner.
+            </Text>
+            <Pressable
+              style={[s.noticeCta, { backgroundColor: colors.accent }]}
+              onPress={async () => {
+                await AsyncStorage.setItem('camera_notice_seen', '1');
+                setShowCameraNotice(false);
+                setScanView('card');
+              }}
+            >
+              <Text style={s.noticeCtaText}>Got it, open scanner</Text>
+            </Pressable>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -611,20 +615,24 @@ export default function ScanScreen() {
         {/* Full-bleed camera — no container, fills remaining space */}
         <View style={{ flex: 1 }}>
           {Platform.OS === 'web' ? (
-            // Native file input capture avoids getUserMedia — no red recording bar in status bar
-            <View style={[s.camera, { backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' }]}>
-              <View style={s.cardBracketOverlay}>
-                <View style={s.cardBracket}>
-                  <View style={[s.cCorner, s.cCornerTL, { borderColor: colors.accent }]} />
-                  <View style={[s.cCorner, s.cCornerTR, { borderColor: colors.accent }]} />
-                  <View style={[s.cCorner, s.cCornerBL, { borderColor: colors.accent }]} />
-                  <View style={[s.cCorner, s.cCornerBR, { borderColor: colors.accent }]} />
-                </View>
-              </View>
-              <Text style={[s.hintText, { color: 'rgba(255,255,255,0.55)', marginTop: 8 }]}>
-                Tap Capture Card to photograph a card
-              </Text>
-            </View>
+            <WebCardScanner
+              ref={webCardScannerRef}
+              active={isFocused && !isCaptureProcessing}
+              autoCapture
+              torchOn={torchOn}
+              onTorchSupportChange={setWebTorchSupported}
+              onCapture={async (base64Jpeg) => {
+                setIsCaptureProcessing(true);
+                const imageDataUrl = `data:image/jpeg;base64,${base64Jpeg}`;
+                let blocks: any[] = [];
+                try { blocks = await recognizeCardTextWeb(base64Jpeg); } catch (_) {}
+                const fields = parseCardFields(blocks);
+                cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+                Analytics.cardScanned(fields.length > 0);
+                setIsCaptureProcessing(false);
+                router.push('/card-review');
+              }}
+            />
           ) : isFocused ? (
             <CameraView style={s.camera} facing="back" active enableTorch={torchOn}>
               <View style={s.cardBracketOverlay}>
@@ -663,7 +671,7 @@ export default function ScanScreen() {
               disabled={isCaptureProcessing || isGalleryImporting}
               onPress={() => {
                 Analytics.captureCardTapped();
-                if (Platform.OS === 'web') { handleWebCameraCapture(); }
+                if (Platform.OS === 'web') { webCardScannerRef.current?.capture(); }
                 else { router.push('/card-scanner'); }
               }}
             >
@@ -763,7 +771,6 @@ function makeStyles(colors: any) {
     choiceWrap: { flex: 1, padding: Spacing.lg, gap: Spacing.md, justifyContent: 'center' },
     galleryLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
     galleryLinkText: { fontSize: FontSize.sm },
-    hintText: { fontSize: FontSize.sm, textAlign: 'center', paddingHorizontal: Spacing.lg },
     choiceCard: {
       flex: 1, borderRadius: Radius.lg, borderWidth: 1,
       alignItems: 'center', justifyContent: 'center',
@@ -844,6 +851,11 @@ function makeStyles(colors: any) {
     infoSheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: Spacing.sm },
     infoSheetHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
     infoSheetTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+    noticeIconRow: { alignItems: 'center', marginBottom: Spacing.md },
+    noticeIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+    noticeSub: { fontSize: FontSize.sm, lineHeight: 20, textAlign: 'center', marginTop: Spacing.sm, marginBottom: Spacing.lg },
+    noticeCta: { borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
+    noticeCtaText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
     infoStep: {
       flexDirection: 'row', gap: Spacing.md,
       paddingHorizontal: Spacing.md, paddingVertical: 12, alignItems: 'flex-start',
