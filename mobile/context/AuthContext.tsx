@@ -230,25 +230,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    if (finalRows.length === 0) return; // nothing in Supabase and nothing local to sync
+    // Local state is canonical — Supabase only enriches image URLs.
+    // Do NOT add Supabase items that aren't in local (user may have deleted them).
+    const remoteById: Record<string, any> = {};
+    for (const r of finalRows) remoteById[r.id] = r;
 
-    // Merge: prefer Supabase cloud URLs, fall back to local AsyncStorage URIs for
-    // cards scanned in this session before Cloudinary upload completed.
-    const localById: Record<string, CardContact> = {};
-    for (const c of local) localById[c.id] = c;
+    const merged = local
+      .map((c) => {
+        const r = remoteById[c.id];
+        if (!r) return c; // local-only (offline scan not yet uploaded), keep as is
+        return {
+          ...c,
+          card_image_uri: r.card_image_uri ?? c.card_image_uri ?? null,
+          card_image_uri_back: r.card_image_uri_back ?? c.card_image_uri_back ?? null,
+          fields: r.fields ?? c.fields ?? [],
+          notes: r.notes ?? c.notes ?? '',
+          tags: r.tags ?? c.tags ?? [],
+          connect_user_id: r.connect_user_id ?? c.connect_user_id ?? null,
+        };
+      })
+      .sort((a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
 
-    const merged = finalRows.map((r: any) => ({
-      id: r.id,
-      source: 'card_scan' as const,
-      scanned_at: r.scanned_at,
-      card_image_uri: r.card_image_uri ?? localById[r.id]?.card_image_uri ?? null,
-      card_image_uri_back: r.card_image_uri_back ?? localById[r.id]?.card_image_uri_back ?? null,
-      fields: r.fields ?? [],
-      notes: r.notes ?? '',
-      tags: r.tags ?? [],
-      connect_user_id: r.connect_user_id ?? null,
-    })).sort((a: any, b: any) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
-
+    if (local.length === 0 && finalRows.length === 0) return;
     setCardContacts(merged);
   }, []);
 
@@ -548,7 +551,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteCardContact = async (id: string) => {
-    setCardContacts((prev) => prev.filter((c) => c.id !== id));
+    const updated = cardContactsRef.current.filter((c) => c.id !== id);
+    setCardContacts(updated);
+    // Write immediately so a fast PWA refresh can't race past the useEffect write
+    await AsyncStorage.setItem(CARD_CONTACTS_KEY, JSON.stringify(updated));
     const { error } = await supabase.from('card_contacts').delete().eq('id', id);
     if (error) console.error('[deleteCardContact] Supabase delete failed:', error.message);
   };
