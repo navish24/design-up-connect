@@ -991,7 +991,7 @@ function makeStyles(colors: any) {
     qrHint: { fontSize: FontSize.xs },
 
     qrOverlay: {
-      flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
+      flex: 1, backgroundColor: '#000',
       alignItems: 'center', justifyContent: 'center', gap: Spacing.lg,
     },
     qrModal: {
