@@ -787,7 +787,7 @@ if (isLoading) {
                 { q: 'How do I share my digital visiting card?', a: 'Go to the Profile tab and tap on your QR code. Show it to someone — they scan it with their phone camera or the Connect app and your card is saved instantly.' },
                 { q: 'How do I scan someone\'s card?', a: 'Open the Scan tab and point your camera at their QR code. Their contact saves to your Connects automatically.' },
                 { q: 'How do I scan a physical visiting card?', a: 'Tap the card icon in the Scan tab to switch to card scan mode. Point your camera at any printed visiting card — the details are read and saved to your contacts.' },
-                { q: 'Why is my profile showing "Create your visiting card" every time I log in?', a: 'Make sure you completed all required fields (name, profession, company, phone) on the profile setup screen. If the issue persists, reach out via the query box below.' },
+                { q: 'Why does a red bar appear at the top when I open the scanner?', a: 'That\'s iOS confirming your camera is active — it\'s a standard privacy indicator Apple shows whenever any app uses the camera. It disappears as soon as you leave the scanner and does not mean anything is being recorded or stored.' },
                 { q: 'How do I update my details on my visiting card?', a: 'Tap "Edit Details" on your card in the Profile tab. Changes update immediately.' },
                 { q: 'Is my data private?', a: 'Yes. Your contact details are only shared when you explicitly exchange QR cards with someone.' },
               ].map((item, i) => (
