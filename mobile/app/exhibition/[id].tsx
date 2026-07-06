@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import { getExhibition, type ApiExhibition } from '../../lib/api';
 import { getCachedCover, subscribeToCache } from '../../lib/unsplash';
+import { useHeaderPaddingTop } from '../../lib/safeArea';
 
 type Tab = 'details' | 'ticket' | 'explore' | 'brands';
 type RegStep = 'phone' | 'otp' | 'personal' | 'professional' | 'confirm';
@@ -55,6 +56,7 @@ export default function ExhibitionDetailScreen() {
   const [tab, setTab] = useState<Tab>((initialTab as Tab) ?? 'details');
   const [mapExpanded, setMapExpanded] = useState(false);
   const [brandSearch, setBrandSearch] = useState('');
+  const headerPaddingTop = useHeaderPaddingTop();
 
   // Registration flow state
   const [showRegister, setShowRegister] = useState(false);
@@ -191,7 +193,7 @@ export default function ExhibitionDetailScreen() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: headerPaddingTop as any }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>

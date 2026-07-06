@@ -11,6 +11,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useHeaderPaddingTop } from '../../lib/safeArea';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import { getBrand, type ApiBrand } from '../../lib/api';
 import NotesModal from '../../components/NotesModal';
@@ -192,6 +193,7 @@ export default function BrandDetailScreen() {
   const { id: rawId, product: productParam } = useLocalSearchParams<{ id: string; product?: string }>();
   const { colors } = useTheme();
   const { isDemoMode, activeExhibitionId, activeExhibitionName, addDemoSavedBrand, demoWishlistedIds, toggleWishlistItem, notes, addNote } = useAuth();
+  const headerPaddingTop = useHeaderPaddingTop();
   const id = resolveId(rawId ?? '');
   const [brand, setBrand] = useState<ApiBrand | null>(null);
 
@@ -449,7 +451,7 @@ export default function BrandDetailScreen() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       {/* Fixed top nav */}
-      <View style={[s.header, { backgroundColor: colors.background }]}>
+      <View style={[s.header, { backgroundColor: colors.background, paddingTop: headerPaddingTop as any }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
@@ -855,9 +857,10 @@ function CollageGrid({ images }: { images: string[] }) {
 // Past show detail page — full-screen replacement rendered when a show is tapped
 function PastShowDetailView({ show, colors, onBack }: { show: PastShow; colors: any; onBack: () => void }) {
   const s = makeStyles(colors);
+  const headerPaddingTop = useHeaderPaddingTop();
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: headerPaddingTop as any }]}>
         <Pressable onPress={onBack} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
