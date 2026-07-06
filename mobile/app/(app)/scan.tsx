@@ -162,6 +162,7 @@ export default function ScanScreen() {
   const [showCameraNotice, setShowCameraNotice] = useState(false);
   const pendingScanView = useRef<'card' | 'qr'>('card');
   const isProcessing = useRef(false);
+  const isManualCapture = useRef(false);
   const webCardScannerRef = useRef<WebCardScannerHandle>(null);
   const webGalleryInputRef = useRef<any>(null);
   const webGalleryHandlerRef = useRef<(e: any) => void>(() => {});
@@ -701,6 +702,8 @@ export default function ScanScreen() {
               torchOn={torchOn}
               onTorchSupportChange={setWebTorchSupported}
               onCapture={async (base64Jpeg) => {
+                const wasManual = isManualCapture.current;
+                isManualCapture.current = false;
                 setIsCaptureProcessing(true);
                 const imageDataUrl = `data:image/jpeg;base64,${base64Jpeg}`;
                 let blocks: any[] = [];
@@ -712,6 +715,16 @@ export default function ScanScreen() {
                   return;
                 }
                 const fields = parseCardFields(blocks);
+                // For auto-capture: only proceed if OCR found a phone or email.
+                // Vision boards, keyboards, and other non-card objects won't have these.
+                // Manual capture bypasses this check — the user explicitly chose to scan.
+                const hasContactInfo = fields.some(
+                  (f: any) => f.label === 'Phone' || f.label === 'WhatsApp' || f.label === 'Email' || f.label === 'Fax'
+                );
+                if (!hasContactInfo && !wasManual) {
+                  setIsCaptureProcessing(false);
+                  return; // scanner restarts automatically via active prop
+                }
                 cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
                 Analytics.cardScanned(fields.length > 0);
                 setIsCaptureProcessing(false);
@@ -756,7 +769,7 @@ export default function ScanScreen() {
               disabled={isCaptureProcessing || isGalleryImporting}
               onPress={() => {
                 Analytics.captureCardTapped();
-                if (Platform.OS === 'web') { webCardScannerRef.current?.capture(); }
+                if (Platform.OS === 'web') { isManualCapture.current = true; webCardScannerRef.current?.capture(); }
                 else { router.push('/card-scanner'); }
               }}
             >
