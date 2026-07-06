@@ -288,9 +288,15 @@ export default function ScanScreen() {
           setActiveExhibition(result.exhibition.id, result.exhibition.name);
         }
         setScanState('success_entry');
+        const exhId = result.exhibition?.id;
+        const isDemoUser = user?.email === 'niveditasingh0124@gmail.com';
         setTimeout(() => {
           resetToIdle();
-          router.replace('/(app)');
+          if (isDemoUser && exhId) {
+            router.replace(`/exhibition/${exhId}` as any);
+          } else {
+            router.replace('/(app)');
+          }
         }, 2000);
       }
     } catch (err: any) {
