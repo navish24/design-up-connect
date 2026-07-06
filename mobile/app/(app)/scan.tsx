@@ -521,6 +521,20 @@ export default function ScanScreen() {
             <Text style={[s.choiceTitle, { color: colors.text }]}>Scan a Connect QR</Text>
             <Text style={[s.choiceSub, { color: colors.textMuted }]}>Saves their contact instantly</Text>
           </Pressable>
+
+          {Platform.OS === 'web' && (
+            <Pressable
+              style={s.galleryLink}
+              onPress={handleGalleryImport}
+              disabled={isGalleryImporting}
+            >
+              {isGalleryImporting
+                ? <ActivityIndicator size="small" color={colors.textMuted} />
+                : <Ionicons name="images-outline" size={16} color={colors.textMuted} />
+              }
+              <Text style={[s.galleryLinkText, { color: colors.textMuted }]}>Import card from Photo Library</Text>
+            </Pressable>
+          )}
         </View>
 
         <Modal visible={showInfo} transparent animationType="slide" onRequestClose={() => setShowInfo(false)}>
@@ -719,6 +733,8 @@ function makeStyles(colors: any) {
     },
     headerTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
     choiceWrap: { flex: 1, padding: Spacing.lg, gap: Spacing.md, justifyContent: 'center' },
+    galleryLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
+    galleryLinkText: { fontSize: FontSize.sm },
     choiceCard: {
       flex: 1, borderRadius: Radius.lg, borderWidth: 1,
       alignItems: 'center', justifyContent: 'center',
