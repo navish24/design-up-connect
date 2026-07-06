@@ -218,6 +218,17 @@ export default function ScanScreen() {
   const handleGalleryImport = () => {
     Analytics.galleryImportTapped();
     if (Platform.OS === 'web') {
+      // Pause auto-capture immediately so the scanner doesn't fire while the picker is open
+      setIsGalleryImporting(true);
+      const g = globalThis as any;
+      const onFocus = () => {
+        // If picker was dismissed without selecting a file, reset the flag
+        setTimeout(() => {
+          if (!webGalleryInputRef.current?.files?.length) setIsGalleryImporting(false);
+        }, 500);
+        g.window?.removeEventListener('focus', onFocus);
+      };
+      g.window?.addEventListener('focus', onFocus);
       webGalleryInputRef.current?.click();
       return;
     }
@@ -252,7 +263,7 @@ export default function ScanScreen() {
   webGalleryHandlerRef.current = async (e: any) => {
     const file = e.target?.files?.[0];
     if (e.target) e.target.value = '';
-    if (!file) return;
+    if (!file) { setIsGalleryImporting(false); return; }
     setIsGalleryImporting(true);
     try {
       // Try QR decode before OCR — handles screenshots of Connect QR pages without
@@ -685,7 +696,7 @@ export default function ScanScreen() {
           {Platform.OS === 'web' ? (
             <WebCardScanner
               ref={webCardScannerRef}
-              active={isFocused && !isCaptureProcessing}
+              active={isFocused && !isCaptureProcessing && !isGalleryImporting}
               autoCapture
               torchOn={torchOn}
               onTorchSupportChange={setWebTorchSupported}
