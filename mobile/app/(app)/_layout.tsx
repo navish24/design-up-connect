@@ -71,7 +71,7 @@ export default function AppLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: getTabBarStyle(colors, Platform.OS === 'web' ? 0 : insets.bottom),
+        tabBarStyle: getTabBarStyle(colors, insets.bottom),
         tabBarShowLabel: false,
         tabBarItemStyle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
       }}
