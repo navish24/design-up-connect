@@ -15,7 +15,7 @@ LogBox.ignoreLogs([
   'Open debugger',
 ]);
 import * as ImagePicker from 'expo-image-picker';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, scanFromURLAsync } from 'expo-camera';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderPaddingTop } from '../../lib/safeArea';
@@ -227,6 +227,16 @@ export default function ScanScreen() {
     }).then(async (result) => {
       if (result.canceled || !result.assets?.[0]) { setIsGalleryImporting(false); return; }
       const imageUri = result.assets[0].uri;
+      // Try QR decode before OCR — handles screenshots of Connect QR pages
+      try {
+        const codes = await scanFromURLAsync(imageUri, ['qr']);
+        const qrData = codes?.[0]?.data;
+        if (qrData && isDesignupQR(qrData)) {
+          setIsGalleryImporting(false);
+          handleBarCodeScanned({ data: qrData });
+          return;
+        }
+      } catch (_) {}
       const blocks = await recognizeCardText(imageUri);
       const fields = parseCardFields(blocks);
       cardScanStore.set({ imageUri, backImageUri: null, fields, isBlurry: blocks.length < 2 });
