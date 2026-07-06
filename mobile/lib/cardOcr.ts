@@ -186,6 +186,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     const norm = normalizeUrl(u);
     return (
       !EMAIL_PROVIDER_RE.test(norm) &&
+      norm.includes('.') &&           // bare TLD fragments like "in" (from "www.in.domain.com") are not real sites
       !norm.includes('linkedin') &&
       !norm.includes('instagram') &&
       !norm.includes('facebook') &&
@@ -323,6 +324,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   let nameAssigned = false;
   let companyAssigned = false;
   const designationLines: string[] = [];
+  const designationIndices: number[] = [];
   const addressIdx = new Set<number>();
   const otherEntries: Array<{ idx: number; text: string }> = [];
 
@@ -335,8 +337,8 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const COMPANY_KEYWORD_RE =
     /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal)\b|\bstate\s+of\b/i;
 
-  // Single-letter label prefix common on Indian cards: "M: ", "O: ", "W: ", "E: "
-  const LABEL_PREFIX_RE = /^[A-Za-z]\s*:\s*/;
+  // Label prefix common on cards: single-letter "M: " or multi-letter "Tel. ", "Fax: ", "Ph: "
+  const LABEL_PREFIX_RE = /^(?:[A-Za-z]\s*:|(?:tel|fax|ph|mob|mobile|phone)\s*\.?\s*:?)\s*/i;
 
   remaining.forEach((line, idx) => {
     // Company keyword check runs BEFORE address — company names often contain words
@@ -369,6 +371,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // Designation: contains a role keyword
     if (DESIGNATION_RE.test(line)) {
       designationLines.push(line);
+      designationIndices.push(idx);
       return;
     }
 
@@ -512,6 +515,43 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
               }
             }
           }
+        }
+      }
+    }
+  }
+
+  // If the current Name is a brand logo (not directly before any designation) but an
+  // Other entry IS directly before a designation, swap them: the person adjacent to their
+  // title is the real contact. E.g. card with "Messe Frankfurt" logo → "Ankita Chadda" →
+  // "Assistant Manager" should yield Name=Ankita Chadda, Company=Messe Frankfurt … Pvt. Ltd.
+  if (nameAssigned && designationIndices.length > 0) {
+    const nameField = fields.find((f) => f.label === 'Name');
+    if (nameField) {
+      const nameRIdx = remaining.findIndex((l) => l === nameField.value);
+      const nameNextToDesig = designationIndices.some((di) => di === nameRIdx + 1);
+      if (!nameNextToDesig) {
+        const betterEntry = otherEntries.find(
+          ({ idx, text }) =>
+            designationIndices.some((di) => di === idx + 1) &&
+            /^[A-Z][a-z]{2,}(?:\s+[A-Z]\.?|\s+[A-Z][a-z]{2,}){1,2}$/.test(text) &&
+            !COMPANY_KEYWORD_RE.test(text) &&
+            !ADDRESS_KEYWORD_RE.test(text)
+        );
+        if (betterEntry) {
+          const companyF = fields.find((f) => f.label === 'Company');
+          const nameFieldIdx = fields.indexOf(nameField);
+          if (companyF) {
+            companyF.value = nameField.value + ' ' + companyF.value;
+            if (nameFieldIdx !== -1) fields.splice(nameFieldIdx, 1);
+          } else {
+            nameField.label = 'Company';
+            companyAssigned = true;
+          }
+          nameAssigned = false;
+          const bi = otherEntries.indexOf(betterEntry);
+          if (bi !== -1) otherEntries.splice(bi, 1);
+          fields.unshift({ label: 'Name', value: betterEntry.text });
+          nameAssigned = true;
         }
       }
     }
