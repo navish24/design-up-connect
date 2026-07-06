@@ -365,12 +365,6 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
           </Text>
         </View>
       </View>
-      {/* Manual capture button — fallback if auto-capture doesn't fire */}
-      {permState === 'granted' && (
-        <Pressable style={s.manualBtn} onPress={capture}>
-          <View style={s.manualBtnInner} />
-        </Pressable>
-      )}
     </View>
   );
 });
