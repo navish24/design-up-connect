@@ -175,14 +175,17 @@ export default function ScanScreen() {
     }
   }, [isFocused]);
 
-  // Hide tab bar when inside card or QR scanner — restore on choice screen
+  // Hide tab bar only while actively scanning — restore on choice screen AND
+  // all result/error states so the user is never fully stuck without navigation.
+  const isActivelyScanning = scanView !== 'choice' &&
+    !['success_brand', 'success_connection', 'success_entry', 'already_saved', 'error'].includes(scanState);
   useEffect(() => {
     navigation.setOptions({
-      tabBarStyle: scanView !== 'choice'
+      tabBarStyle: isActivelyScanning
         ? { display: 'none' }
         : getTabBarStyle(colors, Platform.OS === 'web' ? 0 : bottomInset),
     });
-  }, [scanView, colors, bottomInset, navigation]);
+  }, [isActivelyScanning, colors, bottomInset, navigation]);
 
   // Reset torch and web torch support detection when switching scanner modes
   useEffect(() => {
@@ -518,6 +521,15 @@ export default function ScanScreen() {
         <Text style={[s.successSub, { color: colors.textSecondary }]}>
           {scanResult.exhibition.name} is now active on your dashboard
         </Text>
+        <Pressable
+          style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
+          onPress={() => {
+            resetToIdle();
+            router.replace('/(app)');
+          }}
+        >
+          <Text style={s.btnText}>Go to Dashboard</Text>
+        </Pressable>
       </View>
     );
   }
