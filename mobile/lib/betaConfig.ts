@@ -8,4 +8,4 @@ export const isBeta: boolean =
 // CLOUDINARY_UPLOAD_PRESET: create an unsigned preset in Cloudinary dashboard →
 //   Settings → Upload → Upload Presets → Add preset → Signing mode: Unsigned → name it "connect_cards"
 export const CLOUDINARY_CLOUD_NAME = 'dohulv5ld';
-export const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? 'YOUR_UPLOAD_PRESET';
+export const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? 'connect_cards';

@@ -193,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: rows, error: ccError } = await supabase
       .from('card_contacts')
-      .select('id, scanned_at, fields, notes, tags, connect_user_id')
+      .select('id, scanned_at, fields, notes, tags, connect_user_id, card_image_uri, card_image_uri_back')
       .eq('user_id', userId)
       .order('scanned_at', { ascending: false });
     if (ccError) console.error('[loadCardContacts] query failed:', ccError.message);
@@ -223,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('[loadCardContacts] sync complete — re-querying');
         const { data: fresh } = await supabase
           .from('card_contacts')
-          .select('id, scanned_at, fields, notes, tags, connect_user_id')
+          .select('id, scanned_at, fields, notes, tags, connect_user_id, card_image_uri, card_image_uri_back')
           .eq('user_id', userId)
           .order('scanned_at', { ascending: false });
         finalRows = fresh ?? finalRows;
@@ -232,7 +232,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (finalRows.length === 0) return; // nothing in Supabase and nothing local to sync
 
-    // Merge remote rows with local image URIs (images are device-only, not in Supabase)
+    // Merge: prefer Supabase cloud URLs, fall back to local AsyncStorage URIs for
+    // cards scanned in this session before Cloudinary upload completed.
     const localById: Record<string, CardContact> = {};
     for (const c of local) localById[c.id] = c;
 
@@ -240,8 +241,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       id: r.id,
       source: 'card_scan' as const,
       scanned_at: r.scanned_at,
-      card_image_uri: localById[r.id]?.card_image_uri ?? null,
-      card_image_uri_back: localById[r.id]?.card_image_uri_back ?? null,
+      card_image_uri: r.card_image_uri ?? localById[r.id]?.card_image_uri ?? null,
+      card_image_uri_back: r.card_image_uri_back ?? localById[r.id]?.card_image_uri_back ?? null,
       fields: r.fields ?? [],
       notes: r.notes ?? '',
       tags: r.tags ?? [],
@@ -539,6 +540,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fields: contact.fields,
         notes: contact.notes,
         tags: contact.tags,
+        // Only persist cloud URLs — local device URIs are not portable across sessions
+        ...(contact.card_image_uri?.startsWith('https://') ? { card_image_uri: contact.card_image_uri } : {}),
+        ...(contact.card_image_uri_back?.startsWith('https://') ? { card_image_uri_back: contact.card_image_uri_back } : {}),
       }).eq('id', contact.id).eq('user_id', authUser.id);
     }
   };
