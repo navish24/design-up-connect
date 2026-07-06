@@ -24,7 +24,14 @@
     <link rel="preload" as="font" type="font/ttf" crossorigin href="/Ionicons.ttf" />
     <style>
       /* Root fills the dynamic viewport — excludes Safari's floating bottom bar */
-      html, body { height: 100%; margin: 0; padding: 0; touch-action: manipulation; }
+      html, body {
+        height: 100%; margin: 0; padding: 0;
+        touch-action: manipulation;
+        overflow: hidden;              /* prevent body-level scroll on iOS PWA */
+        overscroll-behavior: none;     /* disable rubber-band bounce */
+        position: fixed;               /* iOS nuclear option: body cannot scroll */
+        width: 100%;
+      }
       #root {
         height: 100dvh;        /* modern: dynamic viewport, clips below Safari bar */
         overflow: hidden;
