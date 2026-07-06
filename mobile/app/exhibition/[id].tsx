@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 
-const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +15,10 @@ import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import { getExhibition, type ApiExhibition } from '../../lib/api';
 import { getCachedCover, subscribeToCache } from '../../lib/unsplash';
 import { useHeaderPaddingTop } from '../../lib/safeArea';
+
+// Exhibitions that have an annotator-built interactive floor map.
+// Add the exhibition ID here once its map JSON is ready.
+const EXHIBITIONS_WITH_MAP = new Set(['exh-001']); // Index Mumbai 2025
 
 type Tab = 'details' | 'ticket' | 'explore' | 'brands';
 type RegStep = 'phone' | 'otp' | 'personal' | 'professional' | 'confirm';
@@ -54,7 +57,6 @@ export default function ExhibitionDetailScreen() {
   const { colors } = useTheme();
   const { activateDemoExhibition, isDemoMode, setActiveExhibition, activeExhibitionId, demoRegisteredExhibitions, addDemoRegistration, user, updateUser } = useAuth();
   const [tab, setTab] = useState<Tab>((initialTab as Tab) ?? 'details');
-  const [mapExpanded, setMapExpanded] = useState(false);
   const [brandSearch, setBrandSearch] = useState('');
   const headerPaddingTop = useHeaderPaddingTop();
 
@@ -78,7 +80,6 @@ export default function ExhibitionDetailScreen() {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showProfessionPicker, setShowProfessionPicker] = useState(false);
   const [gateSimState, setGateSimState] = useState<GateSimState>('idle');
-  const [mapRotated, setMapRotated] = useState(false);
   const swipeStartX = useRef(0);
   const swipeStartY = useRef(0);
 
@@ -350,15 +351,26 @@ export default function ExhibitionDetailScreen() {
           onTouchEnd={(e) => handleTabSwipe(e.nativeEvent.pageX, e.nativeEvent.pageY)}
         >
           <Text style={[s.sectionLabel, { color: colors.textMuted, marginTop: 0 }]}>FLOOR MAP</Text>
-          {exh.layout_map_url ? (
-            <Pressable onPress={() => setMapExpanded(true)}>
-              <Image source={{ uri: exh.layout_map_url }} style={s.mapImg} resizeMode="cover" />
-              <Text style={[s.mapHint, { color: colors.textMuted }]}>Tap to expand</Text>
+          {EXHIBITIONS_WITH_MAP.has(exh.id) ? (
+            <Pressable style={[s.mapCard, { backgroundColor: colors.surface }]} onPress={() => router.push(`/map?exhibitionId=${exh.id}`)}>
+              <View style={s.mapCardLeft}>
+                <Ionicons name="map-outline" size={28} color={colors.accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.mapCardTitle, { color: colors.text }]}>Interactive Floor Map</Text>
+                  <Text style={[s.mapCardSub, { color: colors.textMuted }]}>Navigate booths, find brands &amp; facilities</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
           ) : (
-            <View style={[s.mapPlaceholder, { backgroundColor: colors.surface }]}>
-              <Ionicons name="map-outline" size={36} color={colors.textMuted} />
-              <Text style={[s.mapPlaceholderText, { color: colors.textMuted }]}>Floor map coming soon</Text>
+            <View style={[s.mapCard, { backgroundColor: colors.surface }]}>
+              <View style={s.mapCardLeft}>
+                <Ionicons name="map-outline" size={28} color={colors.textMuted} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.mapCardTitle, { color: colors.textMuted }]}>Floor Map Coming Soon</Text>
+                  <Text style={[s.mapCardSub, { color: colors.textMuted }]}>Map will be available before the show</Text>
+                </View>
+              </View>
             </View>
           )}
           <Text style={[s.sectionLabel, { color: colors.textMuted }]}>FOOD STALLS</Text>
@@ -503,32 +515,6 @@ export default function ExhibitionDetailScreen() {
           </Pressable>
         </View>
       )}
-
-      {/* Full-screen map modal */}
-      <Modal visible={mapExpanded} animationType="fade" statusBarTranslucent>
-        <View style={[s.mapModal, { backgroundColor: '#000' }]}>
-          <Image
-            source={{ uri: exh.layout_map_url }}
-            style={[
-              s.mapModalImg,
-              mapRotated && {
-                width: SCREEN_H * 0.85,
-                height: SCREEN_W,
-                transform: [{ rotate: '90deg' }],
-              },
-            ]}
-            resizeMode="contain"
-          />
-          {/* Close */}
-          <Pressable style={s.mapCloseBtn} onPress={() => { setMapExpanded(false); setMapRotated(false); }}>
-            <Ionicons name="close" size={24} color="#FFF" />
-          </Pressable>
-          {/* Rotate */}
-          <Pressable style={s.mapRotateBtn} onPress={() => setMapRotated((v) => !v)}>
-            <Ionicons name="sync-outline" size={22} color="#FFF" />
-          </Pressable>
-        </View>
-      </Modal>
 
       {/* ── REGISTRATION FLOW MODAL ──────────────────────────────────────── */}
       <Modal visible={showRegister} animationType="slide" transparent>
@@ -936,10 +922,13 @@ function makeStyles(colors: any) {
 
     // Explore
     exploreScroll: { padding: Spacing.lg, paddingBottom: 100 },
-    mapImg: { width: '100%', height: 200, borderRadius: Radius.lg },
-    mapHint: { fontSize: FontSize.xs, textAlign: 'center', marginTop: Spacing.sm, marginBottom: Spacing.lg },
-    mapPlaceholder: { height: 160, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, marginBottom: Spacing.lg },
-    mapPlaceholderText: { fontSize: FontSize.sm },
+    mapCard: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      borderRadius: Radius.lg, padding: Spacing.lg, marginBottom: Spacing.lg,
+    },
+    mapCardLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1 },
+    mapCardTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+    mapCardSub: { fontSize: FontSize.xs, marginTop: 2 },
     exploreBrandRow: {
       flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
       borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm,
@@ -1004,18 +993,6 @@ function makeStyles(colors: any) {
     brandGridBooth: { fontSize: 10 },
     brandsEmpty: { alignItems: 'center', paddingVertical: Spacing.xl },
     brandsEmptyText: { fontSize: FontSize.sm },
-
-    // Map modal
-    mapModal: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    mapModalImg: { width: '100%', height: '80%' },
-    mapCloseBtn: {
-      position: 'absolute', top: 56, right: Spacing.lg,
-      backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 8,
-    },
-    mapRotateBtn: {
-      position: 'absolute', top: 56, left: Spacing.lg,
-      backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 8,
-    },
 
     // Registration modal
     regOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' },

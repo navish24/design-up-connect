@@ -587,9 +587,10 @@ interface FloorMapProps {
   bottomInset?: number;
   initialZoneId?: string | null;
   onViewEvents?: () => void;
+  exhibitionId?: string;
 }
 
-export default function FloorMap({ bottomInset = 0, initialZoneId, onViewEvents }: FloorMapProps) {
+export default function FloorMap({ bottomInset = 0, initialZoneId, onViewEvents, exhibitionId: _exhibitionId }: FloorMapProps) {
   const [show, setShow]       = useState<ShowJSON | null>(null);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);

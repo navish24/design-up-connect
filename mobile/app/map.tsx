@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import FloorMap from '../components/FloorMap';
 import EventsScreen from '../components/EventsScreen';
 import InfoScreen from '../components/InfoScreen';
@@ -10,6 +10,7 @@ type MapTab = 'map' | 'events' | 'info';
 const TAB_BAR_H = 56;
 
 export default function MapScreen() {
+  const { exhibitionId } = useLocalSearchParams<{ exhibitionId?: string }>();
   const [activeTab, setActiveTab] = useState<MapTab>('map');
   // Pending zone navigation from Events tab → Map tab
   const [pendingZoneId, setPendingZoneId] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export default function MapScreen() {
               bottomInset={TAB_BAR_H}
               initialZoneId={pendingZoneId}
               onViewEvents={() => setActiveTab('events')}
+              exhibitionId={exhibitionId}
             />
           )}
           {activeTab === 'events' && (
