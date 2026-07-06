@@ -61,6 +61,16 @@ export default function AppLayout() {
   const { user, isLoading } = useAuth();
   const insets = useSafeAreaInsets();
 
+  const isPWA = Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches ?? false);
+
+  const bottomInset = Platform.OS !== 'web'
+    ? insets.bottom   // native: always use safe area
+    : isPWA
+      ? insets.bottom // PWA: treat like native app
+      : 0;            // Safari browser: browser chrome handles safe area
+
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace('/(auth)/welcome');
@@ -71,7 +81,7 @@ export default function AppLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: getTabBarStyle(colors, insets.bottom),
+        tabBarStyle: getTabBarStyle(colors, bottomInset),
         tabBarShowLabel: false,
         tabBarItemStyle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
       }}
