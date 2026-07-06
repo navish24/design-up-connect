@@ -112,6 +112,29 @@ async function compressImageToBase64(file: any, maxPx = 1200): Promise<string> {
   });
 }
 
+// Decode a QR code from a base64 JPEG string using jsQR (web only).
+async function decodeQRFromBase64(base64Jpeg: string): Promise<string | null> {
+  const g = globalThis as any;
+  if (!g.document) return null;
+  return new Promise((resolve) => {
+    const img = new g.Image();
+    img.onload = () => {
+      try {
+        const canvas = g.document.createElement('canvas');
+        canvas.width = img.width; canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        const code = jsQR(imageData.data, img.width, img.height);
+        resolve(code?.data ?? null);
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = `data:image/jpeg;base64,${base64Jpeg}`;
+  });
+}
+
 // Decode a QR code from an image File using jsQR (web only).
 // Returns the decoded string or null if no QR code found.
 async function decodeQRFromFile(file: any): Promise<string | null> {
@@ -695,15 +718,17 @@ export default function ScanScreen() {
                 const wasManual = isManualCapture.current;
                 isManualCapture.current = false;
                 setIsCaptureProcessing(true);
+                // jsQR check before OCR — ~50ms, no API cost.
+                // If a Connect QR is in frame, route immediately and skip OCR entirely.
+                const qrFromFrame = await decodeQRFromBase64(base64Jpeg);
+                if (qrFromFrame && isDesignupQR(qrFromFrame)) {
+                  setIsCaptureProcessing(false);
+                  handleBarCodeScanned({ data: qrFromFrame });
+                  return;
+                }
                 const imageDataUrl = `data:image/jpeg;base64,${base64Jpeg}`;
                 let blocks: any[] = [];
                 try { blocks = await recognizeCardTextWeb(base64Jpeg); } catch (_) {}
-                const qrLine = blocks.map((b: any) => b.text?.trim()).find((t: string) => t && isDesignupQR(t));
-                if (qrLine) {
-                  setIsCaptureProcessing(false);
-                  handleBarCodeScanned({ data: qrLine });
-                  return;
-                }
                 const fields = parseCardFields(blocks);
                 // For auto-capture: only proceed if OCR found a phone or email.
                 // Vision boards, keyboards, and other non-card objects won't have these.
@@ -843,6 +868,10 @@ export default function ScanScreen() {
           </View>
         </View>
       )}
+      {/* Always-visible switch hint at very bottom */}
+      <Pressable style={[s.qrSwitchHint, { paddingBottom: bottomInset + 10 }]} onPress={() => setScanView('card')}>
+        <Text style={s.qrSwitchHintText}>Have a visiting card instead?</Text>
+      </Pressable>
     </View>
   );
 
@@ -931,6 +960,16 @@ function makeStyles(colors: any) {
       bottom: 0, left: 0, right: 0,
       flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end',
       paddingTop: 20,
+    },
+    qrSwitchHint: {
+      position: 'absolute' as any,
+      bottom: 0, left: 0, right: 0,
+      alignItems: 'center',
+    },
+    qrSwitchHintText: {
+      color: 'rgba(255,255,255,0.5)',
+      fontSize: FontSize.xs,
+      textDecorationLine: 'underline' as any,
     },
 
     // Info bottom sheet
