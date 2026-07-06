@@ -230,11 +230,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Local state is canonical — Supabase only enriches image URLs.
-    // Do NOT add Supabase items that aren't in local (user may have deleted them).
     const remoteById: Record<string, any> = {};
     for (const r of finalRows) remoteById[r.id] = r;
 
+    if (local.length === 0) {
+      // Fresh session / new device — local has nothing so trust Supabase completely
+      const fromRemote = finalRows.map((r: any) => ({
+        id: r.id,
+        source: 'card_scan' as const,
+        scanned_at: r.scanned_at,
+        card_image_uri: r.card_image_uri ?? null,
+        card_image_uri_back: r.card_image_uri_back ?? null,
+        fields: r.fields ?? [],
+        notes: r.notes ?? '',
+        tags: r.tags ?? [],
+        connect_user_id: r.connect_user_id ?? null,
+      })).sort((a: any, b: any) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
+      if (fromRemote.length > 0) setCardContacts(fromRemote);
+      return;
+    }
+
+    // Local has items — it is canonical. Supabase only enriches image URLs.
+    // Items in Supabase but NOT in local were deleted locally — don't re-add them.
     const merged = local
       .map((c) => {
         const r = remoteById[c.id];
@@ -251,7 +268,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
       .sort((a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
 
-    if (local.length === 0 && finalRows.length === 0) return;
     setCardContacts(merged);
   }, []);
 
