@@ -61,15 +61,7 @@ export default function AppLayout() {
   const { user, isLoading } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const isPWA = Platform.OS === 'web' &&
-    typeof window !== 'undefined' &&
-    (window.matchMedia?.('(display-mode: standalone)').matches ?? false);
-
-  const bottomInset = Platform.OS !== 'web'
-    ? insets.bottom   // native: always use safe area
-    : isPWA
-      ? insets.bottom // PWA: treat like native app
-      : 0;            // Safari browser: browser chrome handles safe area
+  const bottomInset = Platform.OS === 'web' ? 0 : insets.bottom;
 
   useEffect(() => {
     if (!isLoading && !user) {
