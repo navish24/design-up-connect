@@ -43,6 +43,7 @@ type ScanState =
   | 'success_connection'
   | 'success_entry'
   | 'already_saved'
+  | 'already_connected'
   | 'error';
 
 // Only process QRs that belong to this app; silently ignore everything else
@@ -204,7 +205,7 @@ export default function ScanScreen() {
   // Hide tab bar only while actively scanning — restore on choice screen AND
   // all result/error states so the user is never fully stuck without navigation.
   const isActivelyScanning = scanView !== 'choice' &&
-    !['success_brand', 'success_connection', 'success_entry', 'already_saved', 'error'].includes(scanState);
+    !['success_brand', 'success_connection', 'success_entry', 'already_saved', 'already_connected', 'error'].includes(scanState);
   useEffect(() => {
     navigation.setOptions({
       tabBarStyle: isActivelyScanning
@@ -359,21 +360,25 @@ export default function ScanScreen() {
           setTimeout(() => setScanState('success_brand'), 1800);
         }
       } else if (result.scan_type === 'user') {
-        setScanState('saving_connection');
-        if (result.connection) {
-          const u = result.connection.user;
-          addDemoConnection({
-            id: (u as any).id ?? u.designup_user_id,
-            full_name: u.full_name,
-            designation: u.designation ?? '',
-            company: u.company_name ?? '',
-            brand_id: (u as any).brand_id,
-            email: (u as any).email ?? '',
-            phone: (u as any).phone ?? '',
-            city: (u as any).city ?? '',
-          });
+        if (result.action === 'already_connected') {
+          setScanState('already_connected');
+        } else {
+          setScanState('saving_connection');
+          if (result.connection) {
+            const u = result.connection.user;
+            addDemoConnection({
+              id: (u as any).id ?? u.designup_user_id,
+              full_name: u.full_name,
+              designation: u.designation ?? '',
+              company: u.company_name ?? '',
+              brand_id: (u as any).brand_id,
+              email: (u as any).email ?? '',
+              phone: (u as any).phone ?? '',
+              city: (u as any).city ?? '',
+            });
+          }
+          setTimeout(() => setScanState('success_connection'), 1800);
         }
-        setTimeout(() => setScanState('success_connection'), 1800);
       } else if (result.scan_type === 'entry') {
         if (result.exhibition) {
           setActiveExhibition(result.exhibition.id, result.exhibition.name);
@@ -519,6 +524,29 @@ export default function ScanScreen() {
           onPress={resetToIdle}
         >
           <Text style={s.btnText}>Scan Next</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ── Already connected ─────────────────────────────────────────────────────
+  if (scanState === 'already_connected' && scanResult?.connection) {
+    const { user: connUser } = scanResult.connection;
+    return (
+      <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
+        <Ionicons name="people" size={52} color={colors.accent} />
+        <Text style={[s.successTitle, { color: colors.text }]}>Already connected</Text>
+        <Text style={[s.successSub, { color: colors.textSecondary }]}>
+          You're already connected with {connUser.full_name}
+        </Text>
+        <Pressable
+          style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
+          onPress={() => { resetToIdle(); router.push('/(app)/connections'); }}
+        >
+          <Text style={s.btnText}>View Connection</Text>
+        </Pressable>
+        <Pressable style={s.textBtn} onPress={resetToIdle}>
+          <Text style={[s.textBtnText, { color: colors.textMuted }]}>Done</Text>
         </Pressable>
       </View>
     );
