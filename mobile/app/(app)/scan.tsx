@@ -216,6 +216,13 @@ export default function ScanScreen() {
       const imageDataUrl = `data:image/jpeg;base64,${imageBase64}`;
       let blocks: any[] = [];
       try { blocks = await recognizeCardTextWeb(imageBase64); } catch (_) {}
+      // If OCR decoded a Connect QR URL from the image, process it as a QR scan
+      const qrLine = blocks.map((b: any) => b.text?.trim()).find((t: string) => t && isDesignupQR(t));
+      if (qrLine) {
+        setIsGalleryImporting(false);
+        handleBarCodeScanned({ data: qrLine });
+        return;
+      }
       const fields = parseCardFields(blocks);
       cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
       Analytics.cardScanned(fields.length > 0);
@@ -634,6 +641,12 @@ export default function ScanScreen() {
                 const imageDataUrl = `data:image/jpeg;base64,${base64Jpeg}`;
                 let blocks: any[] = [];
                 try { blocks = await recognizeCardTextWeb(base64Jpeg); } catch (_) {}
+                const qrLine = blocks.map((b: any) => b.text?.trim()).find((t: string) => t && isDesignupQR(t));
+                if (qrLine) {
+                  setIsCaptureProcessing(false);
+                  handleBarCodeScanned({ data: qrLine });
+                  return;
+                }
                 const fields = parseCardFields(blocks);
                 cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
                 Analytics.cardScanned(fields.length > 0);
