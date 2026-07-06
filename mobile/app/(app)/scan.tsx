@@ -202,6 +202,38 @@ export default function ScanScreen() {
     }).catch(() => setIsGalleryImporting(false));
   };
 
+  // Web camera capture — opens native iOS camera via file input (no getUserMedia stream,
+  // so no red recording indicator in the status bar)
+  const handleWebCameraCapture = () => {
+    const g = globalThis as any;
+    if (!g.document) return;
+    const input = g.document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;';
+    g.document.body.appendChild(input);
+    const cleanup = () => { try { g.document.body.removeChild(input); } catch (_) {} };
+    input.onchange = async (e: any) => {
+      cleanup();
+      const file = e.target?.files?.[0];
+      if (!file) return;
+      setIsCaptureProcessing(true);
+      try {
+        const imageBase64 = await compressImageToBase64(file);
+        const imageDataUrl = `data:image/jpeg;base64,${imageBase64}`;
+        let blocks: any[] = [];
+        try { blocks = await recognizeCardTextWeb(imageBase64); } catch (_) {}
+        const fields = parseCardFields(blocks);
+        cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+        Analytics.cardScanned(fields.length > 0);
+        setIsCaptureProcessing(false);
+        router.push('/card-review');
+      } catch { setIsCaptureProcessing(false); }
+    };
+    input.click();
+  };
+
   // Gallery handler ref — uses web OCR (same pipeline as camera capture)
   webGalleryHandlerRef.current = async (e: any) => {
     const file = e.target?.files?.[0];
@@ -579,24 +611,20 @@ export default function ScanScreen() {
         {/* Full-bleed camera — no container, fills remaining space */}
         <View style={{ flex: 1 }}>
           {Platform.OS === 'web' ? (
-            <WebCardScanner
-              ref={webCardScannerRef}
-              active={isFocused && !isCaptureProcessing}
-              autoCapture
-              torchOn={torchOn}
-              onTorchSupportChange={setWebTorchSupported}
-              onCapture={async (base64Jpeg) => {
-                setIsCaptureProcessing(true);
-                const imageDataUrl = `data:image/jpeg;base64,${base64Jpeg}`;
-                let blocks: any[] = [];
-                try { blocks = await recognizeCardTextWeb(base64Jpeg); } catch (_) {}
-                const fields = parseCardFields(blocks);
-                cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
-                Analytics.cardScanned(fields.length > 0);
-                setIsCaptureProcessing(false);
-                router.push('/card-review');
-              }}
-            />
+            // Native file input capture avoids getUserMedia — no red recording bar in status bar
+            <View style={[s.camera, { backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' }]}>
+              <View style={s.cardBracketOverlay}>
+                <View style={s.cardBracket}>
+                  <View style={[s.cCorner, s.cCornerTL, { borderColor: colors.accent }]} />
+                  <View style={[s.cCorner, s.cCornerTR, { borderColor: colors.accent }]} />
+                  <View style={[s.cCorner, s.cCornerBL, { borderColor: colors.accent }]} />
+                  <View style={[s.cCorner, s.cCornerBR, { borderColor: colors.accent }]} />
+                </View>
+              </View>
+              <Text style={[s.hintText, { color: 'rgba(255,255,255,0.55)', marginTop: 8 }]}>
+                Tap Capture Card to photograph a card
+              </Text>
+            </View>
           ) : isFocused ? (
             <CameraView style={s.camera} facing="back" active enableTorch={torchOn}>
               <View style={s.cardBracketOverlay}>
@@ -635,7 +663,7 @@ export default function ScanScreen() {
               disabled={isCaptureProcessing || isGalleryImporting}
               onPress={() => {
                 Analytics.captureCardTapped();
-                if (Platform.OS === 'web') { webCardScannerRef.current?.capture(); }
+                if (Platform.OS === 'web') { handleWebCameraCapture(); }
                 else { router.push('/card-scanner'); }
               }}
             >
@@ -735,6 +763,7 @@ function makeStyles(colors: any) {
     choiceWrap: { flex: 1, padding: Spacing.lg, gap: Spacing.md, justifyContent: 'center' },
     galleryLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
     galleryLinkText: { fontSize: FontSize.sm },
+    hintText: { fontSize: FontSize.sm, textAlign: 'center', paddingHorizontal: Spacing.lg },
     choiceCard: {
       flex: 1, borderRadius: Radius.lg, borderWidth: 1,
       alignItems: 'center', justifyContent: 'center',
