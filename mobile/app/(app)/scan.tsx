@@ -613,19 +613,6 @@ export default function ScanScreen() {
             <Text style={[s.choiceSub, { color: colors.textMuted }]}>Saves their contact instantly</Text>
           </Pressable>
 
-          {Platform.OS === 'web' && (
-            <Pressable
-              style={s.galleryLink}
-              onPress={handleGalleryImport}
-              disabled={isGalleryImporting}
-            >
-              {isGalleryImporting
-                ? <ActivityIndicator size="small" color={colors.textMuted} />
-                : <Ionicons name="images-outline" size={16} color={colors.textMuted} />
-              }
-              <Text style={[s.galleryLinkText, { color: colors.textMuted }]}>Import card from Photo Library</Text>
-            </Pressable>
-          )}
         </View>
 
         <Modal visible={showInfo} transparent animationType="slide" onRequestClose={() => setShowInfo(false)}>
