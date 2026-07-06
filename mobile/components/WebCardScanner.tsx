@@ -10,6 +10,7 @@ interface Props {
   autoCapture?: boolean;
   torchOn?: boolean;
   onTorchSupportChange?: (supported: boolean) => void;
+  errorHint?: string | null;
 }
 
 export interface WebCardScannerHandle {
@@ -18,7 +19,7 @@ export interface WebCardScannerHandle {
 
 type PermState = 'pending' | 'granted' | 'denied' | 'unavailable';
 
-const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapture, autoCapture = false, torchOn, onTorchSupportChange }, ref) => {
+const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapture, autoCapture = false, torchOn, onTorchSupportChange, errorHint }, ref) => {
   const { colors } = useTheme();
   const containerRef = useRef<any>(null);
   const videoRef = useRef<any>(null);
@@ -355,14 +356,21 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
           )}
         </View>
         {/* Hint pill below frame */}
-        <View style={s.hintPill}>
-          <Text style={s.hint}>
-            {permState === 'pending'
-              ? 'Starting camera…'
-              : stabilityPct > 0
-                ? `Hold still… ${stabilityPct}%`
-                : 'Hold the card in the frame — captures automatically'}
-          </Text>
+        <View style={[s.hintPill, errorHint ? s.hintPillError : null]}>
+          {errorHint ? (
+            <View style={s.hintErrorRow}>
+              <Ionicons name="warning-outline" size={14} color="#FFF" />
+              <Text style={s.hint}>{errorHint}</Text>
+            </View>
+          ) : (
+            <Text style={s.hint}>
+              {permState === 'pending'
+                ? 'Starting camera…'
+                : stabilityPct > 0
+                  ? `Hold still… ${stabilityPct}%`
+                  : 'Hold the card in the frame — captures automatically'}
+            </Text>
+          )}
         </View>
       </View>
     </View>
@@ -431,6 +439,14 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     maxWidth: '80%' as any,
+  },
+  hintPillError: {
+    backgroundColor: 'rgba(194,80,30,0.85)',
+  },
+  hintErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   hint: {
     color: '#FFF',
