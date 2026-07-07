@@ -633,6 +633,9 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
               <Ionicons name="card-outline" size={11} color={colors.textMuted} />
               <Text style={[s.gCardBadgeText, { color: colors.textMuted }]}>Physical visiting card</Text>
             </View>
+            <Text style={[s.scannedAt, { color: colors.textMuted, textAlign: 'left', marginTop: 4 }]}>
+              Scanned {new Date(contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+            </Text>
           </View>
           {contact.card_image_uri && (
             <View style={s.gThumbStack}>
@@ -653,24 +656,24 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
         {hasQuickActions && (
           <View style={s.quickActionRow}>
             {waField && (
-              <Pressable style={[s.quickActionPill, { backgroundColor: '#25D366' + '18', borderColor: '#25D366' + '44' }]}
+              <Pressable style={[s.quickActionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '66' }]}
                 onPress={() => openWhatsApp(waField.value)}>
-                <Ionicons name="logo-whatsapp" size={15} color="#25D366" />
-                <Text style={[s.quickActionText, { color: '#25D366' }]}>WhatsApp</Text>
+                <Ionicons name="logo-whatsapp" size={15} color={colors.accent} />
+                <Text style={[s.quickActionText, { color: colors.accent }]}>WhatsApp</Text>
               </Pressable>
             )}
             {phoneField && (
-              <Pressable style={[s.quickActionPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+              <Pressable style={[s.quickActionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '66' }]}
                 onPress={() => setCallSheetPhone(phoneField.value)}>
-                <Ionicons name="call-outline" size={15} color={colors.text} />
-                <Text style={[s.quickActionText, { color: colors.text }]}>Call</Text>
+                <Ionicons name="call-outline" size={15} color={colors.accent} />
+                <Text style={[s.quickActionText, { color: colors.accent }]}>Call</Text>
               </Pressable>
             )}
             {emailField && (
-              <Pressable style={[s.quickActionPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+              <Pressable style={[s.quickActionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '66' }]}
                 onPress={() => openExternal(`mailto:${emailField.value}`)}>
-                <Ionicons name="mail-outline" size={15} color={colors.text} />
-                <Text style={[s.quickActionText, { color: colors.text }]}>Email</Text>
+                <Ionicons name="mail-outline" size={15} color={colors.accent} />
+                <Text style={[s.quickActionText, { color: colors.accent }]}>Email</Text>
               </Pressable>
             )}
           </View>
@@ -743,9 +746,6 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
           </View>
         </View>
 
-        <Text style={[s.scannedAt, { color: colors.textMuted }]}>
-          Scanned {new Date(contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
-        </Text>
       </ScrollView>
 
       {callSheetPhone && (
@@ -867,13 +867,8 @@ function GroupedFieldRow({ field, colors, s }: { field: import('../../types').Ca
         <Text style={[s.gRowLabel, { color: colors.textMuted }]}>{field.label}</Text>
         <Text style={[s.gRowValue, { color: colors.text }]} numberOfLines={multiLine ? 5 : 1}>{field.value}</Text>
       </View>
-      {isPhone && (
-        <Pressable onPress={() => openWhatsApp(field.value)} hitSlop={8}>
-          <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
-        </Pressable>
-      )}
       {isLinkable && (
-        <Pressable onPress={() => openLink(field.label, field.value)} hitSlop={8} style={isPhone ? { marginLeft: 10 } : undefined}>
+        <Pressable onPress={() => openLink(field.label, field.value)} hitSlop={8}>
           <Ionicons name="open-outline" size={16} color={colors.accent} />
         </Pressable>
       )}
@@ -967,9 +962,15 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
 }) {
   const s = makeStyles(colors);
   const headerPaddingTop = useHeaderPaddingTop();
-  const { user } = connection;
+  const { user: connUser } = connection;
+  const { user: currentUser } = useAuth();
   const [showNotes, setShowNotes] = useState(false);
   const [photoExpanded, setPhotoExpanded] = useState(false);
+  const [callSheetPhone, setCallSheetPhone] = useState<string | null>(null);
+
+  const isQuickActionUser = currentUser?.email === QUICK_ACTION_USER;
+  const hasQRQuickActions = isQuickActionUser && (connUser.phone || connUser.email);
+  const user = connUser;
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
@@ -1015,6 +1016,32 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
           )}
         </View>
 
+        {hasQRQuickActions && (
+          <View style={s.quickActionRow}>
+            {user.phone && (
+              <Pressable style={[s.quickActionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '66' }]}
+                onPress={() => openWhatsApp(user.phone!)}>
+                <Ionicons name="logo-whatsapp" size={15} color={colors.accent} />
+                <Text style={[s.quickActionText, { color: colors.accent }]}>WhatsApp</Text>
+              </Pressable>
+            )}
+            {user.phone && (
+              <Pressable style={[s.quickActionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '66' }]}
+                onPress={() => setCallSheetPhone(user.phone!)}>
+                <Ionicons name="call-outline" size={15} color={colors.accent} />
+                <Text style={[s.quickActionText, { color: colors.accent }]}>Call</Text>
+              </Pressable>
+            )}
+            {user.email && (
+              <Pressable style={[s.quickActionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '66' }]}
+                onPress={() => openExternal(`mailto:${user.email}`)}>
+                <Ionicons name="mail-outline" size={15} color={colors.accent} />
+                <Text style={[s.quickActionText, { color: colors.accent }]}>Email</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
         {/* CONTACT */}
         {(user.phone || user.email) && (
           <GroupedSection label="CONTACT" colors={colors} s={s}>
@@ -1025,10 +1052,7 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
                   <Text style={[s.gRowLabel, { color: colors.textMuted }]}>Phone</Text>
                   <Text style={[s.gRowValue, { color: colors.text }]}>{user.phone}</Text>
                 </View>
-                <Pressable onPress={() => openWhatsApp(user.phone!)} hitSlop={8}>
-                  <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
-                </Pressable>
-                <CopyButton value={user.phone!} label="Phone" size={15} style={{ marginLeft: 10 }} />
+                <CopyButton value={user.phone!} label="Phone" size={15} />
               </View>
             )}
             {user.phone && user.email && <View style={[s.gDivider, { backgroundColor: colors.border }]} />}
@@ -1127,6 +1151,34 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
           </View>
         )}
       </ScrollView>
+
+      {callSheetPhone && (
+        <Modal visible transparent animationType="slide">
+          <Pressable style={s.sheetOverlay} onPress={() => setCallSheetPhone(null)}>
+            <Pressable style={[s.callSheet, { backgroundColor: colors.surface }]} onPress={() => {}}>
+              <Text style={[s.callSheetNumber, { color: colors.textMuted }]}>{callSheetPhone}</Text>
+              <Pressable style={s.callSheetOption} onPress={() => {
+                openExternal(`tel:${callSheetPhone.replace(/[\s\-()]/g, '')}`);
+                setCallSheetPhone(null);
+              }}>
+                <Ionicons name="call-outline" size={20} color={colors.text} />
+                <Text style={[s.callSheetOptionText, { color: colors.text }]}>Call</Text>
+              </Pressable>
+              <View style={[s.gDivider, { backgroundColor: colors.border, marginLeft: 0 }]} />
+              <Pressable style={s.callSheetOption} onPress={() => {
+                Clipboard.setStringAsync(callSheetPhone);
+                setCallSheetPhone(null);
+              }}>
+                <Ionicons name="copy-outline" size={20} color={colors.text} />
+                <Text style={[s.callSheetOptionText, { color: colors.text }]}>Copy number</Text>
+              </Pressable>
+              <Pressable style={[s.callSheetCancel, { borderTopColor: colors.border }]} onPress={() => setCallSheetPhone(null)}>
+                <Text style={[s.callSheetCancelText, { color: colors.textMuted }]}>Cancel</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
 
       <NotesModal
         visible={showNotes}
