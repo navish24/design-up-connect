@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ export default function VerifyOTPScreen() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [countdown, setCountdown] = useState(30);
+  const [resendSent, setResendSent] = useState(false);
   const inputs = useRef<(TextInput | null)[]>([]);
   const s = makeStyles(colors);
 
@@ -81,25 +82,30 @@ export default function VerifyOTPScreen() {
     }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (countdown > 0) return;
-    setCountdown(30);
+    setCountdown(60);
     setError('');
+    setResendSent(false);
     setOtp(['', '', '', '', '', '']);
     inputs.current[0]?.focus();
-    void supabase.auth.signInWithOtp({ email });
+    const { error: resendError } = await supabase.auth.signInWithOtp({ email });
+    if (resendError) {
+      setError('Failed to resend code. Please try again.');
+      setCountdown(0);
+    } else {
+      setResendSent(true);
+    }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[s.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={[s.screen, { backgroundColor: colors.background }]}>
       <Pressable style={[s.back, { marginTop: topInset + 8 }]} onPress={() => router.replace('/(auth)/sign-in')}>
         <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
         <Text style={[s.backText, { color: colors.textSecondary }]}>Back</Text>
       </Pressable>
 
+      <View style={s.root}>
       <View style={s.body}>
         <Text style={[s.heading, { color: colors.text }]}>Enter the code</Text>
         <Text style={[s.sub, { color: colors.textSecondary }]}>
@@ -138,19 +144,26 @@ export default function VerifyOTPScreen() {
           <Text style={[s.resendLabel, { color: colors.textMuted }]}>Didn't receive it? </Text>
           <Pressable onPress={handleResend} disabled={countdown > 0}>
             <Text style={[s.resendBtn, { color: countdown > 0 ? colors.textMuted : colors.gold }]}>
-              {countdown > 0 ? `Resend in ${countdown}s` : 'Resend OTP'}
+              {countdown > 0 ? `Resend in ${countdown}s` : 'Resend code'}
             </Text>
           </Pressable>
         </View>
+        {resendSent && (
+          <Text style={[s.resendLabel, { color: colors.textMuted, textAlign: 'center', marginTop: 4 }]}>
+            Code sent — also check your spam folder.
+          </Text>
+        )}
       </View>
-    </KeyboardAvoidingView>
+      </View>
+    </View>
   );
 }
 
 function makeStyles(colors: any) {
   return StyleSheet.create({
+    screen: { flex: 1 },
     root: { flex: 1, paddingHorizontal: Spacing.lg },
-    back: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.xl },
+    back: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.xl, paddingHorizontal: Spacing.lg },
     backText: { fontSize: FontSize.md },
     body: { flex: 1, justifyContent: 'center', paddingBottom: 80 },
     heading: { fontSize: FontSize.xxxl, fontWeight: FontWeight.bold, lineHeight: 40, marginBottom: Spacing.sm },

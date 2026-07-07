@@ -27,6 +27,8 @@ export default function ProfileScreen() {
 
   const [qrExpanded, setQrExpanded] = useState(false);
   const [showCardPreview, setShowCardPreview] = useState(false);
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [invitePhone, setInvitePhone] = useState('');
   const [inviteSent, setInviteSent] = useState(false);
@@ -113,21 +115,67 @@ export default function ProfileScreen() {
     setShowEditDetails(true);
   };
 
-  const pickProfilePhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow access to your photo library to set a profile picture.');
-      return;
+  const uploadProfileImage = async (uri: string): Promise<string | null> => {
+    if (!user?.id) return null;
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const ext = blob.type?.includes('png') ? 'png' : 'jpg';
+      const path = `${user.id}/profile.${ext}`;
+      const { error } = await supabase.storage
+        .from('profile-images')
+        .upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+      if (error) { console.error('[uploadProfileImage]', error.message); return null; }
+      const { data } = supabase.storage.from('profile-images').getPublicUrl(path);
+      return `${data.publicUrl}?t=${Date.now()}`;
+    } catch (e) {
+      console.error('[uploadProfileImage] error:', e);
+      return null;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+  };
+
+  const pickProfilePhoto = async (source: 'library' | 'camera') => {
+    let result: ImagePicker.ImagePickerResult;
+    if (source === 'camera') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow camera access to take a profile photo.');
+        return;
+      }
+      result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow access to your photo library to set a profile picture.');
+        return;
+      }
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true, aspect: [1, 1], quality: 0.8,
+      });
+    }
     if (!result.canceled && result.assets[0]) {
-      updateUser({ profile_image_url: result.assets[0].uri });
+      const localUri = result.assets[0].uri;
+      updateUser({ profile_image_url: localUri }); // optimistic
+      setUploadingPhoto(true);
+      const publicUrl = await uploadProfileImage(localUri);
+      setUploadingPhoto(false);
+      if (publicUrl) updateUser({ profile_image_url: publicUrl });
     }
+  };
+
+  const showPhotoSourcePicker = () => {
+    if (Platform.OS === 'web') { pickProfilePhoto('library'); return; }
+    Alert.alert('Profile Photo', 'Choose a source', [
+      { text: 'Take Photo', onPress: () => pickProfilePhoto('camera') },
+      { text: 'Choose from Library', onPress: () => pickProfilePhoto('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleAvatarPress = () => {
+    if (user?.profile_image_url) setShowPhotoPreview(true);
+    else showPhotoSourcePicker();
   };
 
   const submitQuery = async () => {
@@ -258,7 +306,7 @@ if (isLoading) {
               {user.designation && <Text style={[s.vcDesig, { color: colors.textSecondary }]}>{user.designation}</Text>}
               {user.company_name && <Text style={[s.vcCompany, { color: colors.accent }]}>{user.company_name}</Text>}
             </View>
-            <Pressable style={s.avatarWrap} onPress={pickProfilePhoto}>
+            <Pressable style={s.avatarWrap} onPress={handleAvatarPress}>
               {user.profile_image_url ? (
                 <Image source={{ uri: user.profile_image_url }} style={s.vcPhoto} />
               ) : (
@@ -267,7 +315,9 @@ if (isLoading) {
                 </View>
               )}
               <View style={[s.avatarCameraOverlay, { backgroundColor: colors.background + 'CC' }]}>
-                <Ionicons name="camera-outline" size={12} color={colors.textSecondary} />
+                {uploadingPhoto
+                  ? <ActivityIndicator size="small" color={colors.accent} />
+                  : <Ionicons name="camera-outline" size={12} color={colors.textSecondary} />}
               </View>
             </Pressable>
           </View>
@@ -470,6 +520,33 @@ if (isLoading) {
         )}
 
       </ScrollView>
+
+      {/* Photo preview modal */}
+      <Modal visible={showPhotoPreview} transparent animationType="fade" onRequestClose={() => setShowPhotoPreview(false)}>
+        <Pressable style={s.photoOverlay} onPress={() => setShowPhotoPreview(false)}>
+          <Pressable style={[s.photoPreviewCard, { backgroundColor: colors.surface }]} onPress={() => {}}>
+            {user?.profile_image_url && (
+              <Image source={{ uri: user.profile_image_url }} style={s.photoPreviewImg} resizeMode="cover" />
+            )}
+            <View style={s.photoPreviewActions}>
+              <Pressable
+                style={[s.photoPreviewBtn, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '55' }]}
+                onPress={() => { setShowPhotoPreview(false); showPhotoSourcePicker(); }}
+              >
+                <Ionicons name="pencil-outline" size={16} color={colors.accent} />
+                <Text style={[s.photoPreviewBtnText, { color: colors.accent }]}>Edit</Text>
+              </Pressable>
+              <Pressable
+                style={[s.photoPreviewBtn, { backgroundColor: '#ef444418', borderColor: '#ef444455' }]}
+                onPress={() => { setShowPhotoPreview(false); updateUser({ profile_image_url: undefined }); }}
+              >
+                <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                <Text style={[s.photoPreviewBtnText, { color: '#ef4444' }]}>Delete</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* QR expanded modal */}
       <Modal visible={qrExpanded} transparent animationType="fade" onRequestClose={() => setQrExpanded(false)}>
@@ -989,6 +1066,13 @@ function makeStyles(colors: any) {
 
     qrCard: { borderRadius: Radius.lg, padding: Spacing.xl, alignItems: 'center', gap: Spacing.sm },
     qrHint: { fontSize: FontSize.xs },
+
+    photoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
+    photoPreviewCard: { width: '100%', maxWidth: 320, borderRadius: Radius.xl, overflow: 'hidden' },
+    photoPreviewImg: { width: '100%', aspectRatio: 1 },
+    photoPreviewActions: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.md },
+    photoPreviewBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: Radius.full, borderWidth: 1.5 },
+    photoPreviewBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
 
     qrOverlay: {
       flex: 1, backgroundColor: '#000',

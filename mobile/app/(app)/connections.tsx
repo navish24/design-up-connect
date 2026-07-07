@@ -1,6 +1,7 @@
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput,
   Alert, ToastAndroid, Platform, Image, Modal, Linking,
+  Animated, PanResponder,
 } from 'react-native';
 import { useState, useMemo, Fragment, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
@@ -35,7 +36,14 @@ export function getCardDisplayName(fields: { label: string; value: string }[]): 
 
 function openExternal(url: string) {
   if (Platform.OS === 'web') {
-    (globalThis as any).window?.open(url, '_blank', 'noopener,noreferrer');
+    const isDeepLink = url.startsWith('tel:') || url.startsWith('mailto:') || url.startsWith('whatsapp:');
+    if (isDeepLink) {
+      // Use location.href for deep links — iOS intercepts the scheme and opens
+      // the native app, then returns to the PWA. window.open leaves a blank tab.
+      (globalThis as any).window.location.href = url;
+    } else {
+      (globalThis as any).window?.open(url, '_blank', 'noopener,noreferrer');
+    }
   } else {
     Linking.openURL(url).catch(() => {});
   }
@@ -44,7 +52,9 @@ function openExternal(url: string) {
 function openWhatsApp(phone: string) {
   const digits = phone.replace(/\D/g, '');
   Analytics.contactIconTapped('whatsapp');
-  openExternal(`https://wa.me/${digits}`);
+  // Use whatsapp:// scheme so iOS returns to the PWA after closing WhatsApp.
+  // wa.me does an extra https redirect which breaks the return path in PWA mode.
+  openExternal(Platform.OS === 'web' ? `whatsapp://send?phone=${digits}` : `https://wa.me/${digits}`);
 }
 
 function openLink(label: string, value: string) {
@@ -126,12 +136,12 @@ const MOCK_CONNECTIONS: Connection[] = [
 
 type SortType = 'newest' | 'oldest' | 'az' | 'za';
 const SORT_LABEL: Record<SortType, string> = { newest: 'New → Old', oldest: 'Old → New', az: 'A → Z', za: 'Z → A' };
-const FILTER_LABEL: Record<string, string> = { all: 'Filter', cards: 'Cards', connections: 'Connects', notes: 'Has Notes' };
+const FILTER_LABEL: Record<string, string> = { all: 'Filter', cards: 'Physical card', connections: 'QR scanned', notes: 'Has notes' };
 const FILTER_OPTIONS = [
   { value: 'all', label: 'All' },
-  { value: 'cards', label: 'Cards' },
-  { value: 'connections', label: 'Connects' },
-  { value: 'notes', label: 'Has Notes' },
+  { value: 'cards', label: 'Physical card' },
+  { value: 'connections', label: 'QR scanned' },
+  { value: 'notes', label: 'Has notes' },
 ];
 const SORT_OPTIONS = [
   { value: 'newest', label: 'New → Old' },
@@ -242,7 +252,7 @@ export default function ConnectionsScreen() {
   const filteredConnections = useMemo(() => {
     if (filterType === 'cards') return [];
     const q = search.toLowerCase();
-    let list = allConnections.filter((c) => {
+    return allConnections.filter((c) => {
       if (q) {
         const connNotes = (notes[c.id] ?? []).map((n) => n.text).join(' ').toLowerCase();
         if (
@@ -256,17 +266,12 @@ export default function ConnectionsScreen() {
       if (filterType === 'notes') return (notes[c.id] ?? []).length > 0;
       return true;
     });
-    if (sortType === 'newest') list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    else if (sortType === 'oldest') list = [...list].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    else if (sortType === 'az') list = [...list].sort((a, b) => a.user.full_name.localeCompare(b.user.full_name));
-    else if (sortType === 'za') list = [...list].sort((a, b) => b.user.full_name.localeCompare(a.user.full_name));
-    return list;
-  }, [allConnections, search, notes, filterType, sortType]);
+  }, [allConnections, search, notes, filterType]);
 
   const filteredCards = useMemo(() => {
     if (filterType === 'connections') return [];
     const q = search.toLowerCase();
-    let list = cardContacts.filter((c) => {
+    return cardContacts.filter((c) => {
       if (q) {
         const allValues = c.fields.map((f) => f.value.toLowerCase()).join(' ');
         const modalNotes = (notes[c.id] ?? []).map((n) => n.text).join(' ').toLowerCase();
@@ -275,12 +280,29 @@ export default function ConnectionsScreen() {
       if (filterType === 'notes') return c.notes.trim().length > 0 || (notes[c.id] ?? []).length > 0;
       return true;
     });
-    if (sortType === 'newest') list = [...list].sort((a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
-    else if (sortType === 'oldest') list = [...list].sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
-    else if (sortType === 'az') list = [...list].sort((a, b) => getCardDisplayName(a.fields).localeCompare(getCardDisplayName(b.fields)));
-    else if (sortType === 'za') list = [...list].sort((a, b) => getCardDisplayName(b.fields).localeCompare(getCardDisplayName(a.fields)));
-    return list;
-  }, [cardContacts, search, notes, filterType, sortType]);
+  }, [cardContacts, search, notes, filterType]);
+
+  type ListItem = { type: 'connect'; data: Connection } | { type: 'card'; data: CardContact };
+
+  const filteredItems = useMemo((): ListItem[] => {
+    const items: (ListItem & { ts: number })[] = [
+      ...filteredConnections.map((c) => ({ type: 'connect' as const, data: c, ts: new Date(c.created_at).getTime() })),
+      ...filteredCards.map((c) => ({ type: 'card' as const, data: c, ts: new Date(c.scanned_at).getTime() })),
+    ];
+    if (sortType === 'newest') items.sort((a, b) => b.ts - a.ts);
+    else if (sortType === 'oldest') items.sort((a, b) => a.ts - b.ts);
+    else if (sortType === 'az') items.sort((a, b) => {
+      const na = a.type === 'connect' ? a.data.user.full_name : getCardDisplayName(a.data.fields);
+      const nb = b.type === 'connect' ? b.data.user.full_name : getCardDisplayName(b.data.fields);
+      return na.localeCompare(nb);
+    });
+    else if (sortType === 'za') items.sort((a, b) => {
+      const na = a.type === 'connect' ? a.data.user.full_name : getCardDisplayName(a.data.fields);
+      const nb = b.type === 'connect' ? b.data.user.full_name : getCardDisplayName(b.data.fields);
+      return nb.localeCompare(na);
+    });
+    return items;
+  }, [filteredConnections, filteredCards, sortType]);
 
   // ── Detail views ────────────────────────────────────────────────────────────
 
@@ -415,44 +437,30 @@ export default function ConnectionsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* ── Connections section ── */}
-        {filteredConnections.length > 0 && (
-          <>
-            <Text style={[s.sectionHeader, { color: colors.textMuted }]}>CONNECTIONS</Text>
-            {filteredConnections.map((conn) => (
-              <ConnectionCard
-                key={conn.id}
-                connection={conn}
-                colors={colors}
-                onPress={() => setActiveView({ type: 'connect_detail', connection: conn })}
-                onExchange={(id, name) => handleExchangeContact(id, name)}
-                notes={notes[conn.id] ?? []}
-                search={search}
-              />
-            ))}
-          </>
-        )}
-
-        {/* ── Physical card contacts section ── */}
-        {filteredCards.length > 0 && (
-          <>
-            <Text style={[s.sectionHeader, { color: colors.textMuted, marginTop: Spacing.lg }]}>
-              PHYSICAL CARDS
-            </Text>
-            {filteredCards.map((card) => (
-              <CardContactCard
-                key={card.id}
-                contact={card}
-                colors={colors}
-                onPress={() => setActiveView({ type: 'card_detail', contact: card })}
-                search={search}
-              />
-            ))}
-          </>
+        {filteredItems.map((item) =>
+          item.type === 'connect' ? (
+            <ConnectionCard
+              key={item.data.id}
+              connection={item.data}
+              colors={colors}
+              onPress={() => setActiveView({ type: 'connect_detail', connection: item.data })}
+              onExchange={(id, name) => handleExchangeContact(id, name)}
+              notes={notes[item.data.id] ?? []}
+              search={search}
+            />
+          ) : (
+            <CardContactCard
+              key={item.data.id}
+              contact={item.data}
+              colors={colors}
+              onPress={() => setActiveView({ type: 'card_detail', contact: item.data })}
+              search={search}
+            />
+          )
         )}
 
         {/* ── Empty state ── */}
-        {filteredConnections.length === 0 && filteredCards.length === 0 && (
+        {filteredItems.length === 0 && (
           <View style={[s.emptyState, { backgroundColor: colors.surface }]}>
             <Text style={s.emptyIcon}>🤝</Text>
             <Text style={[s.emptyTitle, { color: colors.text }]}>No connections yet</Text>
@@ -536,11 +544,6 @@ function CardContactCard({ contact, colors, onPress, search }: {
             </Text>
           </View>
         )}
-        {/* Physical card badge */}
-        <View style={[s.cardBadge, { backgroundColor: colors.surfaceElevated }]}>
-          <Ionicons name="card-outline" size={10} color={colors.textMuted} />
-          <Text style={[s.cardBadgeText, { color: colors.textMuted }]}>Physical card</Text>
-        </View>
       </View>
 
       <View style={s.cardRight}>
@@ -629,10 +632,6 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
             <Text style={[s.gName, { color: colors.text }]}>{name}</Text>
             {company && <Text style={[s.gCompany, { color: colors.accent }]}>{company}</Text>}
             {designation && <Text style={[s.gDesignation, { color: colors.textMuted }]}>{designation}</Text>}
-            <View style={[s.gCardBadge, { backgroundColor: colors.surfaceElevated }]}>
-              <Ionicons name="card-outline" size={11} color={colors.textMuted} />
-              <Text style={[s.gCardBadgeText, { color: colors.textMuted }]}>Physical visiting card</Text>
-            </View>
             <Text style={[s.scannedAt, { color: colors.textMuted, textAlign: 'left', marginTop: 4 }]}>
               Scanned {new Date(contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
             </Text>
@@ -922,34 +921,87 @@ function ConnectionCard({ connection, colors, onPress, onExchange, notes = [], s
             </Text>
           </View>
         )}
-        <View style={[s.statusBadge, {
-          backgroundColor: connection.is_mutual ? colors.accent + '22' : colors.surfaceElevated,
-        }]}>
-          <Text style={[s.statusText, {
-            color: connection.is_mutual ? colors.accent : colors.textMuted,
-          }]}>
-            {connection.is_mutual ? 'Mutual' : 'One-way'}
-          </Text>
-        </View>
       </View>
 
       <View style={s.cardRight}>
         <Text style={[s.date, { color: colors.textMuted }]}>{date}</Text>
-        {!connection.is_mutual && (
-          <Pressable
-            style={[s.exchangeBtn, { backgroundColor: colors.accent, borderColor: colors.accent }]}
-            onPress={(e) => { e.stopPropagation(); onExchange(connection.id, connection.user.full_name); }}
-          >
-            <Text style={[s.exchangeBtnText, { color: '#FFF' }]}>Exchange Contact</Text>
-          </Pressable>
-        )}
-        {connection.is_mutual && (
-          <View style={[s.sharedBtn, { backgroundColor: colors.surface }]}>
-            <Text style={[s.sharedBtnText, { color: colors.textMuted }]}>Contact Shared</Text>
-          </View>
-        )}
       </View>
     </Pressable>
+  );
+}
+
+const SLIDE_THUMB = 44;
+const SLIDE_PAD = 4;
+
+function SlideToExchange({ onComplete, colors }: { onComplete: () => void; colors: any }) {
+  const pan = useRef(new Animated.Value(0)).current;
+  const trackWidthRef = useRef(0);
+  const doneRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+  const [done, setDone] = useState(false);
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !doneRef.current,
+      onMoveShouldSetPanResponder: () => !doneRef.current,
+      onPanResponderMove: (_, g) => {
+        if (doneRef.current) return;
+        const max = trackWidthRef.current - SLIDE_THUMB - SLIDE_PAD * 2;
+        pan.setValue(Math.max(0, Math.min(g.dx, max)));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (doneRef.current) return;
+        const max = trackWidthRef.current - SLIDE_THUMB - SLIDE_PAD * 2;
+        if (g.dx >= max * 0.75) {
+          Animated.spring(pan, { toValue: max, useNativeDriver: false }).start();
+          doneRef.current = true;
+          setDone(true);
+          onCompleteRef.current();
+        } else {
+          Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+        }
+      },
+    })
+  ).current;
+
+  const textOpacity = pan.interpolate({
+    inputRange: [0, Math.max(1, (trackWidth - SLIDE_THUMB - SLIDE_PAD * 2) * 0.45)],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  return (
+    <View
+      style={[s.slideTrack, {
+        backgroundColor: done ? colors.accent + '22' : colors.accent + '14',
+        borderColor: colors.accent + '55',
+      }]}
+      onLayout={(e) => {
+        trackWidthRef.current = e.nativeEvent.layout.width;
+        setTrackWidth(e.nativeEvent.layout.width);
+      }}
+    >
+      {done ? (
+        <View style={s.slideSuccess}>
+          <Ionicons name="checkmark-circle-outline" size={17} color={colors.accent} />
+          <Text style={[s.slideLabel, { color: colors.accent }]}>Contact Exchanged</Text>
+        </View>
+      ) : (
+        <>
+          <Animated.Text style={[s.slideLabel, { color: colors.accent, opacity: textOpacity }]}>
+            Slide to exchange {'→'}
+          </Animated.Text>
+          <Animated.View
+            style={[s.slideThumb, { backgroundColor: colors.accent, left: SLIDE_PAD, transform: [{ translateX: pan }] }]}
+            {...panResponder.panHandlers}
+          >
+            <Ionicons name="arrow-forward" size={19} color="#FFF" />
+          </Animated.View>
+        </>
+      )}
+    </View>
   );
 }
 
@@ -1138,16 +1190,20 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
           </Pressable>
         </View>
 
-        {/* Exchange Contact pill */}
-        {!connection.is_mutual && (
+        {/* Connection status / Exchange */}
+        {connection.is_mutual ? (
           <View style={s.gActions}>
-            <Pressable
-              style={[s.gExchangePill, { borderColor: colors.accent }]}
-              onPress={() => { Analytics.exchangeContactTapped('detail'); onExchange(connection.id, connection.user.full_name); }}
-            >
-              <Ionicons name="swap-horizontal-outline" size={16} color={colors.accent} />
-              <Text style={[s.gExchangePillText, { color: colors.accent }]}>Exchange Contact</Text>
-            </Pressable>
+            <View style={[s.gMutualBadge, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '44' }]}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
+              <Text style={[s.gMutualBadgeText, { color: colors.accent }]}>Mutual Connection</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={s.gActions}>
+            <SlideToExchange
+              colors={colors}
+              onComplete={() => { Analytics.exchangeContactTapped('detail'); onExchange(connection.id, connection.user.full_name); }}
+            />
           </View>
         )}
       </ScrollView>
@@ -1412,6 +1468,12 @@ function makeStyles(colors: any) {
     gBrandLetter: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     gBrandLetterText: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
     gActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
+    gMutualBadge: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 13, borderRadius: Radius.full, borderWidth: 1.5 },
+    gMutualBadgeText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+    slideTrack: { flex: 1, height: 52, borderRadius: 26, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    slideThumb: { position: 'absolute', top: SLIDE_PAD, width: SLIDE_THUMB, height: SLIDE_THUMB, borderRadius: SLIDE_THUMB / 2, alignItems: 'center', justifyContent: 'center' },
+    slideLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, letterSpacing: 0.2 },
+    slideSuccess: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     gWaChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.full, backgroundColor: '#25D366' },
     quickActionRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md, flexWrap: 'wrap' },
     quickActionPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radius.full, borderWidth: 1 },

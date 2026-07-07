@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, Pressable,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
+  View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +20,7 @@ export default function SignInScreen() {
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [suggestion, setSuggestion] = useState('');
 
   useEffect(() => {
     AsyncStorage.getItem('connect_last_email').then((saved) => {
@@ -28,12 +28,53 @@ export default function SignInScreen() {
     });
   }, []);
 
+  const DOMAIN_FIXES: Record<string, string> = {
+    'gamil.com': 'gmail.com', 'gnail.com': 'gmail.com', 'gmai.com': 'gmail.com',
+    'gmial.com': 'gmail.com', 'gmal.com': 'gmail.com', 'gmaill.com': 'gmail.com',
+    'yaho.com': 'yahoo.com', 'yahooo.com': 'yahoo.com',
+    'hotmai.com': 'hotmail.com', 'hotmial.com': 'hotmail.com',
+    'outlok.com': 'outlook.com', 'outllok.com': 'outlook.com',
+  };
+  const TLD_FIXES: Record<string, string> = {
+    con: 'com', cmo: 'com', ocm: 'com', coml: 'com', vom: 'com', cpm: 'com',
+    ner: 'net', og: 'org',
+  };
+
+  const validateEmail = (val: string): { error?: string; suggestion?: string } => {
+    // Must have exactly one @
+    const atCount = (val.match(/@/g) ?? []).length;
+    if (atCount === 0) return { error: 'Missing @ in email address.' };
+    if (atCount > 1) return { error: 'Email address can only have one @.' };
+
+    const [local, domain] = val.split('@');
+    if (!local) return { error: 'Missing username before @.' };
+    if (!domain || !domain.includes('.')) return { error: 'Missing domain after @.' };
+
+    const tld = domain.split('.').pop() ?? '';
+    if (tld.length < 2) return { error: 'Email domain looks incomplete.' };
+
+    // Known domain typos → suggest fix
+    if (DOMAIN_FIXES[domain]) return { suggestion: `${local}@${DOMAIN_FIXES[domain]}` };
+
+    // Known TLD typos → suggest fix
+    if (TLD_FIXES[tld]) return { suggestion: val.slice(0, -tld.length) + TLD_FIXES[tld] };
+
+    return {};
+  };
+
   const handleEmailOtp = async () => {
     setError('');
     setEmailError(false);
+    setSuggestion('');
     const trimmed = email.trim().toLowerCase();
-    if (!/\S+@\S+\.\S+/.test(trimmed)) {
-      setError('Please enter a valid email address.');
+    const { error: validationError, suggestion: fix } = validateEmail(trimmed);
+    if (validationError) {
+      setError(validationError);
+      setEmailError(true);
+      return;
+    }
+    if (fix) {
+      setSuggestion(fix);
       setEmailError(true);
       return;
     }
@@ -50,18 +91,19 @@ export default function SignInScreen() {
   };
 
   const s = makeStyles(colors);
-  const emailReady = /\S+@\S+\.\S+/.test(email.trim());
+  const trimmedEmail = email.trim().toLowerCase();
+  const emailReady = trimmedEmail.includes('@') && trimmedEmail.split('@').length === 2
+    && (trimmedEmail.split('@')[1] ?? '').includes('.')
+    && (trimmedEmail.split('@')[1].split('.').pop()?.length ?? 0) >= 2;
 
   return (
-    <KeyboardAvoidingView
-      style={[s.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={[s.screen, { backgroundColor: colors.background }]}>
       <Pressable style={[s.back, { marginTop: topInset + 8 }]} onPress={() => router.replace('/(auth)/welcome')}>
         <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
         <Text style={[s.backText, { color: colors.textSecondary }]}>Back</Text>
       </Pressable>
 
+      <View style={s.root}>
       <View style={s.content}>
         <Text style={[s.heading, { color: colors.text }]}>Welcome to{'\n'}Connect</Text>
         <Text style={[s.sub, { color: colors.textSecondary }]}>
@@ -80,7 +122,7 @@ export default function SignInScreen() {
             autoComplete="email"
             textContentType="emailAddress"
             value={email}
-            onChangeText={(v) => { setEmail(v); setError(''); setEmailError(false); }}
+            onChangeText={(v) => { setEmail(v); setError(''); setEmailError(false); setSuggestion(''); }}
             autoFocus
           />
         </View>
@@ -96,20 +138,27 @@ export default function SignInScreen() {
           }
         </Pressable>
 
-        {!!error && <Text style={s.error}>{error}</Text>}
+        {!!suggestion && (
+          <Pressable onPress={() => { setEmail(suggestion); setSuggestion(''); setEmailError(false); }}>
+            <Text style={s.error}>
+              Did you mean{' '}
+              <Text style={s.suggestionLink}>{suggestion}</Text>?
+            </Text>
+          </Pressable>
+        )}
+        {!!error && !suggestion && <Text style={s.error}>{error}</Text>}
 
-        <Text style={[s.terms, { color: colors.textMuted }]}>
-          By continuing, you agree to Connect's Terms of Service and Privacy Policy.
-        </Text>
       </View>
-    </KeyboardAvoidingView>
+      </View>
+    </View>
   );
 }
 
 function makeStyles(colors: any) {
   return StyleSheet.create({
+    screen: { flex: 1 },
     root: { flex: 1, paddingHorizontal: Spacing.lg },
-    back: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.xl },
+    back: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.xl, paddingHorizontal: Spacing.lg },
     backText: { fontSize: FontSize.md },
     content: { flex: 1 },
     heading: { fontSize: FontSize.xxxl, fontWeight: FontWeight.bold, lineHeight: 40, marginBottom: Spacing.sm },
@@ -126,6 +175,6 @@ function makeStyles(colors: any) {
     },
     btnText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
     error: { color: '#FF4444', fontSize: FontSize.sm, textAlign: 'center', marginTop: Spacing.sm, marginBottom: Spacing.sm },
-    terms: { fontSize: FontSize.xs, lineHeight: 18, textAlign: 'center', paddingHorizontal: Spacing.lg, marginTop: 'auto', paddingBottom: Spacing.xl },
+    suggestionLink: { fontWeight: FontWeight.semibold, textDecorationLine: 'underline' },
   });
 }

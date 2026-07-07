@@ -139,7 +139,6 @@ export default function AppLayout() {
 
 const styles = StyleSheet.create({
   tabItem: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,

@@ -327,7 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = useCallback(async (userId: string) => {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, email, phone, designation, company_name, city, country, designup_user_id, instagram_handle, website_url, linkedin_url, address')
+      .select('id, first_name, last_name, email, phone, designation, company_name, city, country, designup_user_id, instagram_handle, website_url, linkedin_url, address, profile_image_url')
       .eq('id', userId)
       .single();
 
@@ -351,6 +351,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         website_url: profile.website_url ?? '',
         linkedin_url: profile.linkedin_url ?? '',
         address: profile.address ?? '',
+        profile_image_url: profile.profile_image_url ?? undefined,
         profile_complete: !!(profile.first_name && profile.designation),
       });
       Analytics.identify(profile.id, {
@@ -484,6 +485,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (fields.website_url !== undefined) dbFields.website_url = fields.website_url;
       if (fields.linkedin_url !== undefined) dbFields.linkedin_url = fields.linkedin_url;
       if (fields.address !== undefined) dbFields.address = fields.address;
+      if (fields.profile_image_url !== undefined) dbFields.profile_image_url = fields.profile_image_url;
       if (Object.keys(dbFields).length > 1) {
         supabase.from('profiles').upsert(dbFields, { onConflict: 'id' }).then(({ error }) => {
           if (error) console.error('[updateUser] upsert failed:', error.message, dbFields);

@@ -7,7 +7,9 @@ async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function uploadOnce(localUri: string, folder: string): Promise<string | null> {
+// public_id sets the full Cloudinary path (folder + filename) explicitly,
+// which is more reliable than the 'folder' param that can be overridden by preset settings.
+async function uploadOnce(localUri: string, publicId: string): Promise<string | null> {
   const formData = new FormData();
 
   if (localUri.startsWith('data:')) {
@@ -24,7 +26,7 @@ async function uploadOnce(localUri: string, folder: string): Promise<string | nu
   }
 
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  formData.append('folder', folder);
+  formData.append('public_id', publicId);
 
   const res = await fetch(BASE_URL, { method: 'POST', body: formData });
   if (!res.ok) return null;
@@ -33,10 +35,10 @@ async function uploadOnce(localUri: string, folder: string): Promise<string | nu
 }
 
 // Retries up to 3 times with exponential backoff: 0s → 2s → 4s
-async function uploadWithRetry(localUri: string, folder: string): Promise<string | null> {
+async function uploadWithRetry(localUri: string, publicId: string): Promise<string | null> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const url = await uploadOnce(localUri, folder);
+      const url = await uploadOnce(localUri, publicId);
       if (url) return url;
     } catch {
       // network error — fall through to retry
@@ -47,18 +49,18 @@ async function uploadWithRetry(localUri: string, folder: string): Promise<string
 }
 
 // Upload front + back card images in parallel.
-// Returns the contact with cloud URLs substituted in, or the original if upload failed.
+// Folder structure in Cloudinary: connect/cards/{id}_front, connect/cards/{id}_back
 export async function uploadCardImages(
   contact: CardContact,
   updateContact: (c: CardContact) => void,
 ): Promise<void> {
   if (!CLOUDINARY_UPLOAD_PRESET || CLOUDINARY_UPLOAD_PRESET === 'YOUR_UPLOAD_PRESET') return;
 
-  const folder = `connect/cards/${contact.id}`;
+  const base = `connect/cards/${contact.id}`;
 
   const [frontUrl, backUrl] = await Promise.all([
-    contact.card_image_uri ? uploadWithRetry(contact.card_image_uri, folder) : Promise.resolve(null),
-    contact.card_image_uri_back ? uploadWithRetry(contact.card_image_uri_back, folder) : Promise.resolve(null),
+    contact.card_image_uri ? uploadWithRetry(contact.card_image_uri, `${base}_front`) : Promise.resolve(null),
+    contact.card_image_uri_back ? uploadWithRetry(contact.card_image_uri_back, `${base}_back`) : Promise.resolve(null),
   ]);
 
   // Only update if at least one image made it to Cloudinary
