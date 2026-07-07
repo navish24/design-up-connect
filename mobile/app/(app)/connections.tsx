@@ -557,6 +557,8 @@ const CONTACT_LABELS_SET = new Set(['Phone', 'WhatsApp', 'Email']);
 const ONLINE_LABELS_SET = new Set(['Website', 'Instagram', 'LinkedIn', 'Twitter/X', 'Facebook', 'Behance', 'YouTube', 'Social Handle']);
 const LOCATION_LABELS_SET = new Set(['Address']);
 
+const QUICK_ACTION_USER = 'niveditasingh0124@gmail.com';
+
 function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, notes, onAddNote }: {
   contact: CardContact;
   colors: any;
@@ -568,8 +570,16 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
 }) {
   const s = makeStyles(colors);
   const headerPaddingTop = useHeaderPaddingTop();
+  const { user } = useAuth();
   const [showNotes, setShowNotes] = useState(false);
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
+  const [callSheetPhone, setCallSheetPhone] = useState<string | null>(null);
+
+  const isQuickActionUser = user?.email === QUICK_ACTION_USER;
+  const phoneField = contact.fields.find((f) => f.label === 'Phone');
+  const waField = contact.fields.find((f) => f.label === 'WhatsApp') ?? phoneField;
+  const emailField = contact.fields.find((f) => f.label === 'Email');
+  const hasQuickActions = isQuickActionUser && (waField || phoneField || emailField);
 
   const company = contact.fields.find((f) => f.label === 'Company')?.value;
   const name = getCardDisplayName(contact.fields);
@@ -640,6 +650,32 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
           )}
         </View>
 
+        {hasQuickActions && (
+          <View style={s.quickActionRow}>
+            {waField && (
+              <Pressable style={[s.quickActionPill, { backgroundColor: '#25D366' + '18', borderColor: '#25D366' + '44' }]}
+                onPress={() => openWhatsApp(waField.value)}>
+                <Ionicons name="logo-whatsapp" size={15} color="#25D366" />
+                <Text style={[s.quickActionText, { color: '#25D366' }]}>WhatsApp</Text>
+              </Pressable>
+            )}
+            {phoneField && (
+              <Pressable style={[s.quickActionPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+                onPress={() => setCallSheetPhone(phoneField.value)}>
+                <Ionicons name="call-outline" size={15} color={colors.text} />
+                <Text style={[s.quickActionText, { color: colors.text }]}>Call</Text>
+              </Pressable>
+            )}
+            {emailField && (
+              <Pressable style={[s.quickActionPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+                onPress={() => openExternal(`mailto:${emailField.value}`)}>
+                <Ionicons name="mail-outline" size={15} color={colors.text} />
+                <Text style={[s.quickActionText, { color: colors.text }]}>Email</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
         {contactFields.length > 0 && (
           <GroupedSection label="CONTACT" colors={colors} s={s}>
             {contactFields.map((f, i) => (
@@ -708,9 +744,37 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
         </View>
 
         <Text style={[s.scannedAt, { color: colors.textMuted }]}>
-          Scanned {new Date(contact.scanned_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+          Scanned {new Date(contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
         </Text>
       </ScrollView>
+
+      {callSheetPhone && (
+        <Modal visible transparent animationType="slide">
+          <Pressable style={s.sheetOverlay} onPress={() => setCallSheetPhone(null)}>
+            <Pressable style={[s.callSheet, { backgroundColor: colors.surface }]} onPress={() => {}}>
+              <Text style={[s.callSheetNumber, { color: colors.textMuted }]}>{callSheetPhone}</Text>
+              <Pressable style={s.callSheetOption} onPress={() => {
+                openExternal(`tel:${callSheetPhone.replace(/[\s\-()]/g, '')}`);
+                setCallSheetPhone(null);
+              }}>
+                <Ionicons name="call-outline" size={20} color={colors.text} />
+                <Text style={[s.callSheetOptionText, { color: colors.text }]}>Call</Text>
+              </Pressable>
+              <View style={[s.gDivider, { backgroundColor: colors.border, marginLeft: 0 }]} />
+              <Pressable style={s.callSheetOption} onPress={() => {
+                Clipboard.setStringAsync(callSheetPhone);
+                setCallSheetPhone(null);
+              }}>
+                <Ionicons name="copy-outline" size={20} color={colors.text} />
+                <Text style={[s.callSheetOptionText, { color: colors.text }]}>Copy number</Text>
+              </Pressable>
+              <Pressable style={[s.callSheetCancel, { borderTopColor: colors.border }]} onPress={() => setCallSheetPhone(null)}>
+                <Text style={[s.callSheetCancelText, { color: colors.textMuted }]}>Cancel</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
 
       {expandedUri && (
         <Modal visible transparent animationType="fade">
@@ -1297,6 +1361,16 @@ function makeStyles(colors: any) {
     gBrandLetterText: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
     gActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
     gWaChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.full, backgroundColor: '#25D366' },
+    quickActionRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md, flexWrap: 'wrap' },
+    quickActionPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radius.full, borderWidth: 1 },
+    quickActionText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },
+    sheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+    callSheet: { borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 8, paddingBottom: 32 },
+    callSheetNumber: { fontSize: FontSize.xs, textAlign: 'center', paddingVertical: 12, letterSpacing: 0.3 },
+    callSheetOption: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: Spacing.xl, paddingVertical: 16 },
+    callSheetOptionText: { fontSize: FontSize.md, fontWeight: FontWeight.medium },
+    callSheetCancel: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8, paddingVertical: 16, alignItems: 'center' },
+    callSheetCancelText: { fontSize: FontSize.sm },
     gWaChipText: { color: '#FFF', fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
     gExchangePill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: Radius.full, borderWidth: 1.5 },
     gExchangePillText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
