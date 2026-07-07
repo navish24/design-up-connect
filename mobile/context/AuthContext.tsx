@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Analytics } from '../lib/analytics';
 import type { User, CardContact, ConnectionType, ConnectionScope } from '../types';
@@ -233,8 +234,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const remoteById: Record<string, any> = {};
     for (const r of finalRows) remoteById[r.id] = r;
 
-    if (local.length === 0) {
-      // Fresh session / new device — local has nothing so trust Supabase completely
+    // On web (PWA + browser): always trust Supabase — reliable network, no offline scanning,
+    // and deletions on any context must reflect immediately across all web sessions.
+    // On native with local data: local is canonical (handles offline scanning + delete fix).
+    if (Platform.OS === 'web' || local.length === 0) {
       const fromRemote = finalRows.map((r: any) => ({
         id: r.id,
         source: 'card_scan' as const,
@@ -246,11 +249,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tags: r.tags ?? [],
         connect_user_id: r.connect_user_id ?? null,
       })).sort((a: any, b: any) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
-      if (fromRemote.length > 0) setCardContacts(fromRemote);
+      if (fromRemote.length > 0 || local.length === 0) setCardContacts(fromRemote);
       return;
     }
 
-    // Local has items — it is canonical. Supabase only enriches image URLs.
+    // Native with local items — local is canonical. Supabase only enriches image URLs.
     // Items in Supabase but NOT in local were deleted locally — don't re-add them.
     const merged = local
       .map((c) => {
