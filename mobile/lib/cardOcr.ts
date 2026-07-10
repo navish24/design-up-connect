@@ -391,6 +391,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       !PIN_RE.test(line) &&
       /^[A-Za-z]/.test(line) &&
       line.length <= 100 &&
+      !line.includes('_') &&
       COMPANY_KEYWORD_RE.test(line) &&
       !ADDRESS_STRUCTURAL_RE.test(line)
     ) {
