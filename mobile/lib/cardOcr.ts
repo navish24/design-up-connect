@@ -290,10 +290,13 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       if (/^\+\d{1,4}$/.test(line)) return false;
       // Short bare digit sequence (e.g. "6718") — phone fragment left after PHONE_RE consumed the rest
       if (/^\d{1,6}$/.test(line)) return false;
+      // Short ordinal fragments (e.g. "2nd", "3rd", "1st") — floor/level labels from address context
+      if (/^\d{1,2}(st|nd|rd|th)$/i.test(line)) return false;
       // Pure label remnant after phone/email strip (e.g. "Gous Arab:", "E-Mail:", "M: | E:").
       // Matches any line that ends with ":" with no real value — including pipe-separated
       // label pairs like "M: | E:" left after phone/email extraction.
-      if (/^[\w\s.\-/:|]{2,40}:\s*$/.test(line)) return false;
+      // Also catches "Call US: /" where a trailing "/" follows the colon.
+      if (/^[\w\s.\-/:|]{2,40}:\s*\/*\s*$/.test(line)) return false;
       // Trailing "@" with no handle (e.g. "visit us @" after the URL was extracted from
       // the next OCR line) — prose use of "@" as "at", not a social handle or email.
       if (/^[\w\s.''\-,]{2,40}@\s*$/.test(line)) return false;
@@ -647,7 +650,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   // Personal-name shape: "First Last", "First M Last", "First M. Last" — don't absorb into address
   const PERSON_NAME_SHAPE_RE = /^[A-Z][a-z]{2,}(?:\s+[A-Z]\.?|\s+[A-Z][a-z]{2,}){1,2}$/;
   const looksLikeAddressFragment = (text: string) =>
-    text.length >= 6 && text.length <= 60 && /^[A-Za-z0-9\s,.\-/]+$/.test(text) && !PERSON_NAME_SHAPE_RE.test(text);
+    text.length >= 6 && text.length <= 60 &&
+    /^[A-Za-z0-9\s,.\-/]+$/.test(text) &&
+    !PERSON_NAME_SHAPE_RE.test(text) &&
+    !COMPANY_KEYWORD_RE.test(text);
 
   for (const { idx, text } of otherEntries) {
     if (looksLikeAddressFragment(text) && (addressIdx.has(idx - 1) || addressIdx.has(idx + 1))) {
