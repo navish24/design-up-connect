@@ -781,19 +781,43 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
   }
 
-  // Last resort: if still no name, promote the first Other field that looks like
-  // a personal name (catches the case where the name wasn't adjacent to the address).
+  // Last resort: if still no name, promote an Other field that looks like a personal name.
+  // Priority: an Other whose text matches the email local-part (e.g. "MENKA" from
+  // "menka@…") — that's a direct clue the OCR returned the person's name in all-caps.
+  // Fallback: first Other that matches the mixed-case "First [Last]" shape.
   if (!nameAssigned) {
-    const otherIdx = fields.findIndex(
-      (f) =>
-        f.label === 'Other' &&
-        /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){0,2}$/.test(f.value) &&
-        !ADDRESS_KEYWORD_RE.test(f.value) &&
-        !DESIGNATION_RE.test(f.value) &&
-        !COMPANY_KEYWORD_RE.test(f.value)
-    );
+    const emailFieldForName = fields.find((f) => f.label === 'Email');
+    const emailLocal = emailFieldForName?.value?.split('@')[0]?.toLowerCase() ?? '';
+    const GENERIC_MAILBOX =
+      /^(info|sales|contact|admin|support|hello|help|enquiry|enquiries|office|mail|hr|jobs|noreply|no-reply|team|accounts|billing|marketing|pr|media)$/i;
+    const useEmailHint = emailLocal.length >= 3 && !GENERIC_MAILBOX.test(emailLocal);
+    let otherIdx = useEmailHint
+      ? fields.findIndex(
+          (f) =>
+            f.label === 'Other' &&
+            f.value.toLowerCase() === emailLocal &&
+            !ADDRESS_KEYWORD_RE.test(f.value) &&
+            !DESIGNATION_RE.test(f.value) &&
+            !COMPANY_KEYWORD_RE.test(f.value),
+        )
+      : -1;
+    if (otherIdx === -1) {
+      otherIdx = fields.findIndex(
+        (f) =>
+          f.label === 'Other' &&
+          /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){0,2}$/.test(f.value) &&
+          !ADDRESS_KEYWORD_RE.test(f.value) &&
+          !DESIGNATION_RE.test(f.value) &&
+          !COMPANY_KEYWORD_RE.test(f.value),
+      );
+    }
     if (otherIdx !== -1) {
-      const nameValue = fields[otherIdx].value;
+      const raw = fields[otherIdx].value;
+      // Title-case all-caps values found via email-local match (e.g. "MENKA" → "Menka")
+      const nameValue =
+        raw === raw.toUpperCase()
+          ? raw.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+          : raw;
       fields.splice(otherIdx, 1);
       fields.unshift({ label: 'Name', value: nameValue });
     }
