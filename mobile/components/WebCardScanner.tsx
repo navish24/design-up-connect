@@ -31,6 +31,8 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   const stableStartRef = useRef<number | null>(null);
   const [permState, setPermState] = useState<PermState>('pending');
   const [stabilityPct, setStabilityPct] = useState(0);
+  const [showRotateHint, setShowRotateHint] = useState(false);
+  const rotateHintTimerRef = useRef<any>(null);
 
   useImperativeHandle(ref, () => ({ capture }));
 
@@ -39,6 +41,18 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
     startCamera();
     return () => stopStream();
   }, [active]);
+
+  // Show a rotation hint after 5s of no card detected — helps users who hold
+  // their card landscape (wide) in a portrait viewport and miss content at the edges.
+  useEffect(() => {
+    clearTimeout(rotateHintTimerRef.current);
+    if (permState === 'granted' && stabilityPct === 0 && active && !errorHint) {
+      rotateHintTimerRef.current = setTimeout(() => setShowRotateHint(true), 5000);
+    } else {
+      if (stabilityPct > 0) setShowRotateHint(false);
+    }
+    return () => clearTimeout(rotateHintTimerRef.current);
+  }, [permState, stabilityPct, active, errorHint]);
 
   // When torch toggles: pause stability loop for 2s while camera exposure settles
   useEffect(() => {
@@ -345,32 +359,48 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   return (
     <View ref={containerRef} style={s.camera}>
       <View style={s.overlay} pointerEvents="none">
-        {/* Landscape corner-bracket frame — no border line, brackets only */}
-        <View style={s.bracketFrame}>
-          <View style={[s.corner, s.cornerTL, { borderColor: colors.accent }]} />
-          <View style={[s.corner, s.cornerTR, { borderColor: colors.accent }]} />
-          <View style={[s.corner, s.cornerBL, { borderColor: colors.accent }]} />
-          <View style={[s.corner, s.cornerBR, { borderColor: colors.accent }]} />
-          {stabilityPct > 0 && (
-            <View style={[s.progressBar, { backgroundColor: colors.accent, width: `${stabilityPct}%` as any }]} />
-          )}
+        {/* Top dark band */}
+        <View style={s.dimBand} />
+
+        {/* Middle row: dark sides flanking the clear card zone */}
+        <View style={s.dimRow}>
+          <View style={s.dimSide} />
+          {/* Clear bracket zone — live camera shows through here */}
+          <View style={s.bracketFrame}>
+            <View style={[s.corner, s.cornerTL, { borderColor: colors.accent }]} />
+            <View style={[s.corner, s.cornerTR, { borderColor: colors.accent }]} />
+            <View style={[s.corner, s.cornerBL, { borderColor: colors.accent }]} />
+            <View style={[s.corner, s.cornerBR, { borderColor: colors.accent }]} />
+            {stabilityPct > 0 && (
+              <View style={[s.progressBar, { backgroundColor: colors.accent, width: `${stabilityPct}%` as any }]} />
+            )}
+          </View>
+          <View style={s.dimSide} />
         </View>
-        {/* Hint pill below frame */}
-        <View style={[s.hintPill, errorHint ? s.hintPillError : null]}>
-          {errorHint ? (
-            <View style={s.hintErrorRow}>
-              <Ionicons name="warning-outline" size={14} color="#FFF" />
-              <Text style={s.hint}>{errorHint}</Text>
-            </View>
-          ) : (
-            <Text style={s.hint}>
-              {permState === 'pending'
-                ? 'Starting camera…'
-                : stabilityPct > 0
-                  ? `Hold still… ${stabilityPct}%`
-                  : 'Hold the card in the frame — captures automatically'}
-            </Text>
-          )}
+
+        {/* Bottom dark band with hint pill */}
+        <View style={s.dimBottomBand}>
+          <View style={[s.hintPill, errorHint ? s.hintPillError : null]}>
+            {errorHint ? (
+              <View style={s.hintErrorRow}>
+                <Ionicons name="warning-outline" size={14} color="#FFF" />
+                <Text style={s.hint}>{errorHint}</Text>
+              </View>
+            ) : showRotateHint && stabilityPct === 0 ? (
+              <View style={s.hintErrorRow}>
+                <Ionicons name="phone-portrait-outline" size={14} color="#FFF" />
+                <Text style={s.hint}>No card? Try rotating it to portrait (vertical)</Text>
+              </View>
+            ) : (
+              <Text style={s.hint}>
+                {permState === 'pending'
+                  ? 'Starting camera…'
+                  : stabilityPct > 0
+                    ? `Hold still… ${stabilityPct}%`
+                    : 'Hold card flat in the frame — auto-captures'}
+              </Text>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -411,9 +441,28 @@ const s = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
+    flexDirection: 'column' as any,
+  },
+  // Dark bands above/below and on the sides of the card zone
+  dimBand: {
+    flex: 1,
+    width: '100%' as any,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+  },
+  dimRow: {
+    flexDirection: 'row' as any,
+    height: 188,
+  },
+  dimSide: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+  },
+  dimBottomBand: {
+    flex: 1,
+    width: '100%' as any,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    alignItems: 'center' as any,
+    paddingTop: 18,
   },
   // Landscape visiting-card frame (brackets only, no border line)
   bracketFrame: {
