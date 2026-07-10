@@ -29,6 +29,8 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   const stabilityTimerRef = useRef<any>(null);
   const lastSampleRef = useRef<Uint8ClampedArray | null>(null);
   const stableStartRef = useRef<number | null>(null);
+  const edgeWarnShownRef = useRef(false);   // true once per stable session after warning shown
+  const edgePauseUntilRef = useRef(0);     // timestamp until which stability countdown is paused
   const [permState, setPermState] = useState<PermState>('pending');
   const [stabilityPct, setStabilityPct] = useState(0);
   const [showRotateHint, setShowRotateHint] = useState(false);
@@ -96,6 +98,52 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
     videoRef.current = null;
   };
 
+  // Detects whether the card content extends beyond the left or right edge of the
+  // bracket zone — i.e. the card is wider than the bracket and will be cropped.
+  // Runs a tiny 80×50 canvas of the bracket+padding area and checks if card pixels
+  // are found inside the padding columns (which should only contain background).
+  const isCardEdgeCropped = (video: any): boolean => {
+    const g = globalThis as any;
+    const container = containerRef.current as HTMLElement;
+    if (!container || !video || video.readyState < 2) return false;
+    const cw = container.clientWidth, ch = container.clientHeight;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh || !cw || !ch) return false;
+    const BRAK_W = 300, BRAK_H = 188, PAD = 40;
+    const videoAspect = vw / vh, containerAspect = cw / ch;
+    let displayW: number, displayH: number, overflowX: number, overflowY: number;
+    if (videoAspect > containerAspect) {
+      displayH = ch; displayW = ch * videoAspect; overflowX = (displayW - cw) / 2; overflowY = 0;
+    } else {
+      displayW = cw; displayH = cw / videoAspect; overflowX = 0; overflowY = (displayH - ch) / 2;
+    }
+    const sx = Math.max(0, ((cw - BRAK_W) / 2 - PAD + overflowX) * (vw / displayW));
+    const sy = Math.max(0, ((ch - BRAK_H) / 2 - PAD + overflowY) * (vh / displayH));
+    const sw = Math.min(vw - sx, (BRAK_W + PAD * 2) * (vw / displayW));
+    const sh = Math.min(vh - sy, (BRAK_H + PAD * 2) * (vh / displayH));
+    const CW = 80, CH = 50;
+    const canvas = g.document.createElement('canvas');
+    canvas.width = CW; canvas.height = CH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    try { ctx.drawImage(video, sx, sy, sw, sh, 0, 0, CW, CH); } catch { return false; }
+    const pixels = ctx.getImageData(0, 0, CW, CH).data;
+    const px = (x: number, y: number) => { const i = (y * CW + x) * 4; return [pixels[i], pixels[i+1], pixels[i+2]]; };
+    // Background from each corner (4×4 box)
+    const avgBox = (ox: number, oy: number, dx: number, dy: number) => {
+      const pts = Array.from({ length: 4 }, (_, r) => Array.from({ length: 4 }, (_, c) => px(ox + dx*c, oy + dy*r))).flat();
+      return [0,1,2].map(ci => pts.reduce((s,p) => s + p[ci], 0) / pts.length);
+    };
+    const bg = [avgBox(0,0,1,1), avgBox(CW-1,0,-1,1), avgBox(0,CH-1,1,-1), avgBox(CW-1,CH-1,-1,-1)];
+    const isBg = (col: number[]) => bg.some(([cr,cg,cb]) => (Math.abs(col[0]-cr)+Math.abs(col[1]-cg)+Math.abs(col[2]-cb))/3 < 42);
+    const colHasCard = (x: number) => { for (let y = 3; y < CH-3; y += 3) if (!isBg(px(x,y))) return true; return false; };
+    // PAD occupies PAD/(BRAK_W+2*PAD) fraction of canvas width
+    const padCols = Math.round(CW * PAD / (BRAK_W + PAD * 2)); // ≈ 8 columns
+    let leftCard = 0, rightCard = 0;
+    for (let x = 0; x < padCols; x++) { if (colHasCard(x)) leftCard++; if (colHasCard(CW-1-x)) rightCard++; }
+    return leftCard >= 3 || rightCard >= 3; // card content in padding zone = cropped
+  };
+
   const checkStabilityLoop = () => {
     const g = globalThis as any;
     if (!wantCameraRef.current || !autoCapture) return;
@@ -139,17 +187,33 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
       const mad = diff / (data.length / 4) / 3;
 
       if (mad < MAD_THRESHOLD) {
-        if (!stableStartRef.current) stableStartRef.current = Date.now();
-        const elapsed = Date.now() - stableStartRef.current;
-        const pct = Math.min(100, Math.round((elapsed / 1500) * 100));
-        setStabilityPct(pct);
-        if (elapsed >= 1500) {
-          stableStartRef.current = null; lastSampleRef.current = null; setStabilityPct(0);
-          capture();
-          return; // capture navigates away, stop loop
+        if (!stableStartRef.current) {
+          // First stable frame — check if card is wider than bracket before counting down.
+          if (!edgeWarnShownRef.current && Date.now() >= edgePauseUntilRef.current) {
+            if (isCardEdgeCropped(video)) {
+              edgeWarnShownRef.current = true;
+              setShowRotateHint(true);
+              edgePauseUntilRef.current = Date.now() + 3000; // 3s pause before countdown starts
+            }
+          }
+          if (Date.now() >= edgePauseUntilRef.current) {
+            stableStartRef.current = Date.now();
+          }
+        }
+        if (stableStartRef.current) {
+          const elapsed = Date.now() - stableStartRef.current;
+          const pct = Math.min(100, Math.round((elapsed / 1500) * 100));
+          setStabilityPct(pct);
+          if (elapsed >= 1500) {
+            stableStartRef.current = null; lastSampleRef.current = null; setStabilityPct(0);
+            capture();
+            return; // capture navigates away, stop loop
+          }
         }
       } else {
         stableStartRef.current = null; setStabilityPct(0);
+        edgeWarnShownRef.current = false; // card moved — allow re-detection
+        setShowRotateHint(false);
       }
     }
 
@@ -386,10 +450,14 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
                 <Ionicons name="warning-outline" size={14} color="#FFF" />
                 <Text style={s.hint}>{errorHint}</Text>
               </View>
-            ) : showRotateHint && stabilityPct === 0 ? (
+            ) : showRotateHint ? (
               <View style={s.hintErrorRow}>
                 <Ionicons name="phone-portrait-outline" size={14} color="#FFF" />
-                <Text style={s.hint}>No card? Try rotating it to portrait (vertical)</Text>
+                <Text style={s.hint}>
+                  {stabilityPct > 0
+                    ? `Card edges cut off — rotate to portrait for full capture (${stabilityPct}%)`
+                    : 'No card? Try rotating it to portrait (vertical)'}
+                </Text>
               </View>
             ) : (
               <Text style={s.hint}>
