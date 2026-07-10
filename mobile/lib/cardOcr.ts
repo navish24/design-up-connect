@@ -14,11 +14,11 @@ const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 
 // URLs — https:// (with or without www) or bare www. prefix
 const EXPLICIT_URL_RE =
-  /(?:https?:\/\/(?:www\.)?|www\.)[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+\.(?:com|in|co|net|org|io|design|studio|agency|co\.in|com\.au)[^\s]*/gi;
+  /(?:https?:\/\/(?:www\.)?|www\.)[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+\.(?:com|in|co|net|org|io|art|design|studio|agency|co\.in|com\.au)[^\s]*/gi;
 
 // Bare domains that look like a website (e.g. "studiomehta.com")
 const BARE_DOMAIN_RE =
-  /\b[a-zA-Z0-9\-]{2,}\.(?:com|in|co|net|org|io|design|studio|agency)\b(?:\/\S*)*/g;
+  /\b[a-zA-Z0-9\-]{2,}\.(?:com|in|co|net|org|io|art|design|studio|agency)\b(?:\/\S*)*/g;
 
 const LINKEDIN_RE = /linkedin\.com\/in\/[\w\-]+/gi;
 const INSTAGRAM_RE =
@@ -30,7 +30,7 @@ const YOUTUBE_RE = /youtube\.com\/(?:c\/|channel\/|@)[\w\-]+/gi;
 
 // Address cues
 const ADDRESS_KEYWORD_RE =
-  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
+  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste|bldg|taluka|taluk|dist)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
 const PIN_RE = /\b[1-9]\d{5}\b/;
 
 // Designation keywords — "art" removed (too generic: matches "art collective" brand taglines)
@@ -297,6 +297,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // label pairs like "M: | E:" left after phone/email extraction.
       // Also catches "Call US: /" where a trailing "/" follows the colon.
       if (/^[\w\s.\-/:|]{2,40}:\s*\/*\s*$/.test(line)) return false;
+      // Pipe/punctuation remnant with no letters (e.g. "| (+91) ," left after phone/email
+      // extraction strips the actionable content from a separator line).
+      if (!/[a-zA-Z]/.test(line) && /^[\d\s+()|\-,\/]+$/.test(line)) return false;
       // Trailing "@" with no handle (e.g. "visit us @" after the URL was extracted from
       // the next OCR line) — prose use of "@" as "at", not a social handle or email.
       if (/^[\w\s.''\-,]{2,40}@\s*$/.test(line)) return false;
@@ -503,13 +506,15 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     {
       const CREDENTIAL_SUFFIX_RE = /\s*\([A-Za-z][A-Za-z.\s]{1,15}\)\s*$/;
       const lineForName = line.replace(CREDENTIAL_SUFFIX_RE, '').trim();
+      const ADDR_ABBREV_RE = /^(rd|st|ave|blvd|dr|ln|ct|pl|extn?)$/i;
       if (
         !nameAssigned &&
         !lineIsAllCaps &&
         /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName) &&
         lineForName.split(' ').length >= 2 &&
         lineForName.split(' ').length <= 6 &&
-        lineForName.split(/\s+/).every((w) => /^[A-Z]/.test(w))
+        lineForName.split(/\s+/).every((w) => /^[A-Z]/.test(w)) &&
+        !lineForName.split(/\s+/).some((w) => ADDR_ABBREV_RE.test(w))
       ) {
         fields.unshift({ label: 'Name', value: lineForName });
         nameAssigned = true;
@@ -535,6 +540,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
           /^[A-Za-z]/.test(text) &&
           !ADDRESS_KEYWORD_RE.test(text) &&
           !DESIGNATION_RE.test(text) &&
+          // Don't absorb a line whose predecessor is a designation (e.g. "Business Development"
+          // after "Associate Director-" is a role continuation, not a company name prefix).
+          !designationIndices.includes(idx - 1) &&
           text.split(/\s+/).filter(Boolean).length >= 1 &&
           text.split(/\s+/).filter(Boolean).length <= 3
       );
@@ -558,16 +566,21 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
           ) {
             const addrStr = [...addressIdx].sort((a, b) => a - b).map((j) => remaining[j]).join(', ');
             // Check if the address string starts with what looks like a person's name
-            // ("Rahul Kumar, 45 MG Road") — but exclude matches where the first word is
-            // itself an address keyword ("Near Trezure Casa," or "Building No. C-2,")
-            // which would be a false-positive triggering an incorrect Name→Company merge.
-            const addrFirstWord = addrStr.split(/[\s,]+/)[0] ?? '';
+            // ("Rahul Kumar, 45 MG Road") — but exclude if ANY word in the matched
+            // segment is itself an address keyword (e.g. "Near Trezure Casa," triggers on
+            // "Near"; "Chamunda Complex, Kasheli," triggers on "Complex"). Without this
+            // guard, place names with structural words merge the real person name into Company.
+            const addrNameMatch = addrStr.match(/^([A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2})\s*,/);
+            const addrNameHasAddrWord = addrNameMatch
+              ? addrNameMatch[1].split(/\s+/).some((w) => ADDRESS_KEYWORD_RE.test(w))
+              : false;
             const hasAltName =
-              (/^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}\s*,/.test(addrStr) && !ADDRESS_KEYWORD_RE.test(addrFirstWord)) ||
-              otherEntries.some(({ text }) =>
+              (addrNameMatch !== null && !addrNameHasAddrWord) ||
+              otherEntries.some(({ idx: oIdx, text }) =>
                 /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}$/.test(text) &&
                 !COMPANY_KEYWORD_RE.test(text) &&
-                !DESIGNATION_RE.test(text)
+                !DESIGNATION_RE.test(text) &&
+                !addressIdx.has(oIdx - 1) && !addressIdx.has(oIdx + 1)
               );
             if (hasAltName) {
               const nameFieldIdx = fields.indexOf(nameField);
@@ -677,7 +690,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     const insertAfter = fields.findIndex((f) => f.label === 'Company' || f.label === 'Name');
     const insertAt = insertAfter === -1 ? 0 : insertAfter + 1;
     for (const d of designationLines) {
-      fields.splice(insertAt, 0, { label: 'Designation', value: d });
+      // Strip trailing hyphen/dash that results from OCR splitting "Director-Business Development"
+      // across two lines — the continuation is handled by fragComp or ignored, not the designation.
+      const cleaned = d.replace(/[-–—\s]+$/, '').trim();
+      fields.splice(insertAt, 0, { label: 'Designation', value: cleaned });
     }
   }
 
