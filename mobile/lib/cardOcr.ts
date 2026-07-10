@@ -35,7 +35,7 @@ const PIN_RE = /\b[1-9]\d{5}\b/;
 
 // Designation keywords — "art" removed (too generic: matches "art collective" brand taglines)
 const DESIGNATION_RE =
-  /\b(founder|co-founder|ceo|cto|coo|cmo|cso|director|manager|architect|designer|engineer|consultant|associate|principal|partner|head|lead|senior|junior|intern|president|vice|vp|md|gm|dgm|cgm|officer|executive|strategist|illustrator|creative|senator|representative|minister|secretary|governor|attorney|commissioner|councillor|counsel|ambassador|deputy|spokesperson|chairman|chairperson|trustee|parliamentarian)\b/i;
+  /\b(founder|co-founder|ceo|cto|coo|cmo|cso|director|directed|manager|architect|designer|engineer|consultant|associate|principal|partner|head|lead|senior|junior|intern|president|vice|vp|md|gm|dgm|cgm|officer|executive|strategist|illustrator|creative|senator|representative|minister|secretary|governor|attorney|commissioner|councillor|counsel|ambassador|deputy|spokesperson|chairman|chairperson|trustee|parliamentarian)\b/i;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -58,7 +58,9 @@ const fixOcrArtifacts = (text: string): string =>
     // "domain. in" → "domain.in"  (space between dot and TLD, e.g. "navinarchitects. in")
     .replace(/\b([a-z][a-z0-9\-]+\.)\s+(in|com|co|net|org|io)\b/g, '$1$2')
     // "user.name @domain.com" → "user.name@domain.com"  (space before @)
-    .replace(/([a-zA-Z0-9._%+\-]{2,})\s+@([a-zA-Z0-9\-]+\.[a-zA-Z]{2,})/g, '$1@$2')
+    // Require at least one letter in the local part so a bare phone number like
+    // "8356955483 @handle" is NOT collapsed — that would manufacture a fake email.
+    .replace(/([a-zA-Z0-9._%+\-]*[a-zA-Z][a-zA-Z0-9._%+\-]*)\s+@([a-zA-Z0-9\-]+\.[a-zA-Z]{2,})/g, '$1@$2')
     // "@ nivedita.singh" → "@nivedita.singh"  (space after @ — OCR splits social handle from icon)
     // Use [ \t]+ (not \s+) so this never fires across a line break — "visit us @\nwww.site.com"
     // must NOT be collapsed into "@www.site.com" (that turns a URL into a fake Instagram handle).
@@ -180,7 +182,11 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   }
 
   // ── 5. Emails ────────────────────────────────────────────────────────────────
-  const emailMatches = [...new Set(fullText.match(EMAIL_RE) ?? [])];
+  const emailMatches = [...new Set(fullText.match(EMAIL_RE) ?? [])].filter((m) => {
+    // A phone number before "@" produces fake emails like "8356955483@tushar.gupta".
+    // Real email local parts always contain at least one letter.
+    return /[a-zA-Z]/.test(m.split('@')[0]);
+  });
   for (const m of emailMatches) {
     fields.push({ label: 'Email', value: m.toLowerCase() });
     consume(m);
