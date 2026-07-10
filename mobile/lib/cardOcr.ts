@@ -371,7 +371,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // Words that appear in firm/studio/brand names but not in personal names.
   const COMPANY_KEYWORD_RE =
-    /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal)\b|\bstate\s+of\b/i;
+    /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal|capital|ventures|holdings|finance|financial|wealth|advisory|advisors|investments|investment|securities|broking|insurance|leasing|logistics|infrastructure|pharma|pharmaceuticals|chemicals|polymers|packaging|print|printing|publications|publishers|events|promotions|marketing|consultancy|outsourcing|staffing|recruitment)\b|\bstate\s+of\b/i;
 
   // Label prefix common on cards: "M:" / "M (400)…" / "Tel. " / "Fax: " / "Ph: "
   // The space-only variant (no colon) is guarded by a lookahead for digit/paren/+ so we
@@ -671,7 +671,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // Consolidate address lines into one field, preserving original top-to-bottom order
   if (addressIdx.size > 0) {
-    const ordered = [...addressIdx].sort((a, b) => a - b).map((i) => remaining[i]);
+    const ordered = [...addressIdx].sort((a, b) => a - b).map((i) => remaining[i].replace(/,\s*$/, ''));
     let addressStr = ordered.join(', ').replace(/,?\s*[A-Z]\s*:\s*$/, '').trim();
 
     // Strip an OCR-noise word at the very start of the address (before the first comma)
