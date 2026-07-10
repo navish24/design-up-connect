@@ -611,6 +611,34 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
   }
 
+  // Single-word Company + single-word Other → Name (personal name printed on separate display lines).
+  // Happens when "PRIYANKA\nHANSRAJANI" is split by OCR — "PRIYANKA" gets assigned as Company
+  // (single all-caps word, no keyword) and "HANSRAJANI" falls to Other. When a Designation
+  // confirms this is a person's card, merge them as the full Name.
+  if (companyAssigned && !nameAssigned && designationLines.length > 0) {
+    const companyF = fields.find((f) => f.label === 'Company');
+    if (
+      companyF &&
+      /^[A-Za-z]+$/.test(companyF.value) &&
+      !COMPANY_KEYWORD_RE.test(companyF.value)
+    ) {
+      const surnameEntry = otherEntries.find(
+        (e) =>
+          /^[A-Za-z]+$/.test(e.text) &&
+          !COMPANY_KEYWORD_RE.test(e.text) &&
+          !DESIGNATION_RE.test(e.text)
+      );
+      if (surnameEntry) {
+        const compFIdx = fields.indexOf(companyF);
+        fields[compFIdx] = { label: 'Name', value: companyF.value + ' ' + surnameEntry.text };
+        nameAssigned = true;
+        companyAssigned = false;
+        const oIdx = otherEntries.indexOf(surnameEntry);
+        if (oIdx !== -1) otherEntries.splice(oIdx, 1);
+      }
+    }
+  }
+
   // A line sitting right next to a recognised address line belongs to the address too
   // (e.g. a city/pin line OCR'd separately). Allow digits so "Hyderabad - 500 004" qualifies.
   // Minimum length of 6 prevents short OCR garbage ("P.Q.", "Hum", etc.) from
