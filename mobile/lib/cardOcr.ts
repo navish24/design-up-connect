@@ -374,7 +374,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // Words that appear in firm/studio/brand names but not in personal names.
   const COMPANY_KEYWORD_RE =
-    /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal|capital|ventures|holdings|finance|financial|wealth|advisory|advisors|investments|investment|securities|broking|insurance|leasing|logistics|infrastructure|pharma|pharmaceuticals|chemicals|polymers|packaging|print|printing|publications|publishers|events|promotions|marketing|consultancy|outsourcing|staffing|recruitment)\b|\bstate\s+of\b/i;
+    /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal|capital|ventures|holdings|finance|financial|wealth|advisory|advisors|investments|investment|securities|broking|insurance|leasing|logistics|infrastructure|pharma|pharmaceuticals|chemicals|polymers|packaging|print|printing|publications|publishers|events|promotions|marketing|consultancy|outsourcing|staffing|recruitment|furniture|furnishings|modular)\b|\bstate\s+of\b/i;
 
   // Label prefix common on cards: "M:" / "M (400)…" / "Tel. " / "Fax: " / "Ph: "
   // The space-only variant (no colon) is guarded by a lookahead for digit/paren/+ so we
@@ -557,8 +557,13 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
             !DESIGNATION_RE.test(nameField.value)
           ) {
             const addrStr = [...addressIdx].sort((a, b) => a - b).map((j) => remaining[j]).join(', ');
+            // Check if the address string starts with what looks like a person's name
+            // ("Rahul Kumar, 45 MG Road") — but exclude matches where the first word is
+            // itself an address keyword ("Near Trezure Casa," or "Building No. C-2,")
+            // which would be a false-positive triggering an incorrect Name→Company merge.
+            const addrFirstWord = addrStr.split(/[\s,]+/)[0] ?? '';
             const hasAltName =
-              /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}\s*,/.test(addrStr) ||
+              (/^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}\s*,/.test(addrStr) && !ADDRESS_KEYWORD_RE.test(addrFirstWord)) ||
               otherEntries.some(({ text }) =>
                 /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}$/.test(text) &&
                 !COMPANY_KEYWORD_RE.test(text) &&
@@ -651,7 +656,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const PERSON_NAME_SHAPE_RE = /^[A-Z][a-z]{2,}(?:\s+[A-Z]\.?|\s+[A-Z][a-z]{2,}){1,2}$/;
   const looksLikeAddressFragment = (text: string) =>
     text.length >= 6 && text.length <= 60 &&
-    /^[A-Za-z0-9\s,.\-/]+$/.test(text) &&
+    /^[A-Za-z0-9\s,.\-/#]+$/.test(text) &&
     !PERSON_NAME_SHAPE_RE.test(text) &&
     !COMPANY_KEYWORD_RE.test(text);
 
