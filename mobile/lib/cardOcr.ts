@@ -390,7 +390,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // Condition: starts with uppercase, has a strong company keyword, no PIN,
     // and the line does NOT also have unambiguous address keywords (floor/street/sector etc.)
     const ADDRESS_STRUCTURAL_RE =
-      /\b(floor|street|road|nagar|marg|avenue|lane|plot|sector|bhavan|house|tower|complex|estate|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|highway|expressway|enclave|extension|residency|residences|apartments|apt|flat|villa|bungalow|farm)\b/i;
+      /\b(floor|street|road|nagar|marg|avenue|lane|plot|sector|bhavan|house|tower|complex|estate|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|highway|expressway|enclave|extension|residency|residences|apartments|apt|flat|villa|bungalow|farm|bldg)\b/i;
     if (
       !companyAssigned &&
       !DESIGNATION_RE.test(line) &&
@@ -724,7 +724,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // extract it — this happens when the company name and its address appear on
     // the same OCR block or adjacent lines.
     if (!companyAssigned) {
-      const m = addressStr.match(/^(.+?\b(?:PVT\.?\s*LTD\.?|LIMITED|LLP|INC\.?))\s*,\s*/i);
+      const m = addressStr.match(/^(.+?\b(?:PVT\.?\s*LTD\.?|LIMITED|LLP|INC))\.?(?:\s*,\s*|\s+)/i);
       if (m) {
         const companyName = m[1].trim();
         const nameIdx = fields.findIndex((f) => f.label === 'Name');
@@ -762,6 +762,22 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
     if (addressStr.length > 0) {
       fields.push({ label: 'Address', value: addressStr });
+    }
+  }
+
+  // Email domain → company fallback: if no company was found anywhere, derive a
+  // hint from the custom email domain (skip generic providers like gmail, yahoo).
+  if (!companyAssigned) {
+    const emailField = fields.find((f) => f.label === 'Email');
+    const domain = emailField?.value?.split('@')[1] ?? '';
+    const domainBase = domain.replace(/\.(?:co\.in|com\.au|[a-z]{2,})$/i, '');
+    const GENERIC_DOMAIN =
+      /^(gmail|yahoo|hotmail|outlook|rediffmail|icloud|live|msn|aol|protonmail|zoho|ymail)$/i;
+    if (domainBase && !GENERIC_DOMAIN.test(domainBase)) {
+      const hint = domainBase.charAt(0).toUpperCase() + domainBase.slice(1).toLowerCase();
+      const nameIdx = fields.findIndex((f) => f.label === 'Name');
+      fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: hint });
+      companyAssigned = true;
     }
   }
 
