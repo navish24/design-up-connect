@@ -401,9 +401,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
 
     // Address: has PIN or address keyword.
-    // Guard: lines with "|" are service/product lists (e.g. "3D Wallpaper | Curtain | Blinds")
-    // and should not be absorbed into the address even if they happen to contain a keyword.
-    if (PIN_RE.test(line) || (ADDRESS_KEYWORD_RE.test(line) && !line.includes('|'))) {
+    // Guard: lines with "|" are service/product lists or membership credentials
+    // (e.g. "Member of IIA (CA/2020/121718) | Member of IGBC") — even if the credential
+    // number matches PIN_RE (6 digits), the "|" signals it is not a real postal address.
+    if ((PIN_RE.test(line) || ADDRESS_KEYWORD_RE.test(line)) && !line.includes('|')) {
       addressIdx.add(idx);
       return;
     }
