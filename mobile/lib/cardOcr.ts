@@ -300,6 +300,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // Pipe/punctuation remnant with no letters (e.g. "| (+91) ," left after phone/email
       // extraction strips the actionable content from a separator line).
       if (!/[a-zA-Z]/.test(line) && /^[\d\s+()|\-,\/]+$/.test(line)) return false;
+      // Standalone contact field label word printed on the card (e.g. "Phone", "Email",
+      // "Website", "Address") — after the value is extracted the bare label remains.
+      // Also catches common abbreviations and variants without a trailing colon.
+      if (/^(phone|phones|mobile|mob|cell|tel|telephone|fax|email|e-mail|e\.mail|website|web|url|address|addr)\.?$/i.test(line)) return false;
       // Trailing "@" with no handle (e.g. "visit us @" after the URL was extracted from
       // the next OCR line) — prose use of "@" as "at", not a social handle or email.
       if (/^[\w\s.''\-,]{2,40}@\s*$/.test(line)) return false;
@@ -681,6 +685,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // (e.g. "ESPRAVO" when Company is "Espravo Decor Private Limited")
       const existingCompany = fields.find((f) => f.label === 'Company')?.value?.toUpperCase() ?? '';
       if (isAllCaps(text) && text.split(/\s+/).filter(Boolean).length === 1 && existingCompany.includes(text)) continue;
+      // Suppress Instagram handle OCR'd without "@" when the handle was already captured
+      // (e.g. card shows "@aalaya_home" but OCR returns "Aalaya_home" as a separate block)
+      const igVal = fields.find((f) => f.label === 'Instagram')?.value?.replace(/^@/, '').toLowerCase() ?? '';
+      if (igVal && text.replace(/^@/, '').toLowerCase() === igVal) continue;
       fields.push({ label: 'Other', value: text });
     }
   }
