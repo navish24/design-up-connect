@@ -35,5 +35,29 @@ export function getInAppBrowserName(): string {
 
 export function suggestedBrowser(): 'Safari' | 'Chrome' {
   if (typeof navigator === 'undefined') return 'Safari';
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'Safari' : 'Chrome';
+  const ua = navigator.userAgent;
+  // CriOS = Chrome on iOS; Chrome = Chrome on Android
+  if (/CriOS|Chrome/i.test(ua) && !/EdgA|OPR/i.test(ua)) return 'Chrome';
+  return 'Safari';
+}
+
+// Returns a deep-link URL that escapes the in-app browser and opens the
+// given https:// URL in the user's real browser. Returns null if no
+// applicable scheme is known for this device.
+export function buildRedirectUrl(currentUrl: string): string | null {
+  if (typeof navigator === 'undefined') return null;
+  if (!currentUrl.startsWith('https://')) return null;
+  const ua = navigator.userAgent;
+  const without = currentUrl.slice('https://'.length);
+  if (/iPhone|iPad|iPod/i.test(ua)) {
+    // Chrome on iOS registers googlechromes:// as its custom scheme
+    if (/CriOS/i.test(ua)) return `googlechromes://${without}`;
+    // Safari on iOS (x-safari-https:// is supported by iOS for same-origin escapes)
+    return `x-safari-https://${without}`;
+  }
+  // Android: intent scheme routes to Chrome (or device default browser)
+  if (/Android/i.test(ua)) {
+    return `intent://${without}#Intent;scheme=https;package=com.android.chrome;end`;
+  }
+  return null;
 }

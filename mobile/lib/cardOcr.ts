@@ -8,7 +8,7 @@ import { supabase } from './supabase';
 // International:   +country-code + digits
 // US format:       (NXX) NXX-XXXX or NXX-NXX-XXXX (area code in parens or not)
 const PHONE_RE =
-  /(?:\+91[ \t\-.]?|91[ \t\-.]?|0)?[6-9]\d(?:[ \t\-.]?\d){8}|\+\d{1,3}[ \t\-.]?\d{3,5}[ \t\-.]?\d{3,9}|\(?\d{3}\)?[ \t\-.]?\d{3}[ \t\-.]?\d{4}(?!\d)/g;
+  /0\d{2,3}[\s\t\-.]?\d{7,8}(?!\d)|(?:\+91[ \t\-.]?|91[ \t\-.]?|0)?[6-9]\d(?:[ \t\-.]?\d){8}|\+\d{1,3}[ \t\-.]?\d{2,5}[ \t\-.]?\d{3,9}|\(?\d{3}\)?[ \t\-.]?\d{3}[ \t\-.]?\d{3}[ \t\-.]?\d{4}(?!\d)|\(?\d{3}\)?[ \t\-.]?\d{3}[ \t\-.]?\d{4}(?!\d)/g;
 
 const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 
@@ -30,7 +30,7 @@ const YOUTUBE_RE = /youtube\.com\/(?:c\/|channel\/|@)[\w\-]+/gi;
 
 // Address cues
 const ADDRESS_KEYWORD_RE =
-  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|building|bhavan|house|tower|complex|industrial|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|washington|illinois|california|new york|texas|florida|chicago|dc)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
+  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
 const PIN_RE = /\b[1-9]\d{5}\b/;
 
 // Designation keywords — "art" removed (too generic: matches "art collective" brand taglines)
@@ -60,11 +60,11 @@ const fixOcrArtifacts = (text: string): string =>
     // "user.name @domain.com" → "user.name@domain.com"  (space before @)
     .replace(/([a-zA-Z0-9._%+\-]{2,})\s+@([a-zA-Z0-9\-]+\.[a-zA-Z]{2,})/g, '$1@$2')
     // "@ nivedita.singh" → "@nivedita.singh"  (space after @ — OCR splits social handle from icon)
-    // Only fires when what follows is a bare word (not a domain with another dot), so
-    // "@ domain.tld" that's an email fragment is NOT collapsed here.
-    .replace(/@\s+([a-zA-Z][a-zA-Z0-9_.]{2,29})(?=[^a-zA-Z0-9_@.]|$)/g, '@$1')
-    // "user@ domain.com" → "user@domain.com"  (space after @ in email)
-    .replace(/@\s+([a-zA-Z0-9\-]+\.[a-zA-Z]{2,})/g, '@$1')
+    // Use [ \t]+ (not \s+) so this never fires across a line break — "visit us @\nwww.site.com"
+    // must NOT be collapsed into "@www.site.com" (that turns a URL into a fake Instagram handle).
+    .replace(/@[ \t]+([a-zA-Z][a-zA-Z0-9_.]{2,29})(?=[^a-zA-Z0-9_@.]|$)/g, '@$1')
+    // "user@ domain.com" → "user@domain.com"  (space after @ in email — horizontal only)
+    .replace(/@[ \t]+([a-zA-Z0-9\-]+\.[a-zA-Z]{2,})/g, '@$1')
     // "user@domain com" → "user@domain.com"  (space instead of dot inside email domain)
     .replace(/(@[a-zA-Z0-9\-]+)\s+(com|in|co|net|org|io)\b/g, '$1.$2')
     // "infoOdomain.com" → "info@domain.com"  (@ misread as uppercase O)
@@ -101,10 +101,21 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   // Pre-merge: when OCR splits a platform icon glyph onto its own line immediately
   // before the handle, re-join them so detectHandle has glyph context for platform detection.
   const rawText = blocks.map((b) => b.text).join('\n');
-  const premergedText = rawText.replace(
-    /^(in|ig|i|fb|f|tw|x|li|ln|lk|be|yt)\n([a-zA-Z][a-zA-Z0-9_.]{2,28}[a-zA-Z0-9])/gim,
-    (_, g, h) => `${g.toLowerCase()} ${h}`,
-  );
+  const premergedText = rawText
+    // Merge platform icon glyph onto the same line as its handle
+    .replace(
+      /^(in|ig|i|fb|f|tw|x|li|ln|lk|be|yt)\n([a-zA-Z][a-zA-Z0-9_.]{2,28}[a-zA-Z0-9])/gim,
+      (_, g, h) => `${g.toLowerCase()} ${h}`,
+    )
+    // Merge a bare area code "(NXX)" or label+area-code "M (NXX)" with the phone digits
+    // on the next OCR line — OCR commonly splits them because they're visually separated.
+    .replace(
+      /^(?:[A-Za-z] )?\((\d{3})\)[ \t]*\n([\d+][\d\s()\-.]{5,})/gm,
+      '($1) $2',
+    )
+    // Merge a line starting with "& " into the preceding line — company names like
+    // "AR. POOJA SHETYE\n& ASSOCIATES" are often split this way by OCR.
+    .replace(/([^\n]+)\n(& \S[^\n]{0,60})/g, '$1 $2');
   const fullText = fixOcrArtifacts(premergedText);
   const lines = fullText.split('\n').map((l) => l.trim()).filter(Boolean);
 
@@ -265,6 +276,21 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       if (/\|\s*$/.test(line)) return false;
       // Common QR-code prompt text printed on cards — never contact data
       if (/^(scan\s+me|scan\s+qr|qr\s+code|follow\s+me|click\s+here|tap\s+here)$/i.test(line)) return false;
+      // Lines with no ASCII letters or digits are OCR noise from QR codes or decorative graphics (e.g. "□□", "■■")
+      if (!/[a-zA-Z0-9]/.test(line)) return false;
+      // Bare area code in parens (e.g. "(400)") is a phone fragment already captured by PHONE_RE — discard
+      if (/^\(\d{3}\)$/.test(line)) return false;
+      // Bare country/exchange prefix (e.g. "+18", "+91") with too few digits is a phone fragment — discard
+      if (/^\+\d{1,4}$/.test(line)) return false;
+      // Short bare digit sequence (e.g. "6718") — phone fragment left after PHONE_RE consumed the rest
+      if (/^\d{1,6}$/.test(line)) return false;
+      // Pure label remnant after phone/email strip (e.g. "Gous Arab:", "E-Mail:", "M: | E:").
+      // Matches any line that ends with ":" with no real value — including pipe-separated
+      // label pairs like "M: | E:" left after phone/email extraction.
+      if (/^[\w\s.\-/:|]{2,40}:\s*$/.test(line)) return false;
+      // Trailing "@" with no handle (e.g. "visit us @" after the URL was extracted from
+      // the next OCR line) — prose use of "@" as "at", not a social handle or email.
+      if (/^[\w\s.''\-,]{2,40}@\s*$/.test(line)) return false;
       return true;
     });
 
@@ -304,10 +330,11 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const detectHandle = (text: string): { handle: string; platform: string } | null => {
     const tokenMatch = text.match(ICON_GLYPH_TOKEN_RE);
     const glyphToken = tokenMatch ? tokenMatch[1].toLowerCase() : null;
-    // Only use glyph context when the prefix is a known platform indicator —
-    // unknown 1-3 char tokens (e.g. "Dr", "Mr") would cause false positives.
     const isKnownGlyph = glyphToken !== null && glyphToken in GLYPH_TO_PLATFORM;
-    const rawLine = isKnownGlyph ? tokenMatch![2] : text;
+    // Without a known platform glyph prefix, a bare lowercase word is more likely
+    // a brand name or logo text (e.g. "aviato") than a social handle — don't assume Instagram.
+    if (!isKnownGlyph) return null;
+    const rawLine = tokenMatch![2];
     const candidateLine = rawLine
       .replace(/\s+[A-Za-z]{1,2}[()]*$/, '')
       .replace(/[()[\]{}]+$/, '')
@@ -337,8 +364,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const COMPANY_KEYWORD_RE =
     /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal)\b|\bstate\s+of\b/i;
 
-  // Label prefix common on cards: single-letter "M: " or multi-letter "Tel. ", "Fax: ", "Ph: "
-  const LABEL_PREFIX_RE = /^(?:[A-Za-z]\s*:|(?:tel|fax|ph|mob|mobile|phone)\s*\.?\s*:?)\s*/i;
+  // Label prefix common on cards: "M:" / "M (400)…" / "Tel. " / "Fax: " / "Ph: "
+  // The space-only variant (no colon) is guarded by a lookahead for digit/paren/+ so we
+  // don't accidentally strip the first letter of a real name like "Emily Bates".
+  const LABEL_PREFIX_RE = /^(?:[A-Za-z](?:\s*:|\s+(?=[\d(+]))|(?:tel|fax|ph|mob|mobile|phone)\s*\.?\s*:?)\s*/i;
 
   remaining.forEach((line, idx) => {
     // Company keyword check runs BEFORE address — company names often contain words
@@ -346,7 +375,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // Condition: starts with uppercase, has a strong company keyword, no PIN,
     // and the line does NOT also have unambiguous address keywords (floor/street/sector etc.)
     const ADDRESS_STRUCTURAL_RE =
-      /\b(floor|street|road|nagar|marg|avenue|lane|plot|sector|building|bhavan|house|tower|complex|industrial|estate|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|highway|expressway|enclave|extension|residency|residences|apartments|apt|flat|villa|bungalow|farm)\b/i;
+      /\b(floor|street|road|nagar|marg|avenue|lane|plot|sector|bhavan|house|tower|complex|estate|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|highway|expressway|enclave|extension|residency|residences|apartments|apt|flat|villa|bungalow|farm)\b/i;
     if (
       !companyAssigned &&
       !DESIGNATION_RE.test(line) &&
@@ -362,8 +391,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       return;
     }
 
-    // Address: has PIN or address keyword
-    if (PIN_RE.test(line) || ADDRESS_KEYWORD_RE.test(line)) {
+    // Address: has PIN or address keyword.
+    // Guard: lines with "|" are service/product lists (e.g. "3D Wallpaper | Curtain | Blinds")
+    // and should not be absorbed into the address even if they happen to contain a keyword.
+    if (PIN_RE.test(line) || (ADDRESS_KEYWORD_RE.test(line) && !line.includes('|'))) {
       addressIdx.add(idx);
       return;
     }
@@ -398,8 +429,14 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         fields.push({ label: GLYPH_TO_PLATFORM[glyphAtHandle[1]], value: `@${glyphAtHandle[2]}` });
         return;
       }
-      fields.push({ label: 'Email', value: line });
-      return;
+      // Only push as Email if the line actually contains a valid email address.
+      // "visit us @" contains @ but has no domain — it's prose, not email — let it
+      // fall through to the name/company/other classifiers below.
+      if (EMAIL_RE.test(line)) {
+        fields.push({ label: 'Email', value: line });
+        return;
+      }
+      // Falls through — re-evaluated as name/company/designation/other
     }
 
     // Bare social handle (no @ / platform URL) sitting next to an icon.
@@ -434,8 +471,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
 
     // Single-word all-caps line — brand logo header (e.g. "GUBI", "IKEA", "FLOS").
-    // These are never a person's name (which always has ≥2 words) so classify as Company.
-    if (!companyAssigned && lineIsAllCaps && line.split(/\s+/).filter(Boolean).length === 1 && !DESIGNATION_RE.test(line)) {
+    // Guard: if a name is already assigned and this token is ≤6 chars with no company keyword,
+    // it's likely an OCR fragment of the person's name (e.g. "HANS" from "GHANSHYAM"), not a brand.
+    if (!companyAssigned && lineIsAllCaps && line.split(/\s+/).filter(Boolean).length === 1 && !DESIGNATION_RE.test(line) && !(nameAssigned && line.length <= 6 && !COMPANY_KEYWORD_RE.test(line))) {
       const nameIdx = fields.findIndex((f) => f.label === 'Name');
       fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: line });
       companyAssigned = true;
@@ -446,17 +484,23 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // Skip all-caps lines — those are company/brand headers, handled above.
     // Require every word to start with uppercase — filters OCR-garbled brand logos like
     // "Artists li" where a lowercase fragment reveals it's not a real person's name.
-    if (
-      !nameAssigned &&
-      !lineIsAllCaps &&
-      /^[A-Za-z\s.''\-]{3,60}$/.test(line) &&
-      line.split(' ').length >= 2 &&
-      line.split(' ').length <= 6 &&
-      line.split(/\s+/).every((w) => /^[A-Z]/.test(w))
-    ) {
-      fields.unshift({ label: 'Name', value: line });
-      nameAssigned = true;
-      return;
+    // Allow a trailing academic/professional credential in parens (e.g. "(M. Arch)", "(Ph.D)")
+    // — strip it before matching so "Ar. Rahul S Sulge (M. Arch)" → Name "Ar. Rahul S Sulge".
+    {
+      const CREDENTIAL_SUFFIX_RE = /\s*\([A-Za-z][A-Za-z.\s]{1,15}\)\s*$/;
+      const lineForName = line.replace(CREDENTIAL_SUFFIX_RE, '').trim();
+      if (
+        !nameAssigned &&
+        !lineIsAllCaps &&
+        /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName) &&
+        lineForName.split(' ').length >= 2 &&
+        lineForName.split(' ').length <= 6 &&
+        lineForName.split(/\s+/).every((w) => /^[A-Z]/.test(w))
+      ) {
+        fields.unshift({ label: 'Name', value: lineForName });
+        nameAssigned = true;
+        return;
+      }
     }
 
     // Defer: may turn out to be a city/state line that belongs to the address
@@ -474,7 +518,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       const prefixEntry = otherEntries.find(
         ({ idx, text }) =>
           (idx === companyRemainingIdx - 1 || idx === companyRemainingIdx - 2) &&
-          /^[A-Z]/.test(text) &&
+          /^[A-Za-z]/.test(text) &&
           !ADDRESS_KEYWORD_RE.test(text) &&
           !DESIGNATION_RE.test(text) &&
           text.split(/\s+/).filter(Boolean).length >= 1 &&
@@ -590,8 +634,24 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   // Consolidate address lines into one field, preserving original top-to-bottom order
   if (addressIdx.size > 0) {
     const ordered = [...addressIdx].sort((a, b) => a - b).map((i) => remaining[i]);
-    // Strip any trailing phone-label remnant (e.g. "M:" left after PHONE_RE consumed the number)
     let addressStr = ordered.join(', ').replace(/,?\s*[A-Z]\s*:\s*$/, '').trim();
+
+    // Strip an OCR-noise word at the very start of the address (before the first comma)
+    // if it's all letters, ≤12 chars, and not a known address keyword itself.
+    // e.g. "Afvices, Corporate Office: A-204..." → "Corporate Office: A-204..."
+    addressStr = addressStr.replace(/^([A-Za-z]{2,12}),\s*/, (_, word) =>
+      ADDRESS_KEYWORD_RE.test(word) ? `${word}, ` : '',
+    );
+
+    // Strip embedded phone-label tokens (e.g. "Tel.:" or "Fax:") that remain after
+    // the phone number was extracted by PHONE_RE. Also strip any stray phone numbers
+    // that slipped through (e.g. Indian landlines not matched earlier).
+    addressStr = addressStr
+      .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
+      .replace(new RegExp(PHONE_RE.source, 'g'), '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/^[,\s]+|[,\s]+$/g, '')
+      .trim();
 
     // If no company has been assigned yet and the address string starts with a
     // company name (e.g. "ADORNO INTERIORS PVT LTD, Corporate Office: #303..."),
@@ -657,6 +717,102 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
   }
 
+  // ── Post-pass: recover from OCR-fragment company ──────────────────────────────
+  // If Company has no company keyword, is very short (≤6 chars), and its text is a
+  // substring of the person's Name, it's an OCR misread of the name (e.g. "HANS"
+  // from "GHANSHYAM"). Remove it, then try to promote a Company-keyword Other field
+  // (e.g. "Technologies") — and merge any adjacent lowercase brand prefix Other
+  // (e.g. "aviato") to produce the full "Aviato Technologies" company name.
+  {
+    const fragComp = fields.find(
+      (f) =>
+        f.label === 'Company' &&
+        !COMPANY_KEYWORD_RE.test(f.value) &&
+        f.value.replace(/\s/g, '').length <= 6,
+    );
+    const personName = fields.find((f) => f.label === 'Name');
+    if (
+      fragComp &&
+      personName &&
+      personName.value.toUpperCase().includes(fragComp.value.toUpperCase())
+    ) {
+      fields.splice(fields.indexOf(fragComp), 1);
+      // Find an Other entry with a company keyword to promote
+      const altIdx = fields.findIndex(
+        (f) => f.label === 'Other' && COMPANY_KEYWORD_RE.test(f.value),
+      );
+      if (altIdx !== -1) {
+        const [altComp] = fields.splice(altIdx, 1);
+        // Also pick up a lowercase brand-name prefix sitting in Other
+        // (e.g. "aviato" before "Technologies") — identified by all-lowercase, no spaces
+        const brandIdx = fields.findIndex(
+          (f) =>
+            f.label === 'Other' &&
+            /^[a-z][a-zA-Z0-9]{2,19}$/.test(f.value) &&
+            !COMPANY_KEYWORD_RE.test(f.value) &&
+            !ADDRESS_KEYWORD_RE.test(f.value),
+        );
+        let companyValue = altComp.value;
+        if (brandIdx !== -1) {
+          const [brand] = fields.splice(brandIdx, 1);
+          companyValue = brand.value + ' ' + altComp.value;
+        }
+        const nIdx = fields.findIndex((f) => f.label === 'Name');
+        fields.splice(nIdx === -1 ? 0 : nIdx + 1, 0, { label: 'Company', value: companyValue });
+      }
+    }
+  }
+
+  // Post-process: if Company equals Name exactly (OCR read the same text twice —
+  // once as the person's name, once as the firm header), drop the duplicate Company.
+  // If there's a company-keyword Other entry, promote it as the real company instead.
+  {
+    const dupComp = fields.find((f) => f.label === 'Company');
+    const nameField = fields.find((f) => f.label === 'Name');
+    if (
+      dupComp &&
+      nameField &&
+      dupComp.value.replace(/\s/g, '').toUpperCase() ===
+        nameField.value.replace(/\s/g, '').toUpperCase()
+    ) {
+      fields.splice(fields.indexOf(dupComp), 1);
+      // Try to promote an Other entry with a company keyword
+      const altIdx = fields.findIndex(
+        (f) => f.label === 'Other' && COMPANY_KEYWORD_RE.test(f.value),
+      );
+      if (altIdx !== -1) {
+        const [alt] = fields.splice(altIdx, 1);
+        const nIdx = fields.findIndex((f) => f.label === 'Name');
+        fields.splice(nIdx === -1 ? 0 : nIdx + 1, 0, { label: 'Company', value: alt.value });
+      }
+    }
+  }
+
+  // Post-process: if Company has no company keyword but an Other entry does, the Company
+  // was assigned too early from a short logo/OCR fragment (e.g. "Geninfo" before
+  // "Genesis Infoserve PVT. LTD."). Swap: move the keyword-bearing Other to Company
+  // and demote the fragment to Other. Use a strict subset of keywords (legal suffixes
+  // and strong industry nouns) to avoid swapping on generic organisational words.
+  {
+    const STRONG_KW_RE =
+      /\b(pvt|ltd|limited|llp|llc|inc|associates|technologies|tech|solutions|enterprises|industries|group|studios?|corporation|corp)\b/i;
+    const bareComp = fields.find(
+      (f) => f.label === 'Company' && !STRONG_KW_RE.test(f.value),
+    );
+    if (bareComp) {
+      const kwOtherIdx = fields.findIndex(
+        (f) => f.label === 'Other' && STRONG_KW_RE.test(f.value),
+      );
+      if (kwOtherIdx !== -1) {
+        const [kwOther] = fields.splice(kwOtherIdx, 1);
+        const bareIdx = fields.indexOf(bareComp);
+        fields.splice(bareIdx, 1, { label: 'Other', value: bareComp.value });
+        const nIdx = fields.findIndex((f) => f.label === 'Name');
+        fields.splice(nIdx === -1 ? 0 : nIdx + 1, 0, { label: 'Company', value: kwOther.value });
+      }
+    }
+  }
+
   // Post-process: re-label Instagram handles that were caught by INSTAGRAM_RE but
   // have a known platform glyph immediately before them on the same OCR line —
   // e.g. "fb @niveditafb" should become Facebook, not Instagram.
@@ -687,10 +843,16 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   );
 }
 
+const KEEP_CAPS = new Set(['LLC', 'LLP', 'LTD', 'PVT', 'INC', 'USA', 'UAE', 'UK', 'US']);
+
 function toTitleCase(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return str.replace(/\b(\w+)\b/g, (word) => {
+    // Preserve 2-letter all-caps (state/country codes: NY, CA, TX, UK, US…)
+    if (/^[A-Z]{2}$/.test(word)) return word;
+    // Preserve specific known abbreviations that are 3+ letters
+    if (KEEP_CAPS.has(word)) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
 }
 
 // ── Cloud Vision adapter ──────────────────────────────────────────────────────
