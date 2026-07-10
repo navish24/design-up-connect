@@ -291,6 +291,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // Trailing "@" with no handle (e.g. "visit us @" after the URL was extracted from
       // the next OCR line) — prose use of "@" as "at", not a social handle or email.
       if (/^[\w\s.''\-,]{2,40}@\s*$/.test(line)) return false;
+      // Parenthesised label remnant after phone extraction (e.g. "(M) ," or "(O) :")
+      // — occurs when a line like "(M) 9876543210, 7778001234" has both numbers stripped.
+      if (/^\([A-Za-z]{1,5}\)[\s,.\-:]*$/.test(line)) return false;
       return true;
     });
 
