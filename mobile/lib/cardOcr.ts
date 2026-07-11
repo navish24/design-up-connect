@@ -468,6 +468,30 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       return;
     }
 
+    // Bare handle that matches the website domain base → Social Handle.
+    // Cards often print "padmehumstudioindia" next to Instagram/Facebook icons that OCR
+    // can't read. Without a glyph prefix detectHandle() returns null, but a domain-base
+    // match is reliable enough to classify it. Return (consumed) even for duplicates so
+    // the second identical line doesn't get absorbed into an adjacent address block.
+    {
+      const websiteField = fields.find((f) => f.label === 'Website');
+      if (websiteField && BARE_HANDLE_RE.test(line.toLowerCase())) {
+        const normDomain = normalizeUrl(websiteField.value).replace(/\/.*$/, '');
+        const domBase = normDomain.replace(/\.[a-z]{2,}(?:\.[a-z]{2})?$/i, '').replace(/[.\-]/g, '');
+        const lineNorm = line.toLowerCase().replace(/[.\-]/g, '');
+        if (lineNorm.length >= 4 && lineNorm === domBase) {
+          if (!fields.some(
+            (f) =>
+              (f.label === 'Social Handle' || f.label === 'Instagram' || f.label === 'Facebook') &&
+              f.value.replace(/^@/, '').toLowerCase() === line.toLowerCase()
+          )) {
+            fields.push({ label: 'Social Handle', value: `@${line.toLowerCase()}` });
+          }
+          return;
+        }
+      }
+    }
+
     const lineIsAllCaps = isAllCaps(line);
 
     // All-caps multi-word line — could be a company name OR a person's name printed

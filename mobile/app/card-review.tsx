@@ -5,6 +5,7 @@ import {
 import { useState, useEffect, useCallback } from 'react';
 import { router } from 'expo-router';
 import { useHeaderPaddingTop } from '../lib/safeArea';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +29,7 @@ function generateId() {
 export default function CardReviewScreen() {
   const { colors } = useTheme();
   const headerPaddingTop = useHeaderPaddingTop();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const { addCardContact, updateCardContact, cardContacts } = useAuth();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -330,7 +332,7 @@ export default function CardReviewScreen() {
       </ScrollView>
 
       {/* Sticky save footer */}
-      <View style={[s.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      <View style={[s.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: bottomInset + 12 }]}>
         <Pressable style={[s.solidBtn, { backgroundColor: colors.accent }]} onPress={handleSave}>
           <Ionicons name="checkmark-circle" size={19} color="#FFF" />
           <Text style={s.solidBtnText}>Save Contact</Text>
@@ -666,7 +668,7 @@ const s = StyleSheet.create({
   // Footer
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: 36,
+    paddingHorizontal: Spacing.lg, paddingTop: Spacing.md,
     gap: 6,
   },
   solidBtn: {
