@@ -370,12 +370,12 @@ export default function ScanScreen() {
             addDemoConnection({
               id: (u as any).id ?? u.designup_user_id,
               full_name: u.full_name,
-              designation: u.designation ?? '',
-              company: u.company_name ?? '',
-              brand_id: (u as any).brand_id,
-              email: (u as any).email ?? '',
-              phone: (u as any).phone ?? '',
-              city: (u as any).city ?? '',
+              designation: u.designation || undefined,
+              company: u.company_name || undefined,
+              brand_id: (u as any).brand_id || undefined,
+              email: (u as any).email || undefined,
+              phone: (u as any).phone || undefined,
+              city: (u as any).city || undefined,
             });
           }
           setTimeout(() => setScanState('success_connection'), 1800);
