@@ -33,6 +33,7 @@ import { recognizeCardText, recognizeCardTextWeb, parseCardFields } from '../../
 import { cardScanStore } from '../../lib/cardScanStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ScanResult } from '../../types';
+import { setPendingConnectionOpen } from '../../lib/pendingNav';
 
 type ScanState =
   | 'idle'
@@ -541,7 +542,11 @@ export default function ScanScreen() {
         </Text>
         <Pressable
           style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
-          onPress={() => { resetToIdle(); router.push('/(app)/connections'); }}
+          onPress={() => {
+            resetToIdle();
+            setPendingConnectionOpen((connUser as any).id ?? connUser.designup_user_id ?? null);
+            router.push('/(app)/connections');
+          }}
         >
           <Text style={s.btnText}>View Connection</Text>
         </Pressable>
@@ -566,9 +571,13 @@ export default function ScanScreen() {
         </Text>
         <Pressable
           style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
-          onPress={() => { resetToIdle(); router.push('/(app)/connections'); }}
+          onPress={() => {
+            resetToIdle();
+            setPendingConnectionOpen((connUser as any).id ?? connUser.designup_user_id ?? null);
+            router.push('/(app)/connections');
+          }}
         >
-          <Text style={s.btnText}>View Connections</Text>
+          <Text style={s.btnText}>View Card</Text>
         </Pressable>
         <Pressable style={s.textBtn} onPress={resetToIdle}>
           <Text style={[s.textBtnText, { color: colors.textMuted }]}>Done</Text>

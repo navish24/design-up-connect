@@ -17,6 +17,7 @@ import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import NotesModal from '../../components/NotesModal';
 import { Analytics } from '../../lib/analytics';
 import type { Connection, CardContact } from '../../types';
+import { getPendingConnectionOpen, setPendingConnectionOpen } from '../../lib/pendingNav';
 
 export function getCardDisplayName(fields: { label: string; value: string }[]): string {
   const get = (label: string) => fields.find((f) => f.label === label)?.value ?? '';
@@ -168,11 +169,22 @@ export default function ConnectionsScreen() {
   const [activeView, setActiveView] = useState<ActiveView>({ type: 'list' });
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
   const exchangingRef = useRef<Set<string>>(new Set());
+  const allConnectionsRef = useRef<Connection[]>([]);
 
-  // Reset to list whenever the Connects tab gains focus (handles both tab switching
-  // and tapping the Connects icon while already on it)
+  // Reset to list whenever the Connects tab gains focus, unless a QR scan just
+  // requested that we open a specific connection's detail view.
   useFocusEffect(
     useCallback(() => {
+      const pendingUserId = getPendingConnectionOpen();
+      setPendingConnectionOpen(null);
+      if (pendingUserId) {
+        const conn = allConnectionsRef.current.find(
+          (c) => c.user.id === pendingUserId ||
+                 c.user.designup_user_id === pendingUserId ||
+                 c.id === `demo-${pendingUserId}`
+        );
+        if (conn) { setActiveView({ type: 'connect_detail', connection: conn }); return; }
+      }
       setActiveView({ type: 'list' });
     }, [])
   );
@@ -248,6 +260,8 @@ export default function ConnectionsScreen() {
       mutualIds.has(c.id) ? { ...c, is_mutual: true, from_contact_shared: true } : c
     );
   }, [demoConnectionsReset, demoAddedConnections, mutualIds]);
+  // Keep ref in sync so useFocusEffect (which has no deps) can read current value
+  allConnectionsRef.current = allConnections;
 
   const filteredConnections = useMemo(() => {
     if (filterType === 'cards') return [];
