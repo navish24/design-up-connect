@@ -35,7 +35,7 @@ export default function WebQRScanner({ active, onScan, onDetected, torchOn, onTo
       return;
     }
     startCamera();
-    return () => stopStream();
+    return () => hardStop(); // release tracks on unmount
   }, [active]);
 
   // Apply or remove torch when prop changes
@@ -47,31 +47,37 @@ export default function WebQRScanner({ active, onScan, onDetected, torchOn, onTo
     } catch (_) {}
   }, [torchOn]);
 
-  // Stop stream when PWA goes to background (prevents persistent iOS recording indicator)
+  // Hard-stop when PWA goes to background (prevents persistent iOS recording indicator)
   useEffect(() => {
     const g = globalThis as any;
     if (!g.document) return;
-    const onVisibility = () => { if (g.document.visibilityState === 'hidden') stopStream(); };
+    const onVisibility = () => { if (g.document.visibilityState === 'hidden') hardStop(); };
     g.document.addEventListener('visibilitychange', onVisibility);
     return () => g.document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
+  // Soft-pause: cancel RAF loop and detach video but keep the MediaStream alive
+  // so startCamera() can reuse it without re-prompting for camera permission.
   const stopStream = () => {
     wantCameraRef.current = false;
     if (rafRef.current) {
       (globalThis as any).cancelAnimationFrame?.(rafRef.current);
       rafRef.current = null;
     }
-    streamRef.current?.getTracks().forEach((t: any) => t.stop());
-    streamRef.current = null;
     setScanning(false);
-
-    // Remove video element from container
     const container = containerRef.current as HTMLElement | null;
     if (container && videoRef.current) {
       try { container.removeChild(videoRef.current); } catch (_) {}
     }
     videoRef.current = null;
+    // streamRef kept alive intentionally — reused on next startCamera().
+  };
+
+  // Hard-stop: also releases camera tracks (app background or component unmount).
+  const hardStop = () => {
+    stopStream();
+    streamRef.current?.getTracks().forEach((t: any) => t.stop());
+    streamRef.current = null;
   };
 
   const startCamera = async () => {
@@ -82,24 +88,32 @@ export default function WebQRScanner({ active, onScan, onDetected, torchOn, onTo
     }
     wantCameraRef.current = true;
 
+    // Reuse an existing live stream to avoid re-prompting for permission.
+    const existingTrack = streamRef.current?.getVideoTracks?.()[0];
+    const streamToUse: any = existingTrack && existingTrack.readyState === 'live'
+      ? streamRef.current
+      : null;
+
     try {
-      const stream = await g.navigator.mediaDevices.getUserMedia({
+      const stream = streamToUse ?? await g.navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
       });
-      // If stopStream() was called while getUserMedia was pending, discard the stream immediately
+      // If stopStream() was called while getUserMedia was pending, discard the new stream
       if (!wantCameraRef.current) {
-        stream.getTracks().forEach((t: any) => t.stop());
+        if (!streamToUse) stream.getTracks().forEach((t: any) => t.stop());
         return;
       }
       streamRef.current = stream;
       setPermState('granted');
 
-      // Detect torch support
-      try {
-        const track = stream.getVideoTracks()[0];
-        const caps = track?.getCapabilities?.();
-        onTorchSupportChange?.(!!(caps?.torch));
-      } catch (_) { onTorchSupportChange?.(false); }
+      if (!streamToUse) {
+        // Detect torch support — only needed once on first acquisition
+        try {
+          const track = stream.getVideoTracks()[0];
+          const caps = track?.getCapabilities?.();
+          onTorchSupportChange?.(!!(caps?.torch));
+        } catch (_) { onTorchSupportChange?.(false); }
+      }
 
       // Suppress iOS Safari native video controls overlay
       if (!g.document.getElementById('connect-video-no-controls')) {

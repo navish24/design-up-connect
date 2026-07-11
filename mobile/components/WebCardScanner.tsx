@@ -41,7 +41,7 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   useEffect(() => {
     if (!active) { stopStream(); return; }
     startCamera();
-    return () => stopStream();
+    return () => hardStop(); // release tracks on unmount
   }, [active]);
 
   // Show a rotation hint after 5s of no card detected — helps users who hold
@@ -73,15 +73,17 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
     } catch (_) {}
   }, [torchOn]);
 
-  // Stop stream when PWA goes to background
+  // Hard-stop when PWA goes to background (camera off for battery/privacy)
   useEffect(() => {
     const g = globalThis as any;
     if (!g.document) return;
-    const onVisibility = () => { if (g.document.visibilityState === 'hidden') stopStream(); };
+    const onVisibility = () => { if (g.document.visibilityState === 'hidden') hardStop(); };
     g.document.addEventListener('visibilitychange', onVisibility);
     return () => g.document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
+  // Soft-pause: cancel timers and detach video from DOM but keep the MediaStream
+  // tracks alive so startCamera() can reuse them without a getUserMedia prompt.
   const stopStream = () => {
     wantCameraRef.current = false;
     const g = globalThis as any;
@@ -89,13 +91,19 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
     lastSampleRef.current = null;
     stableStartRef.current = null;
     setStabilityPct(0);
-    streamRef.current?.getTracks().forEach((t: any) => t.stop());
-    streamRef.current = null;
     const container = containerRef.current as HTMLElement | null;
     if (container && videoRef.current) {
       try { container.removeChild(videoRef.current); } catch (_) {}
     }
     videoRef.current = null;
+    // Stream (streamRef) is intentionally kept alive to avoid re-prompting.
+  };
+
+  // Hard-stop: also releases camera tracks (used when app backgrounds or unmounts).
+  const hardStop = () => {
+    stopStream();
+    streamRef.current?.getTracks().forEach((t: any) => t.stop());
+    streamRef.current = null;
   };
 
   // Detects whether the card content extends beyond the left or right edge of the
@@ -230,23 +238,33 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
     const g = globalThis as any;
     if (!g.navigator?.mediaDevices?.getUserMedia) { setPermState('unavailable'); return; }
     wantCameraRef.current = true;
+
+    // Reuse an existing live stream so we don't re-prompt for camera permission.
+    const existingTrack = streamRef.current?.getVideoTracks?.()[0];
+    const streamToUse: any = existingTrack && existingTrack.readyState === 'live'
+      ? streamRef.current
+      : null;
+
     try {
-      const stream = await g.navigator.mediaDevices.getUserMedia({
+      const stream = streamToUse ?? await g.navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
       if (!wantCameraRef.current) {
-        stream.getTracks().forEach((t: any) => t.stop());
+        // Only stop tracks if we just acquired a new stream
+        if (!streamToUse) stream.getTracks().forEach((t: any) => t.stop());
         return;
       }
       streamRef.current = stream;
       setPermState('granted');
 
-      // Detect torch support — torch is only available on Android Chrome, not iOS Safari
-      try {
-        const track = stream.getVideoTracks()[0];
-        const caps = track?.getCapabilities?.();
-        onTorchSupportChange?.(!!(caps?.torch));
-      } catch (_) { onTorchSupportChange?.(false); }
+      if (!streamToUse) {
+        // Detect torch support — only needed once when stream is first acquired
+        try {
+          const track = stream.getVideoTracks()[0];
+          const caps = track?.getCapabilities?.();
+          onTorchSupportChange?.(!!(caps?.torch));
+        } catch (_) { onTorchSupportChange?.(false); }
+      }
 
       // Suppress iOS Safari native video controls overlay
       if (!g.document.getElementById('connect-video-no-controls')) {
