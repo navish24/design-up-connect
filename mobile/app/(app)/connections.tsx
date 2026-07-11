@@ -53,9 +53,16 @@ function openExternal(url: string) {
 function openWhatsApp(phone: string) {
   const digits = phone.replace(/\D/g, '');
   Analytics.contactIconTapped('whatsapp');
-  // Use whatsapp:// scheme so iOS returns to the PWA after closing WhatsApp.
-  // wa.me does an extra https redirect which breaks the return path in PWA mode.
-  openExternal(Platform.OS === 'web' ? `whatsapp://send?phone=${digits}` : `https://wa.me/${digits}`);
+  if (Platform.OS === 'web') {
+    const isAndroid = /Android/i.test((globalThis as any).navigator?.userAgent ?? '');
+    // iOS intercepts whatsapp:// and returns to the PWA. Android Chrome doesn't
+    // handle that scheme — wa.me redirects to the app via the OS intent system.
+    (globalThis as any).window.location.href = isAndroid
+      ? `https://wa.me/${digits}`
+      : `whatsapp://send?phone=${digits}`;
+  } else {
+    Linking.openURL(`https://wa.me/${digits}`).catch(() => {});
+  }
 }
 
 function openLink(label: string, value: string) {
@@ -574,7 +581,6 @@ const CONTACT_LABELS_SET = new Set(['Phone', 'WhatsApp', 'Email']);
 const ONLINE_LABELS_SET = new Set(['Website', 'Instagram', 'LinkedIn', 'Twitter/X', 'Facebook', 'Behance', 'YouTube', 'Social Handle']);
 const LOCATION_LABELS_SET = new Set(['Address']);
 
-const QUICK_ACTION_USER = 'niveditasingh0124@gmail.com';
 
 function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, notes, onAddNote }: {
   contact: CardContact;
@@ -592,11 +598,10 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
   const [callSheetPhone, setCallSheetPhone] = useState<string | null>(null);
 
-  const isQuickActionUser = user?.email === QUICK_ACTION_USER;
   const phoneField = contact.fields.find((f) => f.label === 'Phone');
   const waField = contact.fields.find((f) => f.label === 'WhatsApp') ?? phoneField;
   const emailField = contact.fields.find((f) => f.label === 'Email');
-  const hasQuickActions = isQuickActionUser && (waField || phoneField || emailField);
+  const hasQuickActions = !!(waField || phoneField || emailField);
 
   const company = contact.fields.find((f) => f.label === 'Company')?.value;
   const name = getCardDisplayName(contact.fields);
@@ -1029,13 +1034,11 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
   const s = makeStyles(colors);
   const headerPaddingTop = useHeaderPaddingTop();
   const { user: connUser } = connection;
-  const { user: currentUser } = useAuth();
   const [showNotes, setShowNotes] = useState(false);
   const [photoExpanded, setPhotoExpanded] = useState(false);
   const [callSheetPhone, setCallSheetPhone] = useState<string | null>(null);
 
-  const isQuickActionUser = currentUser?.email === QUICK_ACTION_USER;
-  const hasQRQuickActions = isQuickActionUser && (connUser.phone || connUser.email);
+  const hasQRQuickActions = !!(connUser.phone || connUser.email);
   const user = connUser;
 
   return (
