@@ -207,7 +207,12 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
           if (elapsed >= 1500) {
             stableStartRef.current = null; lastSampleRef.current = null; setStabilityPct(0);
             capture();
-            return; // capture navigates away, stop loop
+            // Block the next auto-capture for 5 s — covers cloud-OCR latency (~2 s) plus
+            // camera restart time (~1 s). pauseUntilRef survives stopStream() so this guard
+            // stays effective even if active=false temporarily while OCR runs.
+            pauseUntilRef.current = Date.now() + 5000;
+            stabilityTimerRef.current = g.setTimeout(checkStabilityLoop, 5100);
+            return;
           }
         }
       } else {

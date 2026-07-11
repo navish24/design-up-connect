@@ -765,14 +765,10 @@ export default function ScanScreen() {
                   (f: any) => f.label === 'Phone' || f.label === 'WhatsApp' || f.label === 'Email' || f.label === 'Fax'
                 );
                 if (!hasContactInfo && !wasManual) {
+                  setIsCaptureProcessing(false);
                   setCardScanError('No card detected — position card fully in the frame');
                   if (cardScanErrorTimer.current) clearTimeout(cardScanErrorTimer.current);
-                  // Keep isCaptureProcessing=true while the error is visible — this keeps
-                  // the camera paused so the same frame doesn't immediately re-trigger.
-                  cardScanErrorTimer.current = setTimeout(() => {
-                    setCardScanError(null);
-                    setIsCaptureProcessing(false);
-                  }, 2500);
+                  cardScanErrorTimer.current = setTimeout(() => setCardScanError(null), 2500);
                   return;
                 }
                 cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
