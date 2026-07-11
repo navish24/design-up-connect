@@ -745,12 +745,16 @@ export default function ScanScreen() {
               onCapture={async (base64Jpeg) => {
                 const wasManual = isManualCapture.current;
                 isManualCapture.current = false;
-                setIsCaptureProcessing(true);
+                // Manual capture stops the camera and shows a loading state.
+                // Auto-capture leaves the camera live — WebCardScanner's pauseUntilRef
+                // already blocks re-capture for 5 s, so there's no need to stop the stream.
+                // Stopping the camera on auto-captures caused getUserMedia restart failures on iOS.
+                if (wasManual) setIsCaptureProcessing(true);
                 // jsQR check before OCR — ~50ms, no API cost.
                 // If a Connect QR is in frame, route immediately and skip OCR entirely.
                 const qrFromFrame = await decodeQRFromBase64(base64Jpeg);
                 if (qrFromFrame && isDesignupQR(qrFromFrame)) {
-                  setIsCaptureProcessing(false);
+                  if (wasManual) setIsCaptureProcessing(false);
                   handleBarCodeScanned({ data: qrFromFrame });
                   return;
                 }
@@ -765,7 +769,6 @@ export default function ScanScreen() {
                   (f: any) => f.label === 'Phone' || f.label === 'WhatsApp' || f.label === 'Email' || f.label === 'Fax'
                 );
                 if (!hasContactInfo && !wasManual) {
-                  setIsCaptureProcessing(false);
                   setCardScanError('No card detected — position card fully in the frame');
                   if (cardScanErrorTimer.current) clearTimeout(cardScanErrorTimer.current);
                   cardScanErrorTimer.current = setTimeout(() => setCardScanError(null), 2500);
@@ -773,7 +776,7 @@ export default function ScanScreen() {
                 }
                 cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
                 Analytics.cardScanned(fields.length > 0);
-                setIsCaptureProcessing(false);
+                if (wasManual) setIsCaptureProcessing(false);
                 router.push('/card-review');
               }}
             />
