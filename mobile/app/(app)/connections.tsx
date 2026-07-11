@@ -203,22 +203,6 @@ export default function ConnectionsScreen() {
     }, [])
   );
 
-  // After allConnections updates, open any deferred connection detail.
-  // This fires when addDemoConnection's state propagates after useFocusEffect ran.
-  useEffect(() => {
-    const userId = deferredOpenUserIdRef.current;
-    if (!userId) return;
-    const conn = allConnections.find(
-      (c) => c.user.id === userId ||
-             c.user.designup_user_id === userId ||
-             c.id === `demo-${userId}`
-    );
-    if (conn) {
-      deferredOpenUserIdRef.current = null;
-      setActiveView({ type: 'connect_detail', connection: conn });
-    }
-  }, [allConnections]);
-
   const s = makeStyles(colors);
 
   const handleExchangeContact = async (connId: string, userName: string) => {
@@ -293,6 +277,22 @@ export default function ConnectionsScreen() {
   }, [demoConnectionsReset, demoAddedConnections, mutualIds]);
   // Keep ref in sync so useFocusEffect (which has no deps) can read current value
   allConnectionsRef.current = allConnections;
+
+  // After allConnections updates, open any deferred connection detail.
+  // This fires when addDemoConnection's state propagates after useFocusEffect ran.
+  useEffect(() => {
+    const userId = deferredOpenUserIdRef.current;
+    if (!userId) return;
+    const conn = allConnections.find(
+      (c) => c.user.id === userId ||
+             c.user.designup_user_id === userId ||
+             c.id === `demo-${userId}`
+    );
+    if (conn) {
+      deferredOpenUserIdRef.current = null;
+      setActiveView({ type: 'connect_detail', connection: conn });
+    }
+  }, [allConnections]);
 
   const filteredConnections = useMemo(() => {
     if (filterType === 'cards') return [];
