@@ -3,7 +3,7 @@ import {
   Alert, ToastAndroid, Platform, Image, Modal, Linking,
   Animated, PanResponder,
 } from 'react-native';
-import { useState, useMemo, Fragment, useCallback, useRef } from 'react';
+import { useState, useMemo, Fragment, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { useHeaderPaddingTop } from '../../lib/safeArea';
@@ -177,6 +177,9 @@ export default function ConnectionsScreen() {
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
   const exchangingRef = useRef<Set<string>>(new Set());
   const allConnectionsRef = useRef<Connection[]>([]);
+  // Holds a userId when useFocusEffect fires before addDemoConnection state has propagated.
+  // The useEffect below watches allConnections and opens the detail once the conn appears.
+  const deferredOpenUserIdRef = useRef<string | null>(null);
 
   // Reset to list whenever the Connects tab gains focus, unless a QR scan just
   // requested that we open a specific connection's detail view.
@@ -191,10 +194,31 @@ export default function ConnectionsScreen() {
                  c.id === `demo-${pendingUserId}`
         );
         if (conn) { setActiveView({ type: 'connect_detail', connection: conn }); return; }
+        // State update from addDemoConnection hasn't propagated yet — defer and wait.
+        deferredOpenUserIdRef.current = pendingUserId;
+        return;
       }
-      setActiveView({ type: 'list' });
+      // Only reset to list when there is no deferred open pending.
+      if (!deferredOpenUserIdRef.current) setActiveView({ type: 'list' });
     }, [])
   );
+
+  // After allConnections updates, open any deferred connection detail.
+  // This fires when addDemoConnection's state propagates after useFocusEffect ran.
+  useEffect(() => {
+    const userId = deferredOpenUserIdRef.current;
+    if (!userId) return;
+    const conn = allConnections.find(
+      (c) => c.user.id === userId ||
+             c.user.designup_user_id === userId ||
+             c.id === `demo-${userId}`
+    );
+    if (conn) {
+      deferredOpenUserIdRef.current = null;
+      setActiveView({ type: 'connect_detail', connection: conn });
+    }
+  }, [allConnections]);
+
   const s = makeStyles(colors);
 
   const handleExchangeContact = async (connId: string, userName: string) => {
