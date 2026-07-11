@@ -376,6 +376,7 @@ export default function ScanScreen() {
               email: (u as any).email || undefined,
               phone: (u as any).phone || undefined,
               city: (u as any).city || undefined,
+              profile_image_url: u.profile_image_url || undefined,
             });
           }
           setTimeout(() => setScanState('success_connection'), 1800);

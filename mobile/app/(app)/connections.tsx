@@ -165,7 +165,7 @@ type ActiveView =
 
 export default function ConnectionsScreen() {
   const { colors } = useTheme();
-  const { demoConnectionsReset, demoAddedConnections, notes, addNote, cardContacts, deleteCardContact, updateCardContact, user } = useAuth();
+  const { demoConnectionsReset, demoAddedConnections, notes, addNote, cardContacts, deleteCardContact, updateCardContact, user, refreshConnections } = useAuth();
   const router = useRouter();
   const headerPaddingTop = useHeaderPaddingTop();
   const [search, setSearch] = useState('');
@@ -180,11 +180,15 @@ export default function ConnectionsScreen() {
   // Holds a userId when useFocusEffect fires before addDemoConnection state has propagated.
   // The useEffect below watches allConnections and opens the detail once the conn appears.
   const deferredOpenUserIdRef = useRef<string | null>(null);
+  const refreshConnectionsRef = useRef(refreshConnections);
+  refreshConnectionsRef.current = refreshConnections;
 
   // Reset to list whenever the Connects tab gains focus, unless a QR scan just
   // requested that we open a specific connection's detail view.
   useFocusEffect(
     useCallback(() => {
+      // Refresh profiles in the background so updates from other users appear.
+      refreshConnectionsRef.current();
       const pendingUserId = getPendingConnectionOpen();
       setPendingConnectionOpen(null);
       if (pendingUserId) {
@@ -259,6 +263,7 @@ export default function ConnectionsScreen() {
           email: person.email || undefined,
           phone: person.phone || undefined,
           city: person.city || undefined,
+          profile_image_url: person.profile_image_url || undefined,
         },
         brand_name: (person.company_name ?? person.company) || undefined,
         brand_id: person.brand_id || undefined,

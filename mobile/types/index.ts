@@ -148,7 +148,7 @@ export interface ScanResult {
   };
   connection?: {
     id: string;
-    user: { full_name: string; designation?: string; company_name?: string; designup_user_id: string; email?: string; phone?: string; city?: string };
+    user: { full_name: string; designation?: string; company_name?: string; designup_user_id: string; email?: string; phone?: string; city?: string; profile_image_url?: string };
     contact_shared: boolean;
     is_mutual: boolean;
   };

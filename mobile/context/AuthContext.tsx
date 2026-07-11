@@ -60,6 +60,8 @@ interface AuthContextType {
   dismissProfileNudge: () => void;
   // User update
   updateUser: (fields: Partial<User>) => void;
+  // Refresh connection profiles from Supabase (call when connections tab gains focus)
+  refreshConnections: () => void;
   // Card contacts (physical visiting card scans)
   cardContacts: CardContact[];
   addCardContact: (contact: CardContact) => Promise<void>;
@@ -103,6 +105,7 @@ const AuthContext = createContext<AuthContextType>({
   addCardContact: async () => {},
   updateCardContact: async () => {},
   deleteCardContact: async () => {},
+  refreshConnections: () => {},
   clearCardContacts: () => {},
 });
 
@@ -292,7 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const ids = rows.map((r: any) => r.connected_user_id);
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id')
+      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id, profile_image_url')
       .in('id', ids);
 
     const profileMap: Record<string, any> = {};
@@ -311,6 +314,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           city: p.city ?? undefined,
           phone: p.phone ?? undefined,
           email: p.email ?? undefined,
+          profile_image_url: p.profile_image_url ?? undefined,
         },
         connection_type: 'networking' as ConnectionType,
         scope: 'personal' as ConnectionScope,
@@ -323,6 +327,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setDemoAddedConnections(connections);
   }, []);
+
+  const refreshConnections = useCallback(() => {
+    if (!user?.id) return;
+    void loadConnections(user.id);
+  }, [user?.id, loadConnections]);
 
   const loadProfile = useCallback(async (userId: string) => {
     const { data: profile } = await supabase
@@ -613,6 +622,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       addDemoSavedBrand,
       demoAddedConnections,
       addDemoConnection,
+      refreshConnections,
       demoRegisteredExhibitions,
       addDemoRegistration,
       demoWishlist,
