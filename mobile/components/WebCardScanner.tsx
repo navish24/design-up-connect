@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FontSize, FontWeight, Spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import jsQR from 'jsqr';
 
 interface Props {
   active: boolean;
@@ -11,6 +12,9 @@ interface Props {
   torchOn?: boolean;
   onTorchSupportChange?: (supported: boolean) => void;
   errorHint?: string | null;
+  // Fires when a QR code is found in the live feed — called immediately without
+  // waiting for card stability. Caller should ignore non-app QRs.
+  onQRDetected?: (data: string) => void;
 }
 
 export interface WebCardScannerHandle {
@@ -19,7 +23,7 @@ export interface WebCardScannerHandle {
 
 type PermState = 'pending' | 'granted' | 'denied' | 'unavailable';
 
-const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapture, autoCapture = false, torchOn, onTorchSupportChange, errorHint }, ref) => {
+const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapture, autoCapture = false, torchOn, onTorchSupportChange, errorHint, onQRDetected }, ref) => {
   const { colors } = useTheme();
   const containerRef = useRef<any>(null);
   const videoRef = useRef<any>(null);
@@ -31,6 +35,11 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   const stableStartRef = useRef<number | null>(null);
   const edgeWarnShownRef = useRef(false);   // true once per stable session after warning shown
   const edgePauseUntilRef = useRef(0);     // timestamp until which stability countdown is paused
+  const lastQRScanRef = useRef(0);
+  const lastQRDataRef = useRef<string | null>(null);
+  const lastQRFireRef = useRef(0);
+  const onQRDetectedRef = useRef(onQRDetected);
+  onQRDetectedRef.current = onQRDetected;
   const [permState, setPermState] = useState<PermState>('pending');
   const [stabilityPct, setStabilityPct] = useState(0);
   const [showRotateHint, setShowRotateHint] = useState(false);
@@ -165,6 +174,36 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
       stabilityTimerRef.current = g.setTimeout(checkStabilityLoop, 400);
       return;
     }
+
+    // QR detection — runs every 500ms independently of stability countdown.
+    // This makes QR codes on visiting cards (or held up directly) work without
+    // needing the user to hold still for the full 1.5s card-capture countdown.
+    const now = Date.now();
+    if (onQRDetectedRef.current && now - lastQRScanRef.current >= 500) {
+      lastQRScanRef.current = now;
+      try {
+        const QR_W = 320, QR_H = 240;
+        const qrCanvas = g.document.createElement('canvas');
+        qrCanvas.width = QR_W; qrCanvas.height = QR_H;
+        const qrCtx = qrCanvas.getContext('2d');
+        if (qrCtx) {
+          qrCtx.drawImage(video, 0, 0, QR_W, QR_H);
+          const imgData = qrCtx.getImageData(0, 0, QR_W, QR_H);
+          const code = jsQR(imgData.data, QR_W, QR_H, { inversionAttempts: 'attemptBoth' });
+          if (code?.data) {
+            const isSameQR = code.data === lastQRDataRef.current && now - lastQRFireRef.current < 2000;
+            if (!isSameQR) {
+              lastQRDataRef.current = code.data;
+              lastQRFireRef.current = now;
+              // Pause card auto-capture so we don't also fire OCR on a QR code frame.
+              pauseUntilRef.current = now + 5000;
+              onQRDetectedRef.current(code.data);
+            }
+          }
+        }
+      } catch {}
+    }
+
     const W = 40, H = 25;
     const canvas = g.document.createElement('canvas');
     canvas.width = W; canvas.height = H;
