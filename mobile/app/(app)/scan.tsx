@@ -855,9 +855,19 @@ export default function ScanScreen() {
     );
   }
 
-  // ── QR mode (full-screen camera) ──────────────────────────────────────────
+  // ── QR mode ───────────────────────────────────────────────────────────────
   return (
     <View style={[s.root, { backgroundColor: '#000' }]}>
+      {/* Header — sits at top in normal flow, no absolute positioning */}
+      <View style={[s.qrHeader, { paddingTop: headerPaddingTop as any }]}>
+        <Pressable onPress={() => setScanView('choice')} hitSlop={12}>
+          <Ionicons name="arrow-back" size={22} color="#FFF" />
+        </Pressable>
+        <Text style={s.qrHeaderTitle}>Connect QR</Text>
+        <View style={{ width: 22 }} />
+      </View>
+
+      {/* Camera fills remaining vertical space */}
       {Platform.OS === 'web' ? (
         <WebQRScanner
           active={isFocused && scanState === 'idle'}
@@ -886,17 +896,10 @@ export default function ScanScreen() {
       ) : (
         <View style={{ flex: 1, backgroundColor: '#000' }} />
       )}
-      {/* Header overlay — matches card mode pattern */}
-      <View style={[s.qrHeader, { paddingTop: headerPaddingTop as any }]}>
-        <Pressable onPress={() => setScanView('choice')} hitSlop={12}>
-          <Ionicons name="arrow-back" size={22} color="#FFF" />
-        </Pressable>
-        <Text style={s.qrHeaderTitle}>Connect QR</Text>
-        <View style={{ width: 22 }} />
-      </View>
-      {/* Torch button — absolute positioned at bottom */}
-      {(Platform.OS !== 'web' || webTorchSupported) && (
-        <View style={[s.qrTorchRow, { paddingBottom: bottomInset + 36 }]}>
+
+      {/* Bottom controls — torch + switch hint, sit below camera in normal flow */}
+      <View style={[s.qrBottom, { paddingBottom: bottomInset + 16 }]}>
+        {(Platform.OS !== 'web' || webTorchSupported) && (
           <View style={s.roundBtnItem}>
             <Pressable
               style={[s.roundBtnSm, { backgroundColor: torchOn ? 'rgba(255,224,102,0.25)' : 'rgba(255,255,255,0.12)' }]}
@@ -906,12 +909,12 @@ export default function ScanScreen() {
             </Pressable>
             <Text style={s.roundBtnLabel}>Torch</Text>
           </View>
-        </View>
-      )}
-      {/* Always-visible switch hint at very bottom */}
-      <Pressable style={[s.qrSwitchHint, { paddingBottom: bottomInset + 10 }]} onPress={() => setScanView('card')}>
-        <Text style={s.qrSwitchHintText}>Have a visiting card instead?</Text>
-      </Pressable>
+        )}
+        <Pressable style={s.qrSwitchBtn} onPress={() => setScanView('card')}>
+          <Ionicons name="card-outline" size={16} color={colors.accent} />
+          <Text style={[s.qrSwitchBtnText, { color: colors.accent }]}>Have a visiting card instead?</Text>
+        </Pressable>
+      </View>
     </View>
   );
 
@@ -986,30 +989,27 @@ function makeStyles(colors: any) {
     },
     roundBtnLabel: { color: '#FFF', fontSize: FontSize.xs, fontWeight: FontWeight.medium },
 
-    // QR mode header overlay
+    // QR mode header — normal flow, no absolute positioning
     qrHeader: {
-      position: 'absolute' as any,
-      top: 0, left: 0, right: 0,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md,
     },
     qrHeaderTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: '#FFF' },
-    // QR mode torch button row — absolute, bottom of screen
-    qrTorchRow: {
-      position: 'absolute' as any,
-      bottom: 0, left: 0, right: 0,
-      flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end',
-      paddingTop: 20,
-    },
-    qrSwitchHint: {
-      position: 'absolute' as any,
-      bottom: 0, left: 0, right: 0,
+    // QR mode bottom bar — sits below camera in normal flow
+    qrBottom: {
       alignItems: 'center',
+      gap: 16,
+      paddingTop: 20,
+      backgroundColor: '#000',
     },
-    qrSwitchHintText: {
-      color: 'rgba(255,255,255,0.5)',
-      fontSize: FontSize.xs,
-      textDecorationLine: 'underline' as any,
+    qrSwitchBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      paddingVertical: 10, paddingHorizontal: 20,
+      borderRadius: Radius.full,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+    qrSwitchBtnText: {
+      fontSize: FontSize.sm, fontWeight: FontWeight.medium,
     },
 
     // Info bottom sheet
