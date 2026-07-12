@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, TextInput, Modal,
 import { useHeaderPaddingTop } from '../../lib/safeArea';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
@@ -27,6 +27,8 @@ export default function ProfileScreen() {
 
   const [qrExpanded, setQrExpanded] = useState(false);
   const [showCardPreview, setShowCardPreview] = useState(false);
+  // Snapshot of field values when edit modal opens — used for unsaved-changes guard
+  const editOriginalRef = useRef<Record<string, string>>({});
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -112,7 +114,54 @@ export default function ProfileScreen() {
     setEditWebsite(user.website_url ?? '');
     setEditOtherUrl(user.other_url ?? '');
     setShowProfessionPicker(false);
+    // Capture snapshot for unsaved-changes guard
+    editOriginalRef.current = {
+      fullName: `${user.first_name} ${user.last_name}`.trim(),
+      designation: user.designation ?? '',
+      company: user.company_name ?? '',
+      address: user.address ?? '',
+      city: user.city ?? '',
+      profession: (PROFESSIONS.includes(user.profession ?? '') ? (user.profession ?? '') : (user.profession ? 'Other' : '')),
+      customProfession: PROFESSIONS.includes(user.profession ?? '') ? '' : (user.profession ?? ''),
+      email: user.email ?? '',
+      instagram: user.instagram_handle ?? '',
+      linkedin: user.linkedin_url ?? '',
+      website: user.website_url ?? '',
+      otherUrl: user.other_url ?? '',
+    };
     setShowEditDetails(true);
+  };
+
+  const hasUnsavedEdits = () => {
+    const o = editOriginalRef.current;
+    return (
+      editFullName !== o.fullName ||
+      editDesignation !== o.designation ||
+      editCompany !== o.company ||
+      editAddress !== o.address ||
+      editCity !== o.city ||
+      editProfession !== o.profession ||
+      editCustomProfession !== o.customProfession ||
+      editEmail !== o.email ||
+      editInstagram !== o.instagram ||
+      editLinkedin !== o.linkedin ||
+      editWebsite !== o.website ||
+      editOtherUrl !== o.otherUrl
+    );
+  };
+
+  const closeEditWithGuard = () => {
+    if (!hasUnsavedEdits()) { setShowEditDetails(false); return; }
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).window?.confirm('Leave without saving? Your changes will be lost.')) {
+        setShowEditDetails(false);
+      }
+      return;
+    }
+    Alert.alert('Unsaved changes', 'Leave without saving?', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => setShowEditDetails(false) },
+    ]);
   };
 
   const uploadProfileImage = async (uri: string): Promise<string | null> => {
@@ -667,6 +716,15 @@ if (isLoading) {
               )}
 
             </ScrollView>
+            <View style={[s.editSaveFooter, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+              <Pressable
+                style={[s.modalSaveBtn, { backgroundColor: colors.accent }]}
+                onPress={() => { setShowCardPreview(false); openEditDetails(); }}
+              >
+                <Ionicons name="create-outline" size={16} color="#FFF" />
+                <Text style={s.modalSaveBtnText}>Edit Details</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -728,7 +786,7 @@ if (isLoading) {
           <View style={[s.modalSheet, { backgroundColor: colors.background }]}>
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: colors.text }]}>Edit Your Details</Text>
-              <Pressable onPress={() => setShowEditDetails(false)}>
+              <Pressable onPress={closeEditWithGuard}>
                 <Ionicons name="close" size={22} color={colors.text} />
               </Pressable>
             </View>
@@ -816,6 +874,8 @@ if (isLoading) {
                 <TextInput style={[s.editInputInner, { color: colors.text }]} value={editOtherUrl} onChangeText={setEditOtherUrl} placeholder="Behance, Pinterest, etc." placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="url" />
               </View>
 
+            </ScrollView>
+            <View style={[s.editSaveFooter, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
               <Pressable
                 style={[s.modalSaveBtn, { backgroundColor: colors.accent }]}
                 onPress={() => {
@@ -840,7 +900,7 @@ if (isLoading) {
               >
                 <Text style={s.modalSaveBtnText}>Save Changes</Text>
               </Pressable>
-            </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1121,8 +1181,9 @@ function makeStyles(colors: any) {
     editInputPrefix: { fontSize: FontSize.md, fontWeight: FontWeight.medium, marginRight: 4 },
     editInputInner: { flex: 1, fontSize: FontSize.md },
     editSectionDivider: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, letterSpacing: 1, marginTop: Spacing.xl, marginBottom: Spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.lg },
-    modalSaveBtn: { paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center', marginTop: Spacing.md, width: '100%' },
+    modalSaveBtn: { paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, width: '100%' },
     modalSaveBtnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+    editSaveFooter: { padding: Spacing.lg, paddingTop: Spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
     usernameInputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, height: 50 },
     usernameAt: { fontSize: FontSize.md, fontWeight: FontWeight.medium, marginRight: 4 },
     usernameInput: { flex: 1, fontSize: FontSize.md },

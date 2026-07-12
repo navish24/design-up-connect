@@ -19,7 +19,7 @@ import { CameraView, useCameraPermissions, scanFromURLAsync } from 'expo-camera'
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderPaddingTop } from '../../lib/safeArea';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { getTabBarStyle } from './_layout';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -170,6 +170,7 @@ export default function ScanScreen() {
   const { colors } = useTheme();
   const { activeExhibitionId, user, addDemoSavedBrand, addDemoConnection, setActiveExhibition } =
     useAuth();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const isFocused = useIsFocused();
   const { bottom: bottomInset } = useSafeAreaInsets();
@@ -200,8 +201,11 @@ export default function ScanScreen() {
       setScanResult(null);
       isProcessing.current = false;
       setScanView('choice');
+    } else if (mode === 'card') {
+      // Arrived from "Scan Another Card" on the success screen — skip choice screen
+      setScanView('card');
     }
-  }, [isFocused]);
+  }, [isFocused, mode]);
 
   // Hide tab bar only while actively scanning — restore on choice screen AND
   // all result/error states so the user is never fully stuck without navigation.

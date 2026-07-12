@@ -17,7 +17,7 @@ type PaletteName =
   // Cool grey base + accent variants:
   | 'grey_jade' | 'grey_slate' | 'grey_warm';
 
-const ACTIVE_PALETTE: PaletteName = 'grey_jade';
+const ACTIVE_PALETTE: PaletteName = 'sand_jade';
 
 // ─── A: Terracotta + Charcoal ─────────────────────────────────────────────────
 // Warm, material, studio-like. References clay, stone, warm concrete.

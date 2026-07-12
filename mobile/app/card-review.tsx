@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cardScanStore } from '../lib/cardScanStore';
+import { setPendingCardOpen } from '../lib/pendingNav';
 import { uploadCardImages } from '../lib/cloudinary';
 import { Analytics } from '../lib/analytics';
 import { Spacing, FontSize, FontWeight, Radius } from '../constants/theme';
@@ -164,17 +165,20 @@ export default function CardReviewScreen() {
         </Text>
         <Pressable
           style={[s.solidBtn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
-          onPress={() => router.replace('/(app)/scan')}
+          onPress={() => router.replace('/(app)/scan?mode=card' as any)}
         >
           <Ionicons name="camera-outline" size={18} color="#FFF" />
           <Text style={s.solidBtnText}>Scan Another Card</Text>
         </Pressable>
         <Pressable
           style={[s.outlineBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={() => router.replace('/(app)/connections')}
+          onPress={() => {
+            if (savedContactId) setPendingCardOpen(savedContactId);
+            router.replace('/(app)/connections');
+          }}
         >
           <Ionicons name="people-outline" size={18} color={colors.textSecondary} />
-          <Text style={[s.outlineBtnText, { color: colors.textSecondary }]}>View Contacts</Text>
+          <Text style={[s.outlineBtnText, { color: colors.textSecondary }]}>View Contact</Text>
         </Pressable>
         <Pressable style={s.addNoteLink} onPress={() => setShowNoteSheet(true)}>
           <Text style={[s.addNoteLinkText, { color: colors.textMuted }]}>

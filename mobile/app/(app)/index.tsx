@@ -18,6 +18,7 @@ import { Analytics } from '../../lib/analytics';
 import { recognizeCardText, recognizeCardTextWeb, parseCardFields } from '../../lib/cardOcr';
 import { cardScanStore } from '../../lib/cardScanStore';
 import { getCardDisplayName } from './connections';
+import { setPendingConnectionOpen, setPendingCardOpen } from '../../lib/pendingNav';
 
 function getBrandCoverImage(brandId: string): string | null {
   const brand = ALL_BRANDS.find((b) => b.id === brandId);
@@ -885,10 +886,10 @@ function BetaHomeScreen() {
           isConnection ? c.user.company_name : (c.company_name ?? c.company),
         ].filter(Boolean).join(' · '),
         source: 'qr' as const,
-        ts: Date.now(),
+        ts: c.created_at ? new Date(c.created_at).getTime() : 0,
       };
     });
-    return [...cards, ...qrs].sort((a, b) => b.ts - a.ts).slice(0, 5);
+    return [...cards, ...qrs].sort((a, b) => b.ts - a.ts).slice(0, 3);
   }, [cardContacts, demoAddedConnections]);
 
   const hasContacts = recentContacts.length > 0;
@@ -1011,7 +1012,14 @@ function BetaHomeScreen() {
                 <Pressable
                   key={contact.id}
                   style={[b.contactRow, { backgroundColor: colors.surface }]}
-                  onPress={() => router.push('/(app)/connections')}
+                  onPress={() => {
+                    if (contact.source === 'card') {
+                      setPendingCardOpen(contact.id);
+                    } else {
+                      setPendingConnectionOpen(contact.id);
+                    }
+                    router.push('/(app)/connections');
+                  }}
                 >
                   <View style={[b.contactAvatar, { backgroundColor: colors.accent + '18' }]}>
                     <Text style={[b.contactAvatarText, { color: colors.accent }]}>{avatarLetters}</Text>

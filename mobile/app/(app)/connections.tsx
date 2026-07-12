@@ -17,7 +17,7 @@ import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import NotesModal from '../../components/NotesModal';
 import { Analytics } from '../../lib/analytics';
 import type { Connection, CardContact } from '../../types';
-import { getPendingConnectionOpen, setPendingConnectionOpen } from '../../lib/pendingNav';
+import { getPendingConnectionOpen, setPendingConnectionOpen, getPendingCardOpen, setPendingCardOpen } from '../../lib/pendingNav';
 
 export function getCardDisplayName(fields: { label: string; value: string }[]): string {
   const get = (label: string) => fields.find((f) => f.label === label)?.value ?? '';
@@ -184,6 +184,8 @@ export default function ConnectionsScreen() {
   pendingOpenUserIdRef.current = pendingOpenUserId;
   const exchangingRef = useRef<Set<string>>(new Set());
   const allConnectionsRef = useRef<Connection[]>([]);
+  const cardContactsRef = useRef<CardContact[]>([]);
+  cardContactsRef.current = cardContacts;
   const refreshConnectionsRef = useRef(refreshConnections);
   refreshConnectionsRef.current = refreshConnections;
   // On web (Expo Router), useFocusEffect can fire a spurious second time after a
@@ -197,6 +199,18 @@ export default function ConnectionsScreen() {
   // requested that we open a specific connection's detail view.
   useFocusEffect(
     useCallback(() => {
+      // Check for pending card (physically scanned) open first
+      const pendingCardId = getPendingCardOpen();
+      setPendingCardOpen(null);
+      if (pendingCardId) {
+        navOpenedDetailRef.current = true;
+        const card = cardContactsRef.current.find((c) => c.id === pendingCardId);
+        if (card) { setActiveView({ type: 'card_detail', contact: card }); return; }
+        // Card list might not be populated yet — store and wait
+        setPendingOpenUserId(`card:${pendingCardId}`);
+        return;
+      }
+
       const pendingUserId = getPendingConnectionOpen();
       setPendingConnectionOpen(null);
       if (pendingUserId) {
@@ -308,6 +322,17 @@ export default function ConnectionsScreen() {
   // was already populated before useFocusEffect set the pending userId.
   useEffect(() => {
     if (!pendingOpenUserId) return;
+    // Deferred card open: pendingOpenUserId is prefixed "card:{id}"
+    if (pendingOpenUserId.startsWith('card:')) {
+      const cardId = pendingOpenUserId.slice(5);
+      const card = cardContacts.find((c) => c.id === cardId);
+      if (card) {
+        navOpenedDetailRef.current = true;
+        setPendingOpenUserId(null);
+        setActiveView({ type: 'card_detail', contact: card });
+      }
+      return;
+    }
     const conn = allConnections.find(
       (c) => c.user.id === pendingOpenUserId ||
              c.user.designup_user_id === pendingOpenUserId ||
@@ -320,7 +345,7 @@ export default function ConnectionsScreen() {
       setPendingOpenUserId(null);
       setActiveView({ type: 'connect_detail', connection: conn });
     }
-  }, [allConnections, pendingOpenUserId]);
+  }, [allConnections, cardContacts, pendingOpenUserId]);
 
   const filteredConnections = useMemo(() => {
     if (filterType === 'cards') return [];
@@ -536,19 +561,25 @@ export default function ConnectionsScreen() {
         {filteredItems.length === 0 && (
           <View style={[s.emptyState, { backgroundColor: colors.surface }]}>
             <Text style={s.emptyIcon}>🤝</Text>
-            <Text style={[s.emptyTitle, { color: colors.text }]}>No connections yet</Text>
-            <Text style={[s.emptyBody, { color: colors.textSecondary }]}>
-              {isBeta
-                ? 'Everyone you\'ve connected with appears here — scan a visiting card or a Connect QR to get started.'
-                : 'Scan a QR code to connect with someone on Connect, or tap "Scan Card" to save a physical visiting card.'}
+            <Text style={[s.emptyTitle, { color: colors.text }]}>
+              {filterType === 'notes' ? 'No contacts with notes' : 'No connections yet'}
             </Text>
-            <Pressable
-              style={[s.emptyCardBtn, { backgroundColor: colors.accent }]}
-              onPress={() => router.push('/(app)/scan?cardMode=1' as any)}
-            >
-              <Ionicons name="card-outline" size={16} color="#FFF" />
-              <Text style={s.emptyCardBtnText}>Scan a Visiting Card</Text>
-            </Pressable>
+            <Text style={[s.emptyBody, { color: colors.textSecondary }]}>
+              {filterType === 'notes'
+                ? 'Open a contact and tap "Add a note" to start keeping notes about your connections.'
+                : isBeta
+                  ? 'Everyone you\'ve connected with appears here — scan a visiting card or a Connect QR to get started.'
+                  : 'Scan a QR code to connect with someone on Connect, or tap "Scan Card" to save a physical visiting card.'}
+            </Text>
+            {filterType !== 'notes' && (
+              <Pressable
+                style={[s.emptyCardBtn, { backgroundColor: colors.accent }]}
+                onPress={() => router.push('/(app)/scan?mode=card' as any)}
+              >
+                <Ionicons name="card-outline" size={16} color="#FFF" />
+                <Text style={s.emptyCardBtnText}>Scan a Visiting Card</Text>
+              </Pressable>
+            )}
           </View>
         )}
       </ScrollView>

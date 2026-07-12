@@ -473,6 +473,21 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       fields.push({ label: detected.platform, value: `@${detected.handle}` });
       return;
     }
+    // If no glyph prefix was found, check adjacent lines for Instagram context.
+    // Cards often print the IG logo graphic (unreadable by OCR) with a bare handle below it.
+    if (BARE_HANDLE_RE.test(stripDiacritics(line.toLowerCase()))) {
+      const window = [remaining[idx - 2], remaining[idx - 1], remaining[idx + 1], remaining[idx + 2]]
+        .filter(Boolean)
+        .map((s) => s.toLowerCase());
+      const igNearby = window.some((s) => /\b(insta(?:gram)?|ig)\b|^@\s*[a-z]/.test(s));
+      if (igNearby) {
+        const handle = stripDiacritics(line.toLowerCase()).replace(ICON_GLYPH_PREFIX_RE, '');
+        if (BARE_HANDLE_RE.test(handle) && !fields.some((f) => f.label === 'Instagram' && f.value.replace(/^@/, '') === handle)) {
+          fields.push({ label: 'Instagram', value: `@${handle}` });
+          return;
+        }
+      }
+    }
 
     // Bare handle that matches the website domain base → Social Handle.
     // Cards often print "padmehumstudioindia" next to Instagram/Facebook icons that OCR

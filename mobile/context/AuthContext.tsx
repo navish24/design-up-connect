@@ -464,7 +464,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const addDemoConnection = (person: any) => {
     setDemoAddedConnections((prev) => {
       if (prev.find((p) => p.id === person.id)) return prev;
-      return [...prev, person];
+      return [...prev, { ...person, created_at: person.created_at ?? new Date().toISOString() }];
     });
     setDemoConnectionsReset(false);
   };
