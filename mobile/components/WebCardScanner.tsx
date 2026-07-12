@@ -51,8 +51,11 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   useEffect(() => {
     if (!active) { stopStream(); return; }
     startCamera();
-    return () => hardStop(); // release tracks on unmount
   }, [active]);
+
+  // Separate unmount cleanup — must not run on every active toggle or the stream
+  // gets killed and the next open re-prompts for camera permission.
+  useEffect(() => { return () => hardStop(); }, []);
 
   // Show a rotation hint after 5s of no card detected — helps users who hold
   // their card landscape (wide) in a portrait viewport and miss content at the edges.
