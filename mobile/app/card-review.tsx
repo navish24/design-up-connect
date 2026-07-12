@@ -268,6 +268,17 @@ export default function CardReviewScreen() {
           </View>
         )}
 
+        {/* No-contact warning: at least one of phone/email/WhatsApp should be present */}
+        {fields.length > 0 &&
+          !fields.some((f) => f.label === 'Phone' || f.label === 'WhatsApp' || f.label === 'Fax' || f.label === 'Email') && (
+          <View style={[s.banner, { backgroundColor: '#C4622D18', borderColor: '#C4622D55' }]}>
+            <Ionicons name="alert-circle-outline" size={15} color="#C4622D" />
+            <Text style={[s.bannerText, { color: '#C4622D' }]}>
+              No phone or email found — this might not be a visiting card. Delete junk fields before saving.
+            </Text>
+          </View>
+        )}
+
         {/* Empty state */}
         {fields.length === 0 && (
           <View style={[s.emptyBox, { backgroundColor: colors.surface }]}>

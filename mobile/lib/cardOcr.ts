@@ -226,9 +226,15 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   }
 
   // ── 7. Phone numbers ─────────────────────────────────────────────────────────
-  const phoneMatches = [...new Set(fullText.match(PHONE_RE) ?? [])].filter(
-    (p) => p.replace(/\D/g, '').length >= 10
-  );
+  const phoneMatches = [...new Set(fullText.match(PHONE_RE) ?? [])].filter((p) => {
+    if (p.replace(/\D/g, '').length < 10) return false;
+    // Reject decimal/fractional numbers from spreadsheets or printed tables.
+    // The phone regex uses "." as a separator (e.g. "+91.98200.00000"), so cell values
+    // like "94.3333 53.33" or "252 186.6667" can match. A real phone separator never
+    // has more than 2 digits on the left side of the dot followed by 3+ fraction digits.
+    if (/\d{2,}\.\d{3,}/.test(p)) return false;
+    return true;
+  });
   for (const m of phoneMatches) {
     if (isConsumed(m)) continue;
     // Check context around this match for "WhatsApp" or "fax" hints
