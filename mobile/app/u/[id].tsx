@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
+import { setPendingConnectionOpen } from '../../lib/pendingNav';
 
 interface Profile {
   first_name: string;
@@ -14,14 +16,17 @@ interface Profile {
   city: string | null;
 }
 
-const APP_URL = 'https://connect-designup.vercel.app';
+const PWA_URL = 'https://connect-designup.vercel.app';
 
 export default function PublicProfilePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const { addDemoConnection } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -37,11 +42,20 @@ export default function PublicProfilePage() {
       });
   }, [id]);
 
-  const openInConnect = () => {
-    const deepLink = `${APP_URL}/u/${id}`;
-    if (Platform.OS === 'web') {
-      (globalThis as any).window?.open(deepLink, '_self');
-    }
+  const addOnConnect = async () => {
+    if (!profile || adding || added) return;
+    setAdding(true);
+    addDemoConnection({
+      id,
+      full_name: `${profile.first_name} ${profile.last_name}`.trim(),
+      designation: profile.designation ?? '',
+      company_name: profile.company_name ?? '',
+      city: profile.city ?? '',
+    });
+    setPendingConnectionOpen(id);
+    setAdded(true);
+    setAdding(false);
+    router.replace('/(app)/connections');
   };
 
   const s = makeStyles(colors);
@@ -94,18 +108,28 @@ export default function PublicProfilePage() {
           Open Connect to save {profile.first_name}'s contact and connect professionally.
         </Text>
 
-        {/* Primary: open in Connect (same URL, app intercepts) */}
-        <Pressable style={[s.primaryBtn, { backgroundColor: colors.accent }]} onPress={openInConnect}>
-          <Ionicons name="person-add-outline" size={16} color="#FFF" />
-          <Text style={s.primaryBtnText}>Add {profile.first_name} on Connect</Text>
+        {/* Primary: add this person to Connect connections */}
+        <Pressable
+          style={[s.primaryBtn, { backgroundColor: added ? colors.accent + 'AA' : colors.accent }]}
+          onPress={addOnConnect}
+          disabled={adding || added}
+        >
+          {adding ? (
+            <ActivityIndicator color="#FFF" size="small" />
+          ) : (
+            <Ionicons name={added ? 'checkmark-circle-outline' : 'person-add-outline'} size={16} color="#FFF" />
+          )}
+          <Text style={s.primaryBtnText}>
+            {added ? 'Added!' : `Add ${profile.first_name} on Connect`}
+          </Text>
         </Pressable>
 
-        {/* Secondary: download prompt */}
+        {/* Secondary: open the PWA for users who don't have it yet */}
         <Text style={[s.downloadHint, { color: colors.textMuted }]}>
           Don't have Connect?{' '}
           <Text
             style={{ color: colors.accent, fontWeight: FontWeight.semibold }}
-            onPress={() => (globalThis as any).window?.open('https://designup.in', '_blank')}
+            onPress={() => (globalThis as any).window?.open(PWA_URL, '_blank')}
           >
             Get the app
           </Text>
