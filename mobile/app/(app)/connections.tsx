@@ -187,8 +187,6 @@ export default function ConnectionsScreen() {
   // requested that we open a specific connection's detail view.
   useFocusEffect(
     useCallback(() => {
-      // Refresh profiles in the background so updates from other users appear.
-      refreshConnectionsRef.current();
       const pendingUserId = getPendingConnectionOpen();
       setPendingConnectionOpen(null);
       if (pendingUserId) {
@@ -199,10 +197,12 @@ export default function ConnectionsScreen() {
         );
         if (conn) { setActiveView({ type: 'connect_detail', connection: conn }); return; }
         // State update from addDemoConnection hasn't propagated yet — defer and wait.
+        // Don't refresh here: loadConnections would replace demoAddedConnections, wiping the new entry.
         deferredOpenUserIdRef.current = pendingUserId;
         return;
       }
-      // Only reset to list when there is no deferred open pending.
+      // Only refresh profiles when showing the list — not when navigating to a specific connection.
+      refreshConnectionsRef.current();
       if (!deferredOpenUserIdRef.current) setActiveView({ type: 'list' });
     }, [])
   );
