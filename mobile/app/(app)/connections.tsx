@@ -1170,10 +1170,16 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
 
         {/* Identity */}
         <View style={s.gIdentity}>
-          {user.profile_image_url && (
+          {user.profile_image_url ? (
             <Pressable onPress={() => setPhotoExpanded(true)} style={s.gProfileThumb}>
               <Image source={{ uri: user.profile_image_url }} style={s.gProfileThumbImg} />
             </Pressable>
+          ) : (
+            <View style={[s.gProfileThumb, { backgroundColor: colors.accent + '22', alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: colors.accent }}>
+                {user.full_name.split(' ').filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+              </Text>
+            </View>
           )}
           <Text style={[s.gName, { color: colors.text }]}>{user.full_name}</Text>
           {connection.brand_name && (
@@ -1316,7 +1322,7 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         {connection.is_mutual ? (
           <View style={s.gActions}>
             <View style={[s.gMutualBadge, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '44' }]}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
+              <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
               <Text style={[s.gMutualBadgeText, { color: colors.accent }]}>Mutual Connection</Text>
             </View>
           </View>
@@ -1590,8 +1596,8 @@ function makeStyles(colors: any) {
     gBrandLetter: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     gBrandLetterText: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
     gActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
-    gMutualBadge: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 13, borderRadius: Radius.full, borderWidth: 1.5 },
-    gMutualBadgeText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+    gMutualBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 5, paddingHorizontal: 12, borderRadius: Radius.full, borderWidth: 1, alignSelf: 'flex-start' },
+    gMutualBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
     slideTrack: { flex: 1, height: 52, borderRadius: 26, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     slideThumb: { position: 'absolute', top: SLIDE_PAD, width: SLIDE_THUMB, height: SLIDE_THUMB, borderRadius: SLIDE_THUMB / 2, alignItems: 'center', justifyContent: 'center' },
     slideLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, letterSpacing: 0.2 },

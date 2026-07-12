@@ -222,10 +222,7 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const handleAvatarPress = () => {
-    if (user?.profile_image_url) setShowPhotoPreview(true);
-    else showPhotoSourcePicker();
-  };
+  const handleAvatarPress = () => setShowPhotoPreview(true);
 
   const submitQuery = async () => {
     if (!queryText.trim()) { Alert.alert('Please type your query first.'); return; }
@@ -574,24 +571,32 @@ if (isLoading) {
       <Modal visible={showPhotoPreview} transparent animationType="fade" onRequestClose={() => setShowPhotoPreview(false)}>
         <Pressable style={s.photoOverlay} onPress={() => setShowPhotoPreview(false)}>
           <Pressable style={[s.photoPreviewCard, { backgroundColor: colors.surface }]} onPress={() => {}}>
-            {user?.profile_image_url && (
+            {user?.profile_image_url ? (
               <Image source={{ uri: user.profile_image_url }} style={s.photoPreviewImg} resizeMode="cover" />
+            ) : (
+              <View style={{ width: '100%', aspectRatio: 1, backgroundColor: colors.accent + '18', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 64, fontWeight: '700', color: colors.accent }}>{initials}</Text>
+              </View>
             )}
             <View style={s.photoPreviewActions}>
               <Pressable
                 style={[s.photoPreviewBtn, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '55' }]}
                 onPress={() => { setShowPhotoPreview(false); showPhotoSourcePicker(); }}
               >
-                <Ionicons name="pencil-outline" size={16} color={colors.accent} />
-                <Text style={[s.photoPreviewBtnText, { color: colors.accent }]}>Edit</Text>
+                <Ionicons name={user?.profile_image_url ? 'pencil-outline' : 'add-outline'} size={16} color={colors.accent} />
+                <Text style={[s.photoPreviewBtnText, { color: colors.accent }]}>
+                  {user?.profile_image_url ? 'Edit' : 'Add Photo'}
+                </Text>
               </Pressable>
-              <Pressable
-                style={[s.photoPreviewBtn, { backgroundColor: '#ef444418', borderColor: '#ef444455' }]}
-                onPress={() => { setShowPhotoPreview(false); updateUser({ profile_image_url: undefined }); }}
-              >
-                <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                <Text style={[s.photoPreviewBtnText, { color: '#ef4444' }]}>Delete</Text>
-              </Pressable>
+              {user?.profile_image_url && (
+                <Pressable
+                  style={[s.photoPreviewBtn, { backgroundColor: '#ef444418', borderColor: '#ef444455' }]}
+                  onPress={() => { setShowPhotoPreview(false); updateUser({ profile_image_url: undefined }); }}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                  <Text style={[s.photoPreviewBtnText, { color: '#ef4444' }]}>Delete</Text>
+                </Pressable>
+              )}
             </View>
           </Pressable>
         </Pressable>
