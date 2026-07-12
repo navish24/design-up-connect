@@ -268,7 +268,8 @@ export default function ScanScreen() {
     setIsGalleryImporting(true);
     ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
+      allowsEditing: true,
+      aspect: [8, 5] as [number, number],
       quality: 0.9,
     }).then(async (result) => {
       if (result.canceled || !result.assets?.[0]) { setIsGalleryImporting(false); return; }
