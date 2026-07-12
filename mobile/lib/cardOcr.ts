@@ -387,7 +387,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // Words that appear in firm/studio/brand names but not in personal names.
   const COMPANY_KEYWORD_RE =
-    /\b(studio|studios|architects|architecture|interiors|interior|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal|capital|ventures|holdings|finance|financial|wealth|advisory|advisors|investments|investment|securities|broking|insurance|leasing|logistics|infrastructure|pharma|pharmaceuticals|chemicals|polymers|packaging|print|printing|publications|publishers|events|promotions|marketing|consultancy|outsourcing|staffing|recruitment|furniture|furnishings|modular)\b|\bstate\s+of\b/i;
+    /\b(studio|studios|architects|architecture|interiors|interior|landscape|landscaping|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal|capital|ventures|holdings|finance|financial|wealth|advisory|advisors|investments|investment|securities|broking|insurance|leasing|logistics|infrastructure|pharma|pharmaceuticals|chemicals|polymers|packaging|print|printing|publications|publishers|events|promotions|marketing|consultancy|outsourcing|staffing|recruitment|furniture|furnishings|modular)\b|\bstate\s+of\b/i;
 
   // Label prefix common on cards: "M:" / "M (400)…" / "Tel. " / "Fax: " / "Ph: "
   // The space-only variant (no colon) is guarded by a lookahead for digit/paren/+ so we
@@ -710,6 +710,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
   }
 
+  // Collect service-type lines printed on firm cards (e.g. "Architecture", "Interiors",
+  // "Landscape", "Turn-Key Projects") to merge into a single Services field.
+  const serviceEntries: string[] = [];
+
   // A line sitting right next to a recognised address line belongs to the address too
   // (e.g. a city/pin line OCR'd separately). Allow digits so "Hyderabad - 500 004" qualifies.
   // Minimum length of 6 prevents short OCR garbage ("P.Q.", "Hum", etc.) from
@@ -734,8 +738,25 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // (e.g. card shows "@aalaya_home" but OCR returns "Aalaya_home" as a separate block)
       const igVal = fields.find((f) => f.label === 'Instagram')?.value?.replace(/^@/, '').toLowerCase() ?? '';
       if (igVal && text.replace(/^@/, '').toLowerCase() === igVal) continue;
+      // Collect service-type lines when the company is already found — e.g. an architecture
+      // firm printing "Architecture / Interiors / Landscape" as service descriptions.
+      // These are industry terms, not contact data, so merge them into one Services field.
+      if (
+        companyAssigned &&
+        COMPANY_KEYWORD_RE.test(text) &&
+        text.split(/\s+/).filter(Boolean).length <= 4 &&
+        !ADDRESS_KEYWORD_RE.test(text) &&
+        !DESIGNATION_RE.test(text)
+      ) {
+        serviceEntries.push(text);
+        continue;
+      }
       fields.push({ label: 'Other', value: text });
     }
+  }
+
+  if (serviceEntries.length > 0) {
+    fields.push({ label: 'Services', value: serviceEntries.join(' · ') });
   }
 
   // Insert designations after name/company block
@@ -994,7 +1015,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   }
 
   // Normalize text fields to title case — cards are often all-caps or all-lowercase
-  const TEXT_LABELS = new Set(['Name', 'Company', 'Designation', 'Address', 'Other']);
+  const TEXT_LABELS = new Set(['Name', 'Company', 'Designation', 'Address', 'Services', 'Other']);
   return fields.map((f) =>
     TEXT_LABELS.has(f.label)
       ? { ...f, value: toTitleCase(f.value) }

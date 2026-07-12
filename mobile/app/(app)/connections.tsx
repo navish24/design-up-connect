@@ -681,8 +681,10 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
   const [callSheetPhone, setCallSheetPhone] = useState<string | null>(null);
 
-  const phoneField = contact.fields.find((f) => f.label === 'Phone');
-  const waField = contact.fields.find((f) => f.label === 'WhatsApp') ?? phoneField;
+  const phoneFields = contact.fields.filter((f) => f.label === 'Phone');
+  const waFields = contact.fields.filter((f) => f.label === 'WhatsApp');
+  const phoneField = phoneFields[0];
+  const waField = waFields[0] ?? phoneFields[0];
   const emailField = contact.fields.find((f) => f.label === 'Email');
   const hasQuickActions = !!(waField || phoneField || emailField);
 
@@ -758,14 +760,33 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
           <View style={s.quickActionRow}>
             {waField && (
               <Pressable style={[s.quickActionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '66' }]}
-                onPress={() => openWhatsApp(waField.value)}>
+                onPress={() => {
+                  const targets = waFields.length > 0 ? waFields : phoneFields;
+                  if (targets.length <= 1) {
+                    openWhatsApp(targets[0].value);
+                  } else {
+                    Alert.alert('WhatsApp', 'Choose a number', [
+                      ...targets.map((f) => ({ text: f.value, onPress: () => openWhatsApp(f.value) })),
+                      { text: 'Cancel', style: 'cancel' as const },
+                    ]);
+                  }
+                }}>
                 <Ionicons name="logo-whatsapp" size={15} color={colors.accent} />
                 <Text style={[s.quickActionText, { color: colors.accent }]}>WhatsApp</Text>
               </Pressable>
             )}
             {phoneField && (
               <Pressable style={[s.quickActionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '66' }]}
-                onPress={() => setCallSheetPhone(phoneField.value)}>
+                onPress={() => {
+                  if (phoneFields.length <= 1) {
+                    setCallSheetPhone(phoneField.value);
+                  } else {
+                    Alert.alert('Call', 'Choose a number', [
+                      ...phoneFields.map((f) => ({ text: f.value, onPress: () => setCallSheetPhone(f.value) })),
+                      { text: 'Cancel', style: 'cancel' as const },
+                    ]);
+                  }
+                }}>
                 <Ionicons name="call-outline" size={15} color={colors.accent} />
                 <Text style={[s.quickActionText, { color: colors.accent }]}>Call</Text>
               </Pressable>
@@ -915,6 +936,7 @@ const FIELD_ICONS: Record<string, string> = {
   Behance: 'color-palette-outline',
   YouTube: 'logo-youtube',
   Address: 'location-outline',
+  Services: 'list-outline',
   Other: 'ellipsis-horizontal-outline',
 };
 

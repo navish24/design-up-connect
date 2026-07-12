@@ -20,7 +20,7 @@ import { CountryCodePicker } from '../components/CountryCodePicker';
 const FIELD_LABELS = [
   'Name', 'Company', 'Designation', 'Phone', 'WhatsApp',
   'Email', 'Website', 'LinkedIn', 'Instagram', 'Facebook', 'Twitter/X',
-  'Behance', 'YouTube', 'Social Handle', 'Address', 'Other',
+  'Behance', 'YouTube', 'Social Handle', 'Address', 'Services', 'Other',
 ];
 
 function generateId() {
@@ -100,8 +100,15 @@ export default function CardReviewScreen() {
       .filter((f) => f.value.trim())
       .map((f, idx) => {
         if ((f.label === 'Phone' || f.label === 'WhatsApp') && !f.value.trim().startsWith('+')) {
+          const trimmed = f.value.trim();
+          const digits = trimmed.replace(/\D/g, '');
+          // Trunk-prefixed number (starts with 0, e.g. "040-23 32 42 52"):
+          // strip the leading 0 and prepend +91 — don't stack +91 on top of 0.
+          if (trimmed.startsWith('0') && digits.length >= 10) {
+            return { ...f, value: `+91 ${trimmed.slice(1)}` };
+          }
           const prefix = phonePrefixes[idx] ?? '+91';
-          return { ...f, value: `${prefix} ${f.value.trim()}` };
+          return { ...f, value: `${prefix} ${trimmed}` };
         }
         return f;
       });
@@ -595,6 +602,7 @@ const LABEL_ICONS: Record<string, string> = {
   YouTube: 'logo-youtube',
   'Social Handle': 'at-outline',
   Address: 'location-outline',
+  Services: 'list-outline',
   Other: 'ellipsis-horizontal-outline',
 };
 
