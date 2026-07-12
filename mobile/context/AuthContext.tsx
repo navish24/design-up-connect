@@ -325,7 +325,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     });
 
-    setDemoAddedConnections(connections);
+    // Preserve flat-format demo entries (added via addDemoConnection / QR scan) — they
+    // have no nested `user` object. Only full Connection-shaped rows come from Supabase.
+    // Without this, a TOKEN_REFRESHED event would wipe freshly-scanned demo contacts.
+    setDemoAddedConnections((prev) => {
+      const flatOnly = prev.filter((p: any) => !(p.user && typeof p.user === 'object'));
+      return [...connections, ...flatOnly];
+    });
   }, []);
 
   const refreshConnections = useCallback(() => {

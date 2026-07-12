@@ -186,6 +186,12 @@ export default function ConnectionsScreen() {
   const allConnectionsRef = useRef<Connection[]>([]);
   const refreshConnectionsRef = useRef(refreshConnections);
   refreshConnectionsRef.current = refreshConnections;
+  // On web (Expo Router), useFocusEffect can fire a spurious second time after a
+  // programmatic tab switch (e.g. "View Card" navigation). That second fire has no
+  // pending userId, so it would reset activeView to 'list' and close the just-opened
+  // detail. This flag absorbs exactly that one extra fire; it is cleared by onBack /
+  // onExchange so subsequent manual tab taps work normally.
+  const navOpenedDetailRef = useRef(false);
 
   // Reset to list whenever the Connects tab gains focus, unless a QR scan just
   // requested that we open a specific connection's detail view.
@@ -194,6 +200,9 @@ export default function ConnectionsScreen() {
       const pendingUserId = getPendingConnectionOpen();
       setPendingConnectionOpen(null);
       if (pendingUserId) {
+        // Mark that this focus came from a "View Card" navigation so we can absorb
+        // the spurious second useFocusEffect fire that Expo Router web emits.
+        navOpenedDetailRef.current = true;
         const conn = allConnectionsRef.current.find(
           (c) => c.user.id === pendingUserId ||
                  c.user.designup_user_id === pendingUserId ||
@@ -204,6 +213,12 @@ export default function ConnectionsScreen() {
         // Setting state triggers a re-render so the useEffect below finds the connection.
         // Don't refresh here: loadConnections would replace demoAddedConnections, wiping the new entry.
         setPendingOpenUserId(pendingUserId);
+        return;
+      }
+      // No pending userId. If this is the spurious second fire that follows a "View Card"
+      // navigation, absorb it: clear the flag and bail out without resetting activeView.
+      if (navOpenedDetailRef.current) {
+        navOpenedDetailRef.current = false;
         return;
       }
       // Only refresh profiles when showing the list — not when navigating to a specific connection.
@@ -299,6 +314,9 @@ export default function ConnectionsScreen() {
              c.id === `demo-${pendingOpenUserId}`
     );
     if (conn) {
+      // Keep navOpenedDetailRef true so the spurious second useFocusEffect fire
+      // (which may arrive after this effect) gets absorbed rather than resetting to list.
+      navOpenedDetailRef.current = true;
       setPendingOpenUserId(null);
       setActiveView({ type: 'connect_detail', connection: conn });
     }
@@ -367,8 +385,8 @@ export default function ConnectionsScreen() {
       <ContactDetailPage
         connection={currentConn}
         colors={colors}
-        onBack={() => setActiveView({ type: 'list' })}
-        onExchange={(id, name) => { handleExchangeContact(id, name); setActiveView({ type: 'list' }); }}
+        onBack={() => { navOpenedDetailRef.current = false; setActiveView({ type: 'list' }); }}
+        onExchange={(id, name) => { navOpenedDetailRef.current = false; handleExchangeContact(id, name); setActiveView({ type: 'list' }); }}
         notes={notes[currentConn.id] ?? []}
         onAddNote={(text) => addNote(currentConn.id, text)}
         router={router}
