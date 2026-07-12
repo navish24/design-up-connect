@@ -175,11 +175,15 @@ export default function ConnectionsScreen() {
   const [showSortDrop, setShowSortDrop] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>({ type: 'list' });
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
+  // When set, we're waiting for allConnections to include this userId before opening detail.
+  // State triggers a re-render so useEffect below always re-evaluates after useFocusEffect sets it,
+  // even when allConnections was already populated (which would otherwise skip the watcher).
+  const [pendingOpenUserId, setPendingOpenUserId] = useState<string | null>(null);
+  // Ref mirrors state so useFocusEffect (empty deps, stable callback) can read current value.
+  const pendingOpenUserIdRef = useRef<string | null>(null);
+  pendingOpenUserIdRef.current = pendingOpenUserId;
   const exchangingRef = useRef<Set<string>>(new Set());
   const allConnectionsRef = useRef<Connection[]>([]);
-  // Holds a userId when useFocusEffect fires before addDemoConnection state has propagated.
-  // The useEffect below watches allConnections and opens the detail once the conn appears.
-  const deferredOpenUserIdRef = useRef<string | null>(null);
   const refreshConnectionsRef = useRef(refreshConnections);
   refreshConnectionsRef.current = refreshConnections;
 
@@ -196,14 +200,15 @@ export default function ConnectionsScreen() {
                  c.id === `demo-${pendingUserId}`
         );
         if (conn) { setActiveView({ type: 'connect_detail', connection: conn }); return; }
-        // State update from addDemoConnection hasn't propagated yet — defer and wait.
+        // allConnectionsRef may be stale if React deferred the off-screen render.
+        // Setting state triggers a re-render so the useEffect below finds the connection.
         // Don't refresh here: loadConnections would replace demoAddedConnections, wiping the new entry.
-        deferredOpenUserIdRef.current = pendingUserId;
+        setPendingOpenUserId(pendingUserId);
         return;
       }
       // Only refresh profiles when showing the list — not when navigating to a specific connection.
       refreshConnectionsRef.current();
-      if (!deferredOpenUserIdRef.current) setActiveView({ type: 'list' });
+      if (!pendingOpenUserIdRef.current) setActiveView({ type: 'list' });
     }, [])
   );
 
@@ -283,21 +288,21 @@ export default function ConnectionsScreen() {
   // Keep ref in sync so useFocusEffect (which has no deps) can read current value
   allConnectionsRef.current = allConnections;
 
-  // After allConnections updates, open any deferred connection detail.
-  // This fires when addDemoConnection's state propagates after useFocusEffect ran.
+  // Open deferred connection once allConnections or pendingOpenUserId changes.
+  // Using state (pendingOpenUserId) guarantees this effect re-runs even when allConnections
+  // was already populated before useFocusEffect set the pending userId.
   useEffect(() => {
-    const userId = deferredOpenUserIdRef.current;
-    if (!userId) return;
+    if (!pendingOpenUserId) return;
     const conn = allConnections.find(
-      (c) => c.user.id === userId ||
-             c.user.designup_user_id === userId ||
-             c.id === `demo-${userId}`
+      (c) => c.user.id === pendingOpenUserId ||
+             c.user.designup_user_id === pendingOpenUserId ||
+             c.id === `demo-${pendingOpenUserId}`
     );
     if (conn) {
-      deferredOpenUserIdRef.current = null;
+      setPendingOpenUserId(null);
       setActiveView({ type: 'connect_detail', connection: conn });
     }
-  }, [allConnections]);
+  }, [allConnections, pendingOpenUserId]);
 
   const filteredConnections = useMemo(() => {
     if (filterType === 'cards') return [];
