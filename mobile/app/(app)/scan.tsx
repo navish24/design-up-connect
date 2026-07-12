@@ -753,7 +753,9 @@ export default function ScanScreen() {
               onTorchSupportChange={setWebTorchSupported}
               errorHint={cardScanError}
               onQRDetected={(data) => {
-                if (isDesignupQR(data)) handleBarCodeScanned({ data });
+                if (!isDesignupQR(data)) return false;
+                handleBarCodeScanned({ data });
+                return true;
               }}
               onCapture={async (base64Jpeg) => {
                 const wasManual = isManualCapture.current;

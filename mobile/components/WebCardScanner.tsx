@@ -13,8 +13,9 @@ interface Props {
   onTorchSupportChange?: (supported: boolean) => void;
   errorHint?: string | null;
   // Fires when a QR code is found in the live feed — called immediately without
-  // waiting for card stability. Caller should ignore non-app QRs.
-  onQRDetected?: (data: string) => void;
+  // waiting for card stability. Return true if the QR was handled (pauses card
+  // capture); return false to let the card OCR flow continue normally.
+  onQRDetected?: (data: string) => boolean;
 }
 
 export interface WebCardScannerHandle {
@@ -195,9 +196,11 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
             if (!isSameQR) {
               lastQRDataRef.current = code.data;
               lastQRFireRef.current = now;
-              // Pause card auto-capture so we don't also fire OCR on a QR code frame.
-              pauseUntilRef.current = now + 5000;
-              onQRDetectedRef.current(code.data);
+              const handled = onQRDetectedRef.current(code.data);
+              // Only pause card capture when the QR was actually handled (Designup QR).
+              // Non-app QRs (website links, social QRs on the card) should be ignored
+              // so OCR continues and the card review page still opens.
+              if (handled) pauseUntilRef.current = now + 5000;
             }
           }
         }
