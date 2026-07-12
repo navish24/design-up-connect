@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Image } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -14,6 +14,7 @@ interface Profile {
   designation: string | null;
   company_name: string | null;
   city: string | null;
+  profile_image_url: string | null;
 }
 
 const PWA_URL = 'https://connect-designup.vercel.app';
@@ -32,7 +33,7 @@ export default function PublicProfilePage() {
     if (!id) return;
     supabase
       .from('profiles')
-      .select('first_name, last_name, designation, company_name, city')
+      .select('first_name, last_name, designation, company_name, city, profile_image_url')
       .eq('id', id)
       .single()
       .then(({ data, error }) => {
@@ -88,10 +89,14 @@ export default function PublicProfilePage() {
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
 
-        {/* Avatar */}
-        <View style={[s.avatar, { backgroundColor: colors.accent + '22' }]}>
-          <Text style={[s.avatarText, { color: colors.accent }]}>{initials}</Text>
-        </View>
+        {/* Avatar — photo if available, initials otherwise */}
+        {profile.profile_image_url ? (
+          <Image source={{ uri: profile.profile_image_url }} style={s.avatarPhoto} />
+        ) : (
+          <View style={[s.avatar, { backgroundColor: colors.accent + '22' }]}>
+            <Text style={[s.avatarText, { color: colors.accent }]}>{initials}</Text>
+          </View>
+        )}
 
         <Text style={[s.name, { color: colors.text }]}>{fullName}</Text>
         {subtitle ? <Text style={[s.sub, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
@@ -155,6 +160,7 @@ function makeStyles(colors: any) {
       width: 72, height: 72, borderRadius: 36,
       alignItems: 'center', justifyContent: 'center', marginBottom: 4,
     },
+    avatarPhoto: { width: 72, height: 72, borderRadius: 36, marginBottom: 4 },
     avatarText: { fontSize: 26, fontWeight: FontWeight.bold },
     name: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, textAlign: 'center' },
     sub: { fontSize: FontSize.sm, textAlign: 'center', lineHeight: 20 },
