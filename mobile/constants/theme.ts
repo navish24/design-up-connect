@@ -263,9 +263,9 @@ const white_jade = {
     tabBar: '#0C0C10', scanOverlay: 'rgba(0,0,0,0.65)',
   },
   light: {
-    background: '#FFFFFF', surface: '#F5F8F5', surfaceElevated: '#EBF0EB',
-    border: '#D8E0D8', text: '#18201A', textSecondary: '#4E5C50',
-    textMuted: '#8E9C90', accent: '#407060', gold: '#9A7820',
+    background: '#FFFFFF', surface: '#FFFFFF', surfaceElevated: '#F5F5F5',
+    border: '#EBEBEB', text: '#1A1A1A', textSecondary: '#505050',
+    textMuted: '#9E9E9E', accent: '#407060', gold: '#9A7820',
     tabBar: '#FFFFFF', scanOverlay: 'rgba(0,0,0,0.5)',
   },
 };
