@@ -15,9 +15,11 @@ type PaletteName =
   // Sand base + pastel greens:
   | 'sand_mint' | 'sand_pistachio' | 'sand_eucalyptus'
   // Cool grey base + accent variants:
-  | 'grey_jade' | 'grey_slate' | 'grey_warm';
+  | 'grey_jade' | 'grey_slate' | 'grey_warm'
+  // White base + jade green:
+  | 'white_jade';
 
-const ACTIVE_PALETTE: PaletteName = 'sand_jade';
+const ACTIVE_PALETTE: PaletteName = 'white_jade';
 
 // ─── A: Terracotta + Charcoal ─────────────────────────────────────────────────
 // Warm, material, studio-like. References clay, stone, warm concrete.
@@ -250,12 +252,30 @@ const grey_jade  = greyBase('#6A9888', '#407060'); // same jade accent, grey car
 const grey_slate = greyBase('#7A9AAA', '#4A7080'); // slate blue on grey
 const grey_warm  = greyBase('#A89080', '#786050'); // warm taupe accent on grey
 
+// ─── White + Jade ─────────────────────────────────────────────────────────────
+// Pure white pages, cards barely lifted from white, jade green accent.
+// Dividers carry the separation — no background colour fill needed.
+const white_jade = {
+  dark: {
+    background: '#0A0A0C', surface: '#16161A', surfaceElevated: '#202026',
+    border: '#2C2C34', text: '#F0F0F2', textSecondary: '#9898A8',
+    textMuted: '#5C5C6C', accent: '#6A9888', gold: '#C8A050',
+    tabBar: '#0C0C10', scanOverlay: 'rgba(0,0,0,0.65)',
+  },
+  light: {
+    background: '#FFFFFF', surface: '#F5F8F5', surfaceElevated: '#EBF0EB',
+    border: '#D8E0D8', text: '#18201A', textSecondary: '#4E5C50',
+    textMuted: '#8E9C90', accent: '#407060', gold: '#9A7820',
+    tabBar: '#FFFFFF', scanOverlay: 'rgba(0,0,0,0.5)',
+  },
+};
+
 const palettes = {
   terracotta, prussian, saffron, sage, champagne, burgundy, indigo, copper, sand, teal,
   sand_slate, sand_cobalt, sand_steel, sand_jade, sand_rose,
   sand_coral, sand_plum, sand_mauve, sand_olive, sand_smokedteal,
   sand_mint, sand_pistachio, sand_eucalyptus,
-  grey_jade, grey_slate, grey_warm,
+  grey_jade, grey_slate, grey_warm, white_jade,
 };
 
 export const Colors = palettes[ACTIVE_PALETTE];
