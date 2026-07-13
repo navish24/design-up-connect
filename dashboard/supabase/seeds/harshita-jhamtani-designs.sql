@@ -69,67 +69,100 @@ INSERT INTO public.collection_images (id, collection_id, url, display_order) VAL
 ON CONFLICT (id) DO NOTHING;
 
 -- ── 3. PRODUCTS (15) ──────────────────────────────────────────
-INSERT INTO public.products (id, brand_id, name, description, material, dimensions, colour, display_order) VALUES
+INSERT INTO public.products (id, brand_id, name, description, material, dimensions, colour, customisation_details, lead_time, installation, display_order) VALUES
   ('hjd-p01', 'hjd-b01-2024', 'Rio Wall Light — Rainforest',
    'This wall light extends the Rio collection into a new format with sculptural softness. Crafted in natural stone with signature fluting detail and brass accents, it casts a soft, diffused glow ideal for bedside settings. Each handcrafted piece is unique.',
-   'Green Rainforest stone, Brass finish MS', '10" H × 8" Ø × 10" from wall', 'Green / Natural Stone', 1),
+   'Green Rainforest stone, Brass finish MS', '10" H × 8" Ø × 10" from wall', 'Green / Natural Stone',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '6–8 weeks', null, 1),
 
   ('hjd-p02', 'hjd-b01-2024', 'Bean Table Lamp (Marble)',
    'Three stacked rounded forms in rainforest green marble with natural veining, topped with a polished alabaster dome shade that produces warm illumination when lit. A masterpiece of modern design that blends sculptural aesthetics with functional lighting.',
-   'Alabaster, Rainforest Green Marble', '24" H × 14" Ø', 'Green / White', 2),
+   'Alabaster, Rainforest Green Marble', '24" H × 14" Ø', 'Green / White',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '6–8 weeks', null, 2),
 
   ('hjd-p03', 'hjd-b01-2024', 'Asteroid — Clay Floor Lamp',
    'Introducing the Asteroid floor lamp, a truly unique piece poured from the studio''s heart. This totem-style lamp represents functional art, blending aesthetics with practicality. Handcrafted over 80 hours, it''s designed as a distinctive statement piece.',
-   'Clay (Stoneware), Mild steel base & pipe', '64" H × 18" Ø', 'Natural Clay', 3),
+   'Clay (Stoneware), Mild steel base & pipe', '64" H × 18" Ø', 'Natural Clay',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '6–8 weeks', null, 3),
 
   ('hjd-p04', 'hjd-b01-2024', 'Bloom Pendant',
    'This pendant traces the quiet poetry of growth, capturing a flower''s journey from seed to full bloom. Five stages expressed in delicate pastel shades across a horizontal form, designed for dining areas and intimate settings.',
-   'Mild steel, in-house claypaste, FRP', '48" L × 6"–7" W', 'Pastel Multi', 4),
+   'Mild steel, in-house claypaste, FRP', '48" L × 6"–7" W', 'Pastel Multi',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '4–6 weeks', 'By the studio''s team', 4),
 
   ('hjd-p05', 'hjd-b01-2024', 'Ring Chandelier',
-   'A playful two-tier design featuring brass rings suspended from pipes with Tyvek light modules in a concentric circular pattern. Additional tiers available. Professional installation by the maker''s team required.',
-   'Tyvek modules, brass rings, mild steel pipes (black powder coated)', '36" H × 60" Ø', 'Brass / Black', 5),
+   'A playful two-tier design featuring brass rings suspended from pipes with Tyvek light modules in a concentric circular pattern. Additional tiers available.',
+   'Tyvek modules, brass rings, mild steel pipes (black powder coated)', '36" H × 60" Ø', 'Brass / Black',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '8–10 weeks', 'By the studio''s team (included with purchase)', 5),
 
   ('hjd-p06', 'hjd-b01-2024', 'Kasa Floor Lamp — Nude',
    'Inspired by Japanese forms, designed to embody simplicity and capture a Zen-like vibe. An indirect LED light source behind frosted acrylic produces a soft, ambient glow that creates a serene atmosphere in any room.',
-   'Mild steel base with in-house clay paste coating', '68" H × 21" Ø', 'Nude / Natural', 6),
+   'Mild steel base with in-house clay paste coating', '68" H × 21" Ø', 'Nude / Natural',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '6–8 weeks', null, 6),
 
   ('hjd-p07', 'hjd-b01-2024', 'Totem Floor Lamp',
    'One of the studio''s sleekest and most recent favourites — a dual-colour totem floor lamp. Each piece is built by hand and finished with in-house clay paste for added texture. A living sculpture that anchors any room.',
-   'Clay (Stoneware), In-house Claypaste, Mild steel base & pipe', '5''6" H × 14" Ø shade', 'Dual Clay', 7),
+   'Clay (Stoneware), In-house Claypaste, Mild steel base & pipe', '5''6" H × 14" Ø shade', 'Dual Clay',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '6–8 weeks', null, 7),
 
   ('hjd-p08', 'hjd-b01-2024', 'Cone Pendant — Brushed Silver',
    'A modern pendant featuring stacked triangular forms that can be adjusted to suit the height and proportions of your space. Available in brushed silver, dull gold, and textured black finishes.',
-   'Casted Aluminium', '18" Ø × 30" H (17" module + 13" drop)', 'Brushed Silver', 8),
+   'Casted Aluminium', '18" Ø × 30" H (17" module + 13" drop)', 'Brushed Silver',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '4–6 weeks', null, 8),
 
   ('hjd-p09', 'hjd-b01-2024', 'Scallop Wall Light',
    'The Scallop brings a playful yet elegant touch to a space. Its charming umbrella-like scalloped design creates a soft, warm glow that enhances ambiance. Functions as either an uplighter or downlighter, with stackable components.',
-   'Mild Steel, In-house Claypaste, Clay (Stoneware)', '13" H × 7" Ø', 'Natural Clay', 9),
+   'Mild Steel, In-house Claypaste, Clay (Stoneware)', '13" H × 7" Ø', 'Natural Clay',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '4–6 weeks', null, 9),
 
   ('hjd-p10', 'hjd-b01-2024', 'Rex Table Lamp',
    'The smallest and cutest in the collection, featuring a dome top adorned with subtle dino-inspired scales for a whimsical and playful touch. Hand-thrown stoneware with signature clay paste finishing in soft pastel shades. A collaboration with Kaji Kids.',
-   'Clay (Stoneware)', '10" H × 9" Ø', 'Soft Pastel', 10),
+   'Clay (Stoneware)', '10" H × 9" Ø', 'Soft Pastel',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '4–6 weeks', null, 10),
 
   ('hjd-p11', 'hjd-b01-2024', 'Iris Pendant',
    'The accidental light — named after the flowering plant because of its resemblance. Two pendants flipped and stacked created this ceiling fixture organically. A meditation on how the best forms emerge without forcing them.',
-   'FRP (Fiber reinforced plastic), In-house Claypaste, Mild steel', '28" Ø × 19.5" H', 'Natural / Ivory', 11),
+   'FRP (Fiber reinforced plastic), In-house Claypaste, Mild steel', '28" Ø × 19.5" H', 'Natural / Ivory',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '6–8 weeks', null, 11),
 
   ('hjd-p12', 'hjd-b01-2024', 'Branch Wall Light',
    'Wall lights inspired by tree branch shapes. Bulbs peek out like little buds, casting a warm and cozy light. The textured black finish grounds the organic silhouette against any wall surface.',
-   'Mild steel base, in-house claypaste, glass globe (3" × 4")', '25" H × 10" Ø × 5" D', 'Textured Black', 12),
+   'Mild steel base, in-house claypaste, glass globe (3" × 4")', '25" H × 10" Ø × 5" D', 'Textured Black',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '4–6 weeks', null, 12),
 
   ('hjd-p13', 'hjd-b01-2024', 'Wilo Nude',
    'An indoor/outdoor terrazzo wall light reminiscent of the terrazzo flooring of the 80s — classic, playful, and timeless. The neutral palette adds warmth and texture whether illuminated or not.',
-   'Terrazzo, aluminium, silicone, LED (14W)', '6" Ø × 2.5" D', 'Nude Terrazzo', 13),
+   'Terrazzo, aluminium, silicone, LED (14W)', '6" Ø × 2.5" D', 'Nude Terrazzo',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '3–4 weeks', null, 13),
 
   ('hjd-p14', 'hjd-b01-2024', 'Legacy Totem',
    'At nearly seven feet tall, this is one of the widest and most personal pieces the studio has ever created. It brings together every chapter of the studio''s evolution — from the very first Asteroid floor lamp to the sculptural totems, to hand-built chandeliers and suspended clay elements.',
-   'Clay (Stoneware), In-house Claypaste, Mild steel', '84" H × 24" Ø', 'Natural Clay', 14),
+   'Clay (Stoneware), In-house Claypaste, Mild steel', '84" H × 24" Ø', 'Natural Clay',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '8–10 weeks', null, 14),
 
   ('hjd-p15', 'hjd-b01-2024', 'Orbis — Casted',
    'A candle stand inspired by the studio''s totems collection, scaled down into a piece that brings sculptural presence to a tabletop. Available in brushed silver, dull brass, and textured black.',
-   'Casted Aluminium', '14.5" H × 4.5" Ø', 'Brushed Silver / Brass / Black', 15)
-ON CONFLICT (id) DO NOTHING;
+   'Casted Aluminium', '14.5" H × 4.5" Ø', 'Brushed Silver / Brass / Black',
+   'All our lamps are handmade to order, allowing for easy customisation of sizes, colors, and finishes.',
+   '3–4 weeks', null, 15)
+ON CONFLICT (id) DO UPDATE SET
+  customisation_details = EXCLUDED.customisation_details,
+  lead_time             = EXCLUDED.lead_time,
+  installation          = EXCLUDED.installation;
 
 -- Product images (2–3 per product)
 INSERT INTO public.product_images (id, product_id, url, display_order) VALUES

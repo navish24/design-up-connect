@@ -73,74 +73,92 @@ INSERT INTO public.collection_images (id, collection_id, url, display_order) VAL
 ON CONFLICT (id) DO NOTHING;
 
 -- ── 3. PRODUCTS (15) ──────────────────────────────────────────
-INSERT INTO public.products (id, brand_id, name, description, material, dimensions, colour, display_order) VALUES
+INSERT INTO public.products (id, brand_id, name, description, material, dimensions, colour, customisation_details, lead_time, installation, display_order) VALUES
 
   -- Wall Art (5)
   ('arisaa-p01', 'arisaa-b01-2024', 'Of the Earth',
    'A layered wall piece working with raw mineral pigments pressed into wet clay — the surface records the gesture of its making, each mark left by the pressure of hands and tools. No two are identical; the earth decides the final form.',
-   'Natural mineral pigments, clay, jute on board', '60 × 45 cm', 'Ochre / Sand / Umber', 1),
+   'Natural mineral pigments, clay, jute on board', '60 × 45 cm', 'Ochre / Sand / Umber',
+   'Get in touch with brand', null, null, 1),
 
   ('arisaa-p02', 'arisaa-b01-2024', 'Terrain Study',
    'A textural wall panel inspired by geological cross-sections — layers of gesso, pigment, and sand built up and carved back to reveal strata beneath. The surface has the quality of sedimentary rock, worn and ancient.',
-   'Gesso, mineral pigment, raw sand, mixed media on board', '80 × 60 cm', 'Stone / Dusk', 2),
+   'Gesso, mineral pigment, raw sand, mixed media on board', '80 × 60 cm', 'Stone / Dusk',
+   'Get in touch with brand', null, null, 2),
 
   ('arisaa-p03', 'arisaa-b01-2024', 'Sediment Series No. 1',
    'The first in an ongoing series exploring how time leaves its mark on surface. Raw pigment is suspended in resin and allowed to settle at its own pace — the artist''s role becomes one of observation rather than control.',
-   'Raw pigment, resin, mixed media', '45 × 60 cm', 'Rust / Terracotta / Bone', 3),
+   'Raw pigment, resin, mixed media', '45 × 60 cm', 'Rust / Terracotta / Bone',
+   'Get in touch with brand', null, null, 3),
 
   ('arisaa-p04', 'arisaa-b01-2024', 'Ochre Relief',
    'A sculptural wall piece built from layers of hand-applied clay over a wooden armature, finished in mineral pigments sourced from Rajasthani ochre deposits. Its surface changes quality with the light — matte at noon, alive at dusk.',
-   'Hand-applied clay, Rajasthani mineral pigments, wood armature', '90 × 70 cm', 'Burnt Ochre / Natural', 4),
+   'Hand-applied clay, Rajasthani mineral pigments, wood armature', '90 × 70 cm', 'Burnt Ochre / Natural',
+   'Get in touch with brand', null, null, 4),
 
   ('arisaa-p05', 'arisaa-b01-2024', 'Fragment Wall Piece',
    'Assembled from fragments of repurposed stone and fired clay, this wall piece explores the formal qualities of broken things — how edges made by accident carry more honesty than edges that were planned.',
-   'Repurposed stone fragments, fired clay, natural pigment', '50 × 50 cm', 'Stone / Charcoal / Bone', 5),
+   'Repurposed stone fragments, fired clay, natural pigment', '50 × 50 cm', 'Stone / Charcoal / Bone',
+   'Get in touch with brand', null, null, 5),
 
   -- Sculptural Installations (3)
   ('arisaa-p06', 'arisaa-b01-2024', 'Negi Sculpture',
    'A freestanding floor sculpture in hand-carved natural stone — the form references the contours of a Negi, a traditional staff carving found in Himachali craft, abstracted into something more elemental. Carved slowly over several weeks.',
-   'Hand-carved natural stone', '40 × 18 × 12 cm', 'Natural Stone', 6),
+   'Hand-carved natural stone', '40 × 18 × 12 cm', 'Natural Stone',
+   'Get in touch with brand', null, null, 6),
 
   ('arisaa-p07', 'arisaa-b01-2024', 'Mesa Form',
    'A sculptural table object in hand-burnished terracotta — the flat plateau at its crown referencing the mesas of arid landscapes. Made through a combination of wheel-throwing and hand-building, fired in a wood kiln.',
-   'Hand-burnished terracotta, wood-fired', '35 × 20 × 20 cm', 'Terra / Natural', 7),
+   'Hand-burnished terracotta, wood-fired', '35 × 20 × 20 cm', 'Terra / Natural',
+   'Get in touch with brand', null, null, 7),
 
   ('arisaa-p08', 'arisaa-b01-2024', 'Vessel Study',
    'A series of slip-cast ceramic vessels exploring volume and restraint. The form is deliberately simple — it is the surface that carries the work, hand-burnished to a soft luminosity, finished with a natural ash glaze.',
-   'Slip-cast ceramic, natural ash glaze', '28 × 12 × 12 cm', 'Ash White / Natural Clay', 8),
+   'Slip-cast ceramic, natural ash glaze', '28 × 12 × 12 cm', 'Ash White / Natural Clay',
+   'Get in touch with brand', null, null, 8),
 
   -- Mirrors (3)
   ('arisaa-p09', 'arisaa-b01-2024', 'Gilded Current',
    'A hand-finished mirror frame in aged brass patina — the frame appears to flow at its edges, as if the gilding was caught mid-motion. Made to order; the patina deepens further over years of use.',
-   'Handmade wooden frame, aged brass patina, mirror glass', '90 × 60 cm', 'Aged Brass / Gold', 9),
+   'Handmade wooden frame, aged brass patina, mirror glass', '90 × 60 cm', 'Aged Brass / Gold',
+   'Get in touch with brand', null, null, 9),
 
   ('arisaa-p10', 'arisaa-b01-2024', 'Ripple Mirror',
    'An organically shaped mirror with an irregular edge — no straight lines, no symmetry. The frame is hand-finished in raw plaster tinted with mineral pigment, giving it the quality of a fragment from an old wall.',
-   'Organic-edge mirror glass, hand-finished plaster frame, mineral pigment', '75 × 55 cm', 'Stone / Plaster', 10),
+   'Organic-edge mirror glass, hand-finished plaster frame, mineral pigment', '75 × 55 cm', 'Stone / Plaster',
+   'Get in touch with brand', null, null, 10),
 
   ('arisaa-p11', 'arisaa-b01-2024', 'Arch Study',
    'A tall arched mirror in a raw linen-wrapped frame — the proportions are classical but the finish is decidedly handmade, the linen slightly irregular, the arch not quite perfect. Its imprecision is its character.',
-   'Mirror glass, hand-carved wood frame, raw linen', '120 × 45 cm', 'Natural Linen / Warm White', 11),
+   'Mirror glass, hand-carved wood frame, raw linen', '120 × 45 cm', 'Natural Linen / Warm White',
+   'Get in touch with brand', null, null, 11),
 
   -- Furniture (2)
   ('arisaa-p12', 'arisaa-b01-2024', 'Antelope Chair',
    'A solid-wood chair whose legs taper and splay like the limbs of the antelope it is named after — simultaneously delicate and structural. Hand-sculpted from a single block of sheesham wood, the seat is slightly concave for comfort.',
-   'Solid sheesham wood, hand-sculpted, natural oil finish', '80 × 60 × 50 cm', 'Natural Sheesham', 12),
+   'Solid sheesham wood, hand-sculpted, natural oil finish', '80 × 60 × 50 cm', 'Natural Sheesham',
+   'Get in touch with brand', null, null, 12),
 
   ('arisaa-p13', 'arisaa-b01-2024', 'Studio Bench',
    'A long low bench in reclaimed timber, finished by hand with a rubbed wax that lets the grain breathe. Made for sitting but equally purposeful as a surface — for books, objects, the quiet accumulation of a day.',
-   'Reclaimed timber, hand-finished, natural wax', '120 × 35 × 45 cm', 'Natural / Reclaimed', 13),
+   'Reclaimed timber, hand-finished, natural wax', '120 × 35 × 45 cm', 'Natural / Reclaimed',
+   'Get in touch with brand', null, null, 13),
 
   -- Rugs (2)
   ('arisaa-p14', 'arisaa-b01-2024', 'Drava',
    'A hand-woven rug in natural wool and cotton — the weave follows a geometry loosely derived from river systems, the pattern emerging from the rhythm of the loom rather than a fixed plan. Made in collaboration with weavers in Rajasthan.',
-   'Hand-woven natural wool and cotton, Rajasthan', '180 × 120 cm', 'Dusk / Bone / Charcoal', 14),
+   'Hand-woven natural wool and cotton, Rajasthan', '180 × 120 cm', 'Dusk / Bone / Charcoal',
+   'Get in touch with brand', null, null, 14),
 
   ('arisaa-p15', 'arisaa-b01-2024', 'Mesa Weave',
    'A hand-tufted rug in natural jute with a low pile that gives it a surface quality closer to stone than textile. The geometric pattern references the flat-topped mesa formations of the Deccan plateau.',
-   'Hand-tufted natural jute, low pile', '240 × 160 cm', 'Sand / Stone / Natural', 15)
+   'Hand-tufted natural jute, low pile', '240 × 160 cm', 'Sand / Stone / Natural',
+   'Get in touch with brand', null, null, 15)
 
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  customisation_details = EXCLUDED.customisation_details,
+  lead_time             = EXCLUDED.lead_time,
+  installation          = EXCLUDED.installation;
 
 -- Product images (2–3 per product)
 INSERT INTO public.product_images (id, product_id, url, display_order) VALUES

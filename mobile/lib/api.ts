@@ -16,6 +16,8 @@ export interface ApiProduct {
   dimensions: string;
   color: string;
   customisable: string;
+  lead_time?: string;
+  installation?: string;
   images: string[];
 }
 
@@ -362,6 +364,8 @@ export async function getBrand(id: string, isDemoMode?: boolean): Promise<ApiBra
       dimensions: p.dimensions ?? '',
       color: p.colour ?? p.color ?? '',
       customisable: p.customisation_details ?? p.customisable ?? '',
+      lead_time: p.lead_time ?? '',
+      installation: p.installation ?? '',
       images: imagesByProduct[p.id] ?? [],
     })),
     projects: (() => {

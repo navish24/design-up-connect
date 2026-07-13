@@ -137,6 +137,8 @@ alter table public.products add column if not exists material              text;
 alter table public.products add column if not exists dimensions            text;
 alter table public.products add column if not exists colour                text;
 alter table public.products add column if not exists customisation_details text;
+alter table public.products add column if not exists lead_time             text;
+alter table public.products add column if not exists installation          text;
 alter table public.products add column if not exists display_order         int default 0;
 
 -- ============================================================

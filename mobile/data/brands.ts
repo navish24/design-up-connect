@@ -9,6 +9,8 @@ export interface Product {
   dimensions: string;
   color: string;
   customisable: string;
+  lead_time?: string;
+  installation?: string;
   images: string[];  // 4 images per product
 }
 

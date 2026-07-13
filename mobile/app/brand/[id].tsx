@@ -593,7 +593,9 @@ export default function BrandDetailScreen() {
                 { label: 'Dimensions', value: selectedProduct.dimensions },
                 { label: 'Colour', value: selectedProduct.color },
                 { label: 'Customisable', value: selectedProduct.customisable },
-              ].map(({ label, value }) => (
+                { label: 'Lead Time', value: selectedProduct.lead_time },
+                { label: 'Installation', value: selectedProduct.installation },
+              ].filter(({ value }) => value).map(({ label, value }) => (
                 <View key={label} style={[s.pdpSpecCell, { backgroundColor: colors.background }]}>
                   <Text style={[s.pdpSpecLabel, { color: colors.textMuted }]}>{label}</Text>
                   <Text style={[s.pdpSpecValue, { color: colors.text }]}>{value}</Text>
