@@ -70,7 +70,9 @@ const fixOcrArtifacts = (text: string): string =>
     // "user@domain com" → "user@domain.com"  (space instead of dot inside email domain)
     .replace(/(@[a-zA-Z0-9\-]+)\s+(com|in|co|net|org|io)\b/g, '$1.$2')
     // "infoOdomain.com" → "info@domain.com"  (@ misread as uppercase O)
-    .replace(/\b([a-z][a-z0-9._+\-]*)O([a-z][a-z0-9.\-]*\.[a-z]{2,})\b/g, '$1@$2')
+    // Require ≥2 chars before O so single icon misreads ("o" + globe icon "O" + domain)
+    // don't produce false emails like "o@ziba.homes".
+    .replace(/\b([a-z][a-z0-9._+\-]+)O([a-z][a-z0-9.\-]*\.[a-z]{2,})\b/g, '$1@$2')
     // "O_handle_" → "@_handle_"  (@ misread as O before underscore-led social handles)
     .replace(/(?<![a-zA-Z0-9.])O(_[a-z][a-z0-9_.]{1,27}[a-z0-9_]?)(?=[^a-zA-Z0-9_]|$)/g, '@$1');
 
