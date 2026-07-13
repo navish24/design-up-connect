@@ -250,6 +250,50 @@ export default function CardScannerScreen() {
 
 // ── Web card capture (browser only) ──────────────────────────────────────────
 
+async function compressDataUrlToBase64(dataUrl: string, maxW = 1600): Promise<string> {
+  const g = globalThis as any;
+  return new Promise((resolve) => {
+    const img = new g.Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = g.document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(dataUrl.split(',')[1] ?? ''); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1] ?? '');
+    };
+    img.onerror = () => resolve(dataUrl.split(',')[1] ?? '');
+    img.src = dataUrl;
+  });
+}
+
+async function canvasCropToBase64(
+  dataUrl: string,
+  crop: { originX: number; originY: number; width: number; height: number }
+): Promise<string> {
+  const g = globalThis as any;
+  return new Promise((resolve) => {
+    const img = new g.Image();
+    img.onload = () => {
+      try {
+        const canvas = g.document.createElement('canvas');
+        canvas.width = Math.max(1, crop.width);
+        canvas.height = Math.max(1, crop.height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(dataUrl.split(',')[1] ?? ''); return; }
+        ctx.drawImage(img, crop.originX, crop.originY, crop.width, crop.height, 0, 0, crop.width, crop.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1] ?? '');
+      } catch {
+        resolve(dataUrl.split(',')[1] ?? '');
+      }
+    };
+    img.onerror = () => resolve(dataUrl.split(',')[1] ?? '');
+    img.src = dataUrl;
+  });
+}
+
 async function compressToBase64(file: any): Promise<string> {
   const g = globalThis as any;
 
@@ -307,8 +351,23 @@ async function compressToBase64(file: any): Promise<string> {
 }
 
 function WebCardScanner({ colors, insets }: { colors: any; insets: any }) {
-  const [stage, setStage] = useState<'idle' | 'processing' | 'error'>('idle');
+  const [stage, setStage] = useState<'idle' | 'crop' | 'processing' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [cropDataUrl, setCropDataUrl] = useState<string | null>(null);
+
+  const runWebOCR = async (imageBase64: string, imageDataUrl: string) => {
+    setStage('processing');
+    try {
+      const blocks = await recognizeCardTextWeb(imageBase64);
+      const fields = parseCardFields(blocks);
+      cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+      Analytics.cardScanned(fields.length > 0);
+      router.replace('/card-review');
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? 'Something went wrong');
+      setStage('error');
+    }
+  };
 
   const handleCapture = () => {
     const g = globalThis as any;
@@ -322,28 +381,19 @@ function WebCardScanner({ colors, insets }: { colors: any; insets: any }) {
 
     const cleanup = () => { try { g.document.body.removeChild(input); } catch (_) {} };
 
-    input.onchange = async (e: any) => {
+    input.onchange = (e: any) => {
       cleanup();
       const file = e.target?.files?.[0];
       if (!file) return;
-      setStage('processing');
-      try {
-        const imageBase64 = await compressToBase64(file);
-        const imageDataUrl = `data:image/jpeg;base64,${imageBase64}`;
-        const blocks = await recognizeCardTextWeb(imageBase64);
-        const fields = parseCardFields(blocks);
-        cardScanStore.set({
-          imageUri: imageDataUrl,
-          backImageUri: null,
-          fields,
-          isBlurry: blocks.length < 2,
-        });
-        Analytics.cardScanned(fields.length > 0);
-        router.replace('/card-review');
-      } catch (err: any) {
-        setErrorMsg(err?.message ?? 'Something went wrong');
-        setStage('error');
-      }
+      // Read as data URL so we can show the crop preview
+      const reader = new g.FileReader();
+      reader.onload = (ev: any) => {
+        const dataUrl: string = ev.target?.result ?? '';
+        if (dataUrl) { setCropDataUrl(dataUrl); setStage('crop'); }
+        else { setErrorMsg('Could not read image'); setStage('error'); }
+      };
+      reader.onerror = () => { setErrorMsg('Could not read image'); setStage('error'); };
+      reader.readAsDataURL(file);
     };
 
     // Also clean up if the user cancels without picking a file
@@ -351,6 +401,25 @@ function WebCardScanner({ colors, insets }: { colors: any; insets: any }) {
 
     input.click();
   };
+
+  // ── Crop stage ────────────────────────────────────────────────────────────
+  if (stage === 'crop' && cropDataUrl) {
+    return (
+      <CropPreview
+        uri={cropDataUrl}
+        colors={colors}
+        insets={insets}
+        onSkip={async () => {
+          const base64 = await compressDataUrlToBase64(cropDataUrl);
+          await runWebOCR(base64, `data:image/jpeg;base64,${base64}`);
+        }}
+        onCrop={async (cropParams) => {
+          const base64 = await canvasCropToBase64(cropDataUrl, cropParams);
+          await runWebOCR(base64, `data:image/jpeg;base64,${base64}`);
+        }}
+      />
+    );
+  }
 
   if (stage === 'processing') {
     return (

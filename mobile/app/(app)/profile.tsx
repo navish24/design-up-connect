@@ -722,6 +722,22 @@ if (isLoading) {
                 </View>
               )}
 
+              {/* LOCATION section */}
+              {user.address && (
+                <View style={{ gap: 6 }}>
+                  <Text style={[s.previewSectionLabel, { color: colors.textMuted }]}>LOCATION</Text>
+                  <View style={[s.previewSectionCard, { backgroundColor: colors.surface }]}>
+                    <View style={[s.previewRow, { alignItems: 'flex-start' }]}>
+                      <Ionicons name="location-outline" size={18} color={colors.textSecondary} style={{ marginTop: 2 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.previewRowLabel, { color: colors.textMuted }]}>Address</Text>
+                        <Text style={[s.previewRowValue, { color: colors.text, lineHeight: 20 }]}>{user.address}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              )}
+
             </ScrollView>
             <View style={[s.editSaveFooter, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
               <Pressable

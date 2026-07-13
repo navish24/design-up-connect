@@ -1347,9 +1347,11 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         {/* Connection status / Exchange */}
         {connection.is_mutual ? (
           <View style={s.gActions}>
-            <View style={[s.gMutualBadge, { backgroundColor: colors.accent + '15' }]}>
-              <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
-              <Text style={[s.gMutualBadgeText, { color: colors.accent }]}>Mutual Connection</Text>
+            <View style={[s.slideTrack, { backgroundColor: colors.accent + '22', borderColor: colors.accent + '55' }]}>
+              <View style={s.slideSuccess}>
+                <Ionicons name="checkmark-circle" size={17} color={colors.accent} />
+                <Text style={[s.slideLabel, { color: colors.accent }]}>Mutual Connection</Text>
+              </View>
             </View>
           </View>
         ) : (
