@@ -13,6 +13,7 @@ import { cardScanStore } from '../lib/cardScanStore';
 import { setPendingCardOpen } from '../lib/pendingNav';
 import { uploadCardImages } from '../lib/cloudinary';
 import { Analytics } from '../lib/analytics';
+import { saveOcrQuality } from '../lib/cardOcr';
 import { Spacing, FontSize, FontWeight, Radius } from '../constants/theme';
 import type { CardContact, CardContactField } from '../types';
 import { CountryCodePicker } from '../components/CountryCodePicker';
@@ -31,13 +32,14 @@ export default function CardReviewScreen() {
   const { colors } = useTheme();
   const headerPaddingTop = useHeaderPaddingTop();
   const { bottom: bottomInset } = useSafeAreaInsets();
-  const { addCardContact, updateCardContact, cardContacts } = useAuth();
+  const { addCardContact, updateCardContact, cardContacts, user } = useAuth();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [backImageUri, setBackImageUri] = useState<string | null>(null);
   const [fields, setFields] = useState<CardContactField[]>([]);
   const [notes, setNotes] = useState('');
   const [isBlurry, setIsBlurry] = useState(false);
+  const [rawText, setRawText] = useState('');
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [editingLabelIdx, setEditingLabelIdx] = useState<number | null>(null);
   const [showAddField, setShowAddField] = useState(false);
@@ -59,6 +61,7 @@ export default function CardReviewScreen() {
       setBackImageUri(data.backImageUri);
       setFields(data.fields);
       setIsBlurry(data.isBlurry);
+      setRawText(data.rawText ?? '');
     }
   }, []);
 
@@ -128,7 +131,8 @@ export default function CardReviewScreen() {
     setSavedContactId(id);
     setSaved(true);
     void uploadCardImages(contact, updateCardContact);
-  }, [imageUri, backImageUri, fields, notes, addCardContact, updateCardContact, phonePrefixes]);
+    void saveOcrQuality(id, user?.id ?? null, rawText, normalizedFields);
+  }, [imageUri, backImageUri, fields, notes, rawText, user, addCardContact, updateCardContact, phonePrefixes]);
 
   const handleSave = useCallback(() => {
     const dup = findDuplicate();

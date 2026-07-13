@@ -55,6 +55,7 @@ export default function CardScannerScreen() {
     imageUri: string;
     fields: ReturnType<typeof parseCardFields>;
     isBlurry: boolean;
+    rawText: string;
   } | null>(null);
 
   const runOCR = async (imageUri: string) => {
@@ -62,6 +63,7 @@ export default function CardScannerScreen() {
     try {
       const blocks = await recognizeCardText(imageUri);
       const fields = parseCardFields(blocks);
+      const rawText = blocks.map((b) => b.text).join('\n');
 
       if (isSecondSide.current && frontRef.current) {
         const merged = [...frontRef.current.fields, ...fields];
@@ -70,13 +72,14 @@ export default function CardScannerScreen() {
           backImageUri: imageUri,
           fields: merged,
           isBlurry: frontRef.current.isBlurry,
+          rawText: frontRef.current.rawText + '\n' + rawText,
         });
         Analytics.cardScanned(true);
         frontRef.current = null;
         isCapturing.current = false;
         router.replace('/card-review');
       } else {
-        frontRef.current = { imageUri, fields, isBlurry: blocks.length < 2 };
+        frontRef.current = { imageUri, fields, isBlurry: blocks.length < 2, rawText };
         isCapturing.current = false;
         setStage('back-prompt');
       }
@@ -139,6 +142,7 @@ export default function CardScannerScreen() {
       backImageUri: null,
       fields: front?.fields ?? [],
       isBlurry: front?.isBlurry ?? false,
+      rawText: front?.rawText ?? '',
     });
     router.replace('/card-review');
   };
@@ -360,7 +364,8 @@ function WebCardScanner({ colors, insets }: { colors: any; insets: any }) {
     try {
       const blocks = await recognizeCardTextWeb(imageBase64);
       const fields = parseCardFields(blocks);
-      cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+      const rawText = blocks.map((b) => b.text).join('\n');
+      cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText });
       Analytics.cardScanned(fields.length > 0);
       router.replace('/card-review');
     } catch (err: any) {

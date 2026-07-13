@@ -1,6 +1,59 @@
 import type { CardContactField } from '../types';
 import { supabase } from './supabase';
 
+// Bump whenever parser logic changes so Supabase queries can compare before/after.
+export const PARSER_VERSION = '1.1.0';
+
+// ── OCR quality signals (saved silently to Supabase after every scan) ─────────
+
+export interface OcrQualityPayload {
+  parse_version: string;
+  raw_text: string;
+  field_count: number;
+  other_count: number;
+  has_name: boolean;
+  has_company: boolean;
+  has_phone: boolean;
+  has_email: boolean;
+  completeness_pct: number;
+  other_values: string[];
+}
+
+export function computeOcrQuality(rawText: string, fields: CardContactField[]): OcrQualityPayload {
+  const has = (label: string) => fields.some((f) => f.label === label);
+  const core = ['Name', 'Phone', 'Email', 'Company'];
+  const presentCore = core.filter(has).length;
+  return {
+    parse_version: PARSER_VERSION,
+    raw_text: rawText,
+    field_count: fields.length,
+    other_count: fields.filter((f) => f.label === 'Other').length,
+    has_name: has('Name'),
+    has_company: has('Company'),
+    has_phone: has('Phone') || has('WhatsApp'),
+    has_email: has('Email'),
+    completeness_pct: Math.round((presentCore / core.length) * 100),
+    other_values: fields.filter((f) => f.label === 'Other').map((f) => f.value),
+  };
+}
+
+export async function saveOcrQuality(
+  cardContactId: string,
+  userId: string | null,
+  rawText: string,
+  fields: CardContactField[],
+): Promise<void> {
+  try {
+    await supabase.from('ocr_quality').insert({
+      card_contact_id: cardContactId,
+      user_id: userId,
+      ...computeOcrQuality(rawText, fields),
+    });
+  } catch {
+    // Silent — never surface quality logging errors to the user
+  }
+}
+
 // ── Regex patterns ────────────────────────────────────────────────────────────
 
 // Indian mobile:  +91 / 91 / 0 prefix (+ optional), then 6–9 leading digit, 9 more digits

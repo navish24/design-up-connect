@@ -936,7 +936,7 @@ function BetaHomeScreen() {
           let blocks: any[] = [];
           try { blocks = await recognizeCardTextWeb(base64); } catch (_) {}
           const fields = parseCardFields(blocks);
-          cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+          cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText: blocks.map((b: any) => b.text).join('\n') });
           setImporting(false);
           router.push('/card-review');
         } catch { setImporting(false); }
@@ -956,7 +956,7 @@ function BetaHomeScreen() {
       const imageUri = result.assets[0].uri;
       const blocks = await recognizeCardText(imageUri);
       const fields = parseCardFields(blocks);
-      cardScanStore.set({ imageUri, backImageUri: null, fields, isBlurry: blocks.length < 2 });
+      cardScanStore.set({ imageUri, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText: blocks.map((b: any) => b.text).join('\n') });
       setImporting(false);
       router.push('/card-review');
     } catch {

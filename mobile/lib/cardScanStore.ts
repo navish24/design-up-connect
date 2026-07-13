@@ -8,6 +8,7 @@ export interface PendingCardScan {
   backImageUri: string | null;
   fields: CardContactField[];
   isBlurry: boolean;
+  rawText: string;
 }
 
 let pending: PendingCardScan | null = null;
