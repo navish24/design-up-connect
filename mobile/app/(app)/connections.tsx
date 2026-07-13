@@ -174,6 +174,9 @@ export default function ConnectionsScreen() {
   const [showFilterDrop, setShowFilterDrop] = useState(false);
   const [showSortDrop, setShowSortDrop] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>({ type: 'list' });
+  const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
+  const scrollRef = useRef<ScrollView>(null);
+  const savedScrollY = useRef(0);
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
   // When set, we're waiting for allConnections to include this userId before opening detail.
   // State triggers a re-render so useEffect below always re-evaluates after useFocusEffect sets it,
@@ -347,6 +350,16 @@ export default function ConnectionsScreen() {
     }
   }, [allConnections, cardContacts, pendingOpenUserId]);
 
+  // Restore scroll position when returning to list from a detail view
+  useEffect(() => {
+    if (activeView.type !== 'list' || savedScrollY.current <= 0) return;
+    const y = savedScrollY.current;
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y, animated: false });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [activeView.type]);
+
   const filteredConnections = useMemo(() => {
     if (filterType === 'cards') return [];
     const q = search.toLowerCase();
@@ -467,7 +480,7 @@ export default function ConnectionsScreen() {
         />
       )}
 
-      {/* Filter + Sort dropdowns */}
+      {/* Filter + Sort + View toggle */}
       <View style={[s.filterBar, { zIndex: 20 }]}>
 
         {/* Filter CTA */}
@@ -531,56 +544,133 @@ export default function ConnectionsScreen() {
             </View>
           )}
         </View>
+
+        {/* View toggle */}
+        <Pressable
+          style={[s.dropBtn, {
+            backgroundColor: colors.surface,
+            borderColor: viewMode === 'gallery' ? colors.accent : colors.border,
+            paddingHorizontal: 10,
+          }]}
+          onPress={() => setViewMode((v) => v === 'list' ? 'gallery' : 'list')}
+        >
+          <Ionicons
+            name={viewMode === 'gallery' ? 'list-outline' : 'grid-outline'}
+            size={16}
+            color={viewMode === 'gallery' ? colors.accent : colors.textSecondary}
+          />
+        </Pressable>
+
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={viewMode === 'gallery' ? s.galleryScroll : s.scroll}
+        onScroll={(e) => { savedScrollY.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={100}
+      >
 
-        {filteredItems.map((item) =>
-          item.type === 'connect' ? (
-            <ConnectionCard
-              key={item.data.id}
-              connection={item.data}
-              colors={colors}
-              onPress={() => setActiveView({ type: 'connect_detail', connection: item.data })}
-              onExchange={(id, name) => handleExchangeContact(id, name)}
-              notes={notes[item.data.id] ?? []}
-              search={search}
-            />
-          ) : (
-            <CardContactCard
-              key={item.data.id}
-              contact={item.data}
-              colors={colors}
-              onPress={() => setActiveView({ type: 'card_detail', contact: item.data })}
-              search={search}
-            />
-          )
-        )}
-
-        {/* ── Empty state ── */}
-        {filteredItems.length === 0 && (
-          <View style={[s.emptyState, { backgroundColor: colors.surface }]}>
-            <Text style={s.emptyIcon}>🤝</Text>
-            <Text style={[s.emptyTitle, { color: colors.text }]}>
-              {filterType === 'notes' ? 'No contacts with notes' : 'No connections yet'}
-            </Text>
-            <Text style={[s.emptyBody, { color: colors.textSecondary }]}>
-              {filterType === 'notes'
-                ? 'Open a contact and tap "Add a note" to start keeping notes about your connections.'
-                : isBeta
-                  ? 'Everyone you\'ve connected with appears here — scan a visiting card or a Connect QR to get started.'
-                  : 'Scan a QR code to connect with someone on Connect, or tap "Scan Card" to save a physical visiting card.'}
-            </Text>
-            {filterType !== 'notes' && (
-              <Pressable
-                style={[s.emptyCardBtn, { backgroundColor: colors.accent }]}
-                onPress={() => router.push('/(app)/scan?mode=card' as any)}
-              >
-                <Ionicons name="card-outline" size={16} color="#FFF" />
-                <Text style={s.emptyCardBtnText}>Scan a Visiting Card</Text>
-              </Pressable>
+        {viewMode === 'gallery' ? (
+          /* ── Gallery view ─────────────────────────────────────────────── */
+          <>
+            {filteredItems.map((item) => {
+              const id = item.data.id;
+              const isCard = item.type === 'card';
+              const contact = isCard ? (item.data as CardContact) : null;
+              const conn = !isCard ? (item.data as Connection) : null;
+              const imgUri = isCard ? contact!.card_image_uri : conn!.user.profile_image_url;
+              const name = isCard ? getCardDisplayName(contact!.fields) : conn!.user.full_name;
+              const initials = name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+              return (
+                <Pressable
+                  key={id}
+                  style={[s.galleryCell, { backgroundColor: colors.surface }]}
+                  onPress={() => isCard
+                    ? setActiveView({ type: 'card_detail', contact: item.data as CardContact })
+                    : setActiveView({ type: 'connect_detail', connection: item.data as Connection })
+                  }
+                >
+                  {imgUri ? (
+                    <Image source={{ uri: imgUri }} style={s.galleryCellImg} resizeMode={isCard ? 'cover' : 'cover'} />
+                  ) : (
+                    <View style={[s.galleryCellPlaceholder, { backgroundColor: colors.accent + '18' }]}>
+                      <Text style={[s.galleryCellInitials, { color: colors.accent }]}>{initials}</Text>
+                    </View>
+                  )}
+                  <Text style={[s.galleryCellName, { color: colors.text }]} numberOfLines={1}>{name}</Text>
+                </Pressable>
+              );
+            })}
+            {filteredItems.length === 0 && (
+              <View style={[s.emptyState, { backgroundColor: colors.surface, width: '100%' }]}>
+                <Text style={s.emptyIcon}>{search ? '🔍' : '🤝'}</Text>
+                <Text style={[s.emptyTitle, { color: colors.text }]}>
+                  {search ? `No results for "${search}"` : 'No connections yet'}
+                </Text>
+                <Text style={[s.emptyBody, { color: colors.textSecondary }]}>
+                  {search ? 'Try a different name, company, or role.' : 'Scan a visiting card or Connect QR to get started.'}
+                </Text>
+              </View>
             )}
-          </View>
+          </>
+        ) : (
+          /* ── List view ────────────────────────────────────────────────── */
+          <>
+            {filteredItems.map((item) =>
+              item.type === 'connect' ? (
+                <ConnectionCard
+                  key={item.data.id}
+                  connection={item.data}
+                  colors={colors}
+                  onPress={() => setActiveView({ type: 'connect_detail', connection: item.data })}
+                  onExchange={(id, name) => handleExchangeContact(id, name)}
+                  notes={notes[item.data.id] ?? []}
+                  search={search}
+                />
+              ) : (
+                <CardContactCard
+                  key={item.data.id}
+                  contact={item.data}
+                  colors={colors}
+                  onPress={() => setActiveView({ type: 'card_detail', contact: item.data })}
+                  search={search}
+                />
+              )
+            )}
+
+            {/* ── Empty state ── */}
+            {filteredItems.length === 0 && (
+              <View style={[s.emptyState, { backgroundColor: colors.surface }]}>
+                <Text style={s.emptyIcon}>{search ? '🔍' : filterType === 'notes' ? '📝' : '🤝'}</Text>
+                <Text style={[s.emptyTitle, { color: colors.text }]}>
+                  {search
+                    ? `No results for "${search}"`
+                    : filterType === 'notes'
+                      ? 'No contacts with notes'
+                      : 'No connections yet'}
+                </Text>
+                <Text style={[s.emptyBody, { color: colors.textSecondary }]}>
+                  {search
+                    ? 'Try searching by a different name, company, role, or city.'
+                    : filterType === 'notes'
+                      ? 'Open a contact and tap "Add a note" to start keeping notes about your connections.'
+                      : isBeta
+                        ? 'Everyone you\'ve connected with appears here — scan a visiting card or a Connect QR to get started.'
+                        : 'Scan a QR code to connect with someone on Connect, or tap "Scan Card" to save a physical visiting card.'}
+                </Text>
+                {!search && filterType !== 'notes' && (
+                  <Pressable
+                    style={[s.emptyCardBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => router.push('/(app)/scan?mode=card' as any)}
+                  >
+                    <Ionicons name="card-outline" size={16} color="#FFF" />
+                    <Text style={s.emptyCardBtnText}>Scan a Visiting Card</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -1469,6 +1559,12 @@ function makeStyles(colors: any) {
     },
     dropItemText: { fontSize: FontSize.sm },
     scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
+    galleryScroll: { paddingHorizontal: Spacing.md, paddingBottom: 100, flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    galleryCell: { width: '48%', borderRadius: Radius.lg, overflow: 'hidden' },
+    galleryCellImg: { width: '100%', aspectRatio: 1.6 },
+    galleryCellPlaceholder: { width: '100%', aspectRatio: 1.6, alignItems: 'center', justifyContent: 'center' },
+    galleryCellInitials: { fontSize: FontSize.xl, fontWeight: FontWeight.bold },
+    galleryCellName: { fontSize: FontSize.xs, fontWeight: FontWeight.medium, paddingHorizontal: Spacing.sm, paddingVertical: 7 },
     sectionHeader: {
       fontSize: FontSize.xs, fontWeight: FontWeight.semibold,
       letterSpacing: 0.5, marginBottom: Spacing.sm,
