@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.1.0';
+export const PARSER_VERSION = '1.2.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -841,71 +841,116 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
   }
 
-  // Consolidate address lines into one field, preserving original top-to-bottom order
+  // Consolidate address lines — supports multiple offices via location headers.
   if (addressIdx.size > 0) {
     const ordered = [...addressIdx].sort((a, b) => a - b).map((i) => remaining[i].replace(/,\s*$/, ''));
-    let addressStr = ordered.join(', ').replace(/,?\s*[A-Z]\s*:\s*$/, '').trim();
 
-    // Strip an OCR-noise word at the very start of the address (before the first comma)
-    // if it's all letters, ≤12 chars, and not a known address keyword itself.
-    // e.g. "Afvices, Corporate Office: A-204..." → "Corporate Office: A-204..."
-    addressStr = addressStr.replace(/^([A-Za-z]{2,12}),\s*/, (_, word) =>
-      ADDRESS_KEYWORD_RE.test(word) ? `${word}, ` : '',
-    );
+    // City names worth using as address group labels (excludes generic countries like India/USA)
+    const CITY_LABEL_RE =
+      /\b(mumbai|delhi|new\s+delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|navi\s+mumbai|singapore|dubai|bahrain|kuwait|qatar|washington|chicago|new\s+york|los\s+angeles|san\s+francisco|london|toronto|sydney|seattle|boston)\b/i;
+    const ADDR_STRUCTURAL_RE =
+      /\b(road|street|nagar|marg|avenue|floor|sector|plot|block|house|tower|no\.|phase|opposite|opp)\b/i;
 
-    // Strip embedded phone-label tokens (e.g. "Tel.:" or "Fax:") that remain after
-    // the phone number was extracted by PHONE_RE. Also strip any stray phone numbers
-    // that slipped through (e.g. Indian landlines not matched earlier).
-    addressStr = addressStr
-      .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
-      .replace(new RegExp(PHONE_RE.source, 'g'), '')
-      .replace(/\s{2,}/g, ' ')
-      .replace(/^[,\s]+|[,\s]+$/g, '')
-      .trim();
+    // Returns the city label if this line is a location header ("Hyderabad", "HEAD OFFICE Singapore"),
+    // null if it is regular address content.
+    const asLocationHeader = (line: string): string | null => {
+      const cityMatch = line.match(CITY_LABEL_RE);
+      if (!cityMatch) return null;
+      if (line.trim().split(/\s+/).length > 5) return null; // too many words → address content
+      if (PIN_RE.test(line)) return null; // has a pin code → address content
+      if (/\d{1,4}[,\/]/.test(line)) return null; // street number pattern
+      const withoutCity = line.replace(CITY_LABEL_RE, '').trim();
+      if (ADDR_STRUCTURAL_RE.test(withoutCity)) return null; // structural word alongside city
+      const city = cityMatch[0].replace(/\s+/g, ' ').trim();
+      return city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
+    };
 
-    // If no company has been assigned yet and the address string starts with a
-    // company name (e.g. "ADORNO INTERIORS PVT LTD, Corporate Office: #303..."),
-    // extract it — this happens when the company name and its address appear on
-    // the same OCR block or adjacent lines.
-    if (!companyAssigned) {
-      const m = addressStr.match(/^(.+?\b(?:PVT\.?\s*LTD\.?|LIMITED|LLP|INC))\.?(?:\s*,\s*|\s+)/i);
-      if (m) {
-        const companyName = m[1].trim();
-        const nameIdx = fields.findIndex((f) => f.label === 'Name');
-        fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: companyName });
-        companyAssigned = true;
-        addressStr = addressStr.slice(m[0].length).trim();
+    // Group address lines by location headers
+    const groups: { city: string | null; lines: string[] }[] = [];
+    let cur: { city: string | null; lines: string[] } = { city: null, lines: [] };
+    for (const line of ordered) {
+      const city = asLocationHeader(line);
+      if (city !== null) {
+        if (cur.lines.length > 0 || cur.city !== null) groups.push(cur);
+        cur = { city, lines: [] };
+      } else {
+        cur.lines.push(line);
       }
     }
+    groups.push(cur);
 
-    // If no name yet, scan comma-separated address segments for a personal name —
-    // "First Last" anywhere in the address block (start, middle, or end).
-    if (!nameAssigned) {
-      const segments = addressStr.split(/,\s*/);
-      let nameSegIdx = -1;
-      for (let si = 0; si < segments.length; si++) {
-        const seg = segments[si].trim();
-        if (
-          /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}$/.test(seg) &&
-          !ADDRESS_KEYWORD_RE.test(seg) &&
-          !DESIGNATION_RE.test(seg) &&
-          !COMPANY_KEYWORD_RE.test(seg)
-        ) {
-          nameSegIdx = si;
-          break;
+    const isMultiAddress = groups.length > 1 || (groups.length === 1 && groups[0].city !== null);
+
+    // ── Single address (existing behavior) ──────────────────────────────────
+    if (!isMultiAddress) {
+      let addressStr = ordered.join(', ').replace(/,?\s*[A-Z]\s*:\s*$/, '').trim();
+
+      addressStr = addressStr.replace(/^([A-Za-z]{2,12}),\s*/, (_, word) =>
+        ADDRESS_KEYWORD_RE.test(word) ? `${word}, ` : '',
+      );
+      addressStr = addressStr
+        .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
+        .replace(new RegExp(PHONE_RE.source, 'g'), '')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/^[,\s]+|[,\s]+$/g, '')
+        .trim();
+
+      if (!companyAssigned) {
+        const m = addressStr.match(/^(.+?\b(?:PVT\.?\s*LTD\.?|LIMITED|LLP|INC))\.?(?:\s*,\s*|\s+)/i);
+        if (m) {
+          const companyName = m[1].trim();
+          const nameIdx = fields.findIndex((f) => f.label === 'Name');
+          fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: companyName });
+          companyAssigned = true;
+          addressStr = addressStr.slice(m[0].length).trim();
         }
       }
-      if (nameSegIdx !== -1) {
-        const possibleName = segments[nameSegIdx].trim();
-        segments.splice(nameSegIdx, 1);
-        fields.unshift({ label: 'Name', value: possibleName });
-        nameAssigned = true;
-        addressStr = segments.join(', ').trim();
-      }
-    }
 
-    if (addressStr.length > 0) {
-      fields.push({ label: 'Address', value: addressStr });
+      if (!nameAssigned) {
+        const segments = addressStr.split(/,\s*/);
+        let nameSegIdx = -1;
+        for (let si = 0; si < segments.length; si++) {
+          const seg = segments[si].trim();
+          if (
+            /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}$/.test(seg) &&
+            !ADDRESS_KEYWORD_RE.test(seg) &&
+            !DESIGNATION_RE.test(seg) &&
+            !COMPANY_KEYWORD_RE.test(seg)
+          ) {
+            nameSegIdx = si;
+            break;
+          }
+        }
+        if (nameSegIdx !== -1) {
+          const possibleName = segments[nameSegIdx].trim();
+          segments.splice(nameSegIdx, 1);
+          fields.unshift({ label: 'Name', value: possibleName });
+          nameAssigned = true;
+          addressStr = segments.join(', ').trim();
+        }
+      }
+
+      if (addressStr.length > 0) fields.push({ label: 'Address', value: addressStr });
+
+    // ── Multiple offices ─────────────────────────────────────────────────────
+    } else {
+      for (const group of groups) {
+        if (group.lines.length === 0) continue;
+        // Skip unlabeled prefix lines (e.g. country name "India" before first header)
+        if (group.city === null) continue;
+
+        let addressStr = group.lines
+          .join(', ')
+          .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
+          .replace(new RegExp(PHONE_RE.source, 'g'), '')
+          .replace(/\s{2,}/g, ' ')
+          .replace(/^[,\s]+|[,\s]+$/g, '')
+          .trim();
+
+        if (addressStr.length > 0) {
+          fields.push({ label: `Address (${group.city})`, value: addressStr });
+        }
+      }
     }
   }
 

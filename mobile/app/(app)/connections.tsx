@@ -753,6 +753,7 @@ const IDENTITY_LABELS = new Set(['Name', 'Company', 'Designation']);
 const CONTACT_LABELS_SET = new Set(['Phone', 'WhatsApp', 'Email']);
 const ONLINE_LABELS_SET = new Set(['Website', 'Instagram', 'LinkedIn', 'Twitter/X', 'Facebook', 'Behance', 'YouTube', 'Social Handle']);
 const LOCATION_LABELS_SET = new Set(['Address']);
+const isAddressLabel = (label: string) => label === 'Address' || label.startsWith('Address (');
 
 
 function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, notes, onAddNote }: {
@@ -786,10 +787,10 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
 
   const contactFields = contact.fields.filter((f) => CONTACT_LABELS_SET.has(f.label));
   const onlineFields = contact.fields.filter((f) => ONLINE_LABELS_SET.has(f.label));
-  const locationFields = contact.fields.filter((f) => LOCATION_LABELS_SET.has(f.label));
+  const locationFields = contact.fields.filter((f) => isAddressLabel(f.label));
   const otherFields = contact.fields.filter(
     (f) => !IDENTITY_LABELS.has(f.label) && !CONTACT_LABELS_SET.has(f.label) &&
-            !ONLINE_LABELS_SET.has(f.label) && !LOCATION_LABELS_SET.has(f.label)
+            !ONLINE_LABELS_SET.has(f.label) && !isAddressLabel(f.label)
   );
 
   const handleDelete = () => {
@@ -1059,7 +1060,7 @@ const LINKABLE_FIELDS = new Set(['Website', 'Instagram', 'LinkedIn']);
 
 function FieldDetailRow({ field, colors, isLast }: { field: import('../../types').CardContactField; colors: any; isLast: boolean }) {
   const s = makeStyles(colors);
-  const icon = FIELD_ICONS[field.label] ?? 'ellipsis-horizontal-outline';
+  const icon = FIELD_ICONS[field.label] ?? (isAddressLabel(field.label) ? 'location-outline' : 'ellipsis-horizontal-outline');
   const isCopyable = ['Phone', 'WhatsApp', 'Email', 'Website', 'LinkedIn', 'Instagram', 'Twitter/X'].includes(field.label);
   const isLinkable = LINKABLE_FIELDS.has(field.label);
 
@@ -1092,11 +1093,11 @@ function GroupedSection({ label, children, colors, s }: { label: string; childre
 }
 
 function GroupedFieldRow({ field, colors, s }: { field: import('../../types').CardContactField; colors: any; s: any }) {
-  const icon = FIELD_ICONS[field.label] ?? 'ellipsis-horizontal-outline';
+  const icon = FIELD_ICONS[field.label] ?? (isAddressLabel(field.label) ? 'location-outline' : 'ellipsis-horizontal-outline');
   const isPhone = field.label === 'Phone' || field.label === 'WhatsApp';
   const isLinkable = ONLINE_LABELS_SET.has(field.label) && field.label !== 'Social Handle';
   const isCopyable = CONTACT_LABELS_SET.has(field.label);
-  const multiLine = field.label === 'Address' || field.label === 'Other' || field.label === 'Services';
+  const multiLine = isAddressLabel(field.label) || field.label === 'Other' || field.label === 'Services';
 
   return (
     <View style={[s.gRow, multiLine && { alignItems: 'flex-start' }]}>
