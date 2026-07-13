@@ -1051,6 +1051,7 @@ const FIELD_ICONS: Record<string, string> = {
   YouTube: 'logo-youtube',
   Address: 'location-outline',
   Services: 'list-outline',
+  'Name 2': 'person-outline',
   Other: 'ellipsis-horizontal-outline',
 };
 

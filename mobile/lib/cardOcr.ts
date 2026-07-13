@@ -575,6 +575,30 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       }
     }
 
+    // Second person on card: same name shape as primary but Name already taken.
+    // Happens on cards with two partners/co-founders (e.g. "Kunj Baheti / Nidhi Baheti").
+    // Label as 'Name 2' so the UI can surface it distinctly instead of burying it in Other.
+    {
+      const CREDENTIAL_SUFFIX_RE = /\s*\([A-Za-z][A-Za-z.\s]{1,15}\)\s*$/;
+      const lineForName2 = line.replace(CREDENTIAL_SUFFIX_RE, '').trim();
+      const ADDR_ABBREV_RE = /^(rd|st|ave|blvd|dr|ln|ct|pl|extn?)$/i;
+      if (
+        nameAssigned &&
+        !lineIsAllCaps &&
+        /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName2) &&
+        lineForName2.split(' ').length >= 2 &&
+        lineForName2.split(' ').length <= 6 &&
+        lineForName2.split(/\s+/).every((w) => /^[A-Z]/.test(w)) &&
+        !lineForName2.split(/\s+/).some((w) => ADDR_ABBREV_RE.test(w)) &&
+        !ADDRESS_KEYWORD_RE.test(lineForName2) &&
+        !DESIGNATION_RE.test(lineForName2) &&
+        !COMPANY_KEYWORD_RE.test(lineForName2)
+      ) {
+        fields.push({ label: 'Name 2', value: lineForName2 });
+        return;
+      }
+    }
+
     // Defer: may turn out to be a city/state line that belongs to the address
     otherEntries.push({ idx, text: line });
   });
@@ -745,10 +769,15 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // Collect service-type lines when the company is already found — e.g. an architecture
       // firm printing "Architecture / Interiors / Landscape" as service descriptions.
       // These are industry terms, not contact data, so merge them into one Services field.
+      // Also catches pipe-separated product/offering taglines like "Objects | Rugs | Sculptures".
       if (
         companyAssigned &&
-        COMPANY_KEYWORD_RE.test(text) &&
-        text.split(/\s+/).filter(Boolean).length <= 4 &&
+        (COMPANY_KEYWORD_RE.test(text) || (
+          text.includes('|') &&
+          text.split(/\s*\|\s*/).length >= 2 &&
+          text.split(/\s*\|\s*/).every((p) => p.trim().length >= 2)
+        )) &&
+        text.split(/\s+/).filter(Boolean).length <= 8 &&
         !ADDRESS_KEYWORD_RE.test(text) &&
         !DESIGNATION_RE.test(text)
       ) {
