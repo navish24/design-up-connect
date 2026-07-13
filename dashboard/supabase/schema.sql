@@ -379,6 +379,24 @@ create policy "vp_all" on public.visitor_passes for all to authenticated using (
 -- GATE STAFF ASSIGNMENTS
 create policy "gsa_all" on public.gate_staff_assignments for all to authenticated using (true) with check (true);
 
--- BRAND PAST EXHIBITIONS
-create policy "bpe_all"  on public.brand_past_exhibitions       for all to authenticated using (true) with check (true);
-create policy "bpei_all" on public.brand_past_exhibition_images for all to authenticated using (true) with check (true);
+-- BRAND PAST EXHIBITIONS (public read so mobile can show brand history)
+create policy "bpe_select"  on public.brand_past_exhibitions       for select using (true);
+create policy "bpe_write"   on public.brand_past_exhibitions       for all to authenticated using (true) with check (true);
+create policy "bpei_select" on public.brand_past_exhibition_images for select using (true);
+create policy "bpei_write"  on public.brand_past_exhibition_images for all to authenticated using (true) with check (true);
+
+-- COLLECTIONS (public read)
+alter table public.collections        enable row level security;
+alter table public.collection_images  enable row level security;
+create policy "coll_select" on public.collections       for select using (true);
+create policy "coll_write"  on public.collections       for all to authenticated using (true) with check (true);
+create policy "ci_select"   on public.collection_images for select using (true);
+create policy "ci_write"    on public.collection_images for all to authenticated using (true) with check (true);
+
+-- PROJECTS (public read)
+alter table public.projects       enable row level security;
+alter table public.project_images enable row level security;
+create policy "proj_select"    on public.projects       for select using (true);
+create policy "proj_write"     on public.projects       for all to authenticated using (true) with check (true);
+create policy "projimg_select" on public.project_images for select using (true);
+create policy "projimg_write"  on public.project_images for all to authenticated using (true) with check (true);

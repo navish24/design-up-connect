@@ -58,6 +58,72 @@ const BRAND_COLLECTIONS: Record<string, Collection[]> = {
   b11: [
     { id: 'b11-col1', name: 'Monsoon Botanicals', description: 'Original works inspired by the Indian monsoon — watercolour, ink, and mixed media on archival paper.', images: ['https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=800', 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=800', 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800'] },
   ],
+  'arisaa-b01-2024': [
+    {
+      id: 'arisaa-c01',
+      name: 'Of the Earth',
+      description: 'Wall pieces and reliefs in natural pigment, clay, and raw mineral — each surface a record of material time. Made to be read slowly: the closer you look, the more texture reveals itself.',
+      images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0300321c-5336-41ec-be26-4c0082d245ca/Of+the+Earth+%281%29.png',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/b17cc747-fe59-4b03-ad7e-509fa988f324/_R8A2413-edit.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/6097b573-1fc9-4770-8965-2edcde445095/_R8A3250edited-new.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/eb0013af-bbeb-40ec-8b21-77833b7e9bef/ARSD00415.jpg',
+      ],
+    },
+    {
+      id: 'arisaa-c02',
+      name: 'Reflections',
+      description: 'Mirrors shaped by hand rather than machine — each frame a study in material honesty. Gilded brass, raw linen, organic edge. Every surface is an invitation to look twice.',
+      images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/f85e0e44-1696-4063-baaa-a8c0bcaf3049/Gilded+current4a.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0bd027f7-ee1f-46bf-9291-2fd7739d8061/web+rs.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/6097b573-1fc9-4770-8965-2edcde445095/_R8A3250edited-new.jpg',
+      ],
+    },
+    {
+      id: 'arisaa-c03',
+      name: 'Woven Grounds',
+      description: 'Floor pieces woven in natural wool, cotton, and jute — geometry and touch in conversation. Designed to age beautifully underfoot, each rug is a landscape you live on.',
+      images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/50193dd1-52f1-4501-abe2-df9323063be4/Drava-web-3.png',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/a7d37874-2573-494d-9eb9-a45b71997213/ARSD00404.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/eb0013af-bbeb-40ec-8b21-77833b7e9bef/ARSD00415.jpg',
+      ],
+    },
+  ],
+  'hjd-b01-2024': [
+    {
+      id: 'hjd-c01',
+      name: 'The Rio Collection',
+      description: 'Wall lights sculpted from natural stone — travertine, rainforest marble, alabaster, and pizzato — each with signature fluting and brass accents. Every piece is unique, shaped by the veining and colour of the stone it is carved from.',
+      images: [
+        'https://static.wixstatic.com/media/67a4ef_56422cdaf100415fac61c15a5d349eb1~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_dc0794650c6c43b696de70f4482da15b~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_79bde5707e094e9381712fdbb35a33be~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_64ac390b3a824bb6ab7b80fe2b40bf9e~mv2.jpg',
+      ],
+    },
+    {
+      id: 'hjd-c02',
+      name: 'Totem Series',
+      description: 'Freestanding floor lamps that read as sculpture. Built over 80+ hours in clay stoneware and claypaste on a mild steel armature, each totem carries the full material vocabulary of the studio from first lamp to latest form.',
+      images: [
+        'https://static.wixstatic.com/media/67a4ef_090f6f2764474878a6a056f4ec953a2a~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_1219ac2b81634ab4af00330ea192d085~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_32a6d73160f94665aeec5fa37c1be4c3~mv2.jpg',
+      ],
+    },
+    {
+      id: 'hjd-c03',
+      name: 'Pendants & Chandeliers',
+      description: 'Ceiling fixtures that define a room — from the delicate Bloom pendant tracing a flower\'s growth to the brass ring chandelier that turns negative space into ornament.',
+      images: [
+        'https://static.wixstatic.com/media/67a4ef_09c382a29a234c62af7e01dd6ee2cfd4~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_0766e8810f124207b10082023d41f7b4~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_cd84fd3879ee4b438781937ed5b8d8d7~mv2.jpg',
+      ],
+    },
+  ],
 };
 
 // Sample past exhibitions for select brands
@@ -185,6 +251,181 @@ const BRAND_PAST_SHOWS: Record<string, PastShow[]> = {
         'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=800',
       ],
       about: "Building on our ACETECH Mumbai presence, the Bengaluru 2025 edition let us take our handloom and natural-dye textile story deeper into South India. We launched the Earth Collection exclusively here — 100% natural indigo, turmeric, and madder dyes on Khadi base fabrics.",
+    },
+  ],
+  'arisaa-b01-2024': [
+    {
+      id: 'arisaa-show01',
+      exhibition_name: 'Salone Satellite',
+      city: 'Milan, Italy',
+      year: '2023',
+      booth: 'Fiera Milano, Rho',
+      images: ['https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/eaa6dc82-80bd-42c7-9651-6f8cb287e0f6/Copy+of+MILAN+FEATURES-12.png'],
+      booth_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/eaa6dc82-80bd-42c7-9651-6f8cb287e0f6/Copy+of+MILAN+FEATURES-12.png',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0309f91d-d641-4a6d-971b-0e875afae13e/ARSD00465+a.jpg',
+      ],
+      product_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0300321c-5336-41ec-be26-4c0082d245ca/Of+the+Earth+%281%29.png',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0f54cb7d-3661-4bc6-a44c-dc96ef5e1b6b/Negi+Sculpture+%281%29.JPG',
+      ],
+      about: "Arisaa's international debut at Salone Satellite — the most visible platform for emerging design talent during Milan Design Week. The studio presented wall art, sculptural objects, and handwoven pieces to an international audience, drawing significant editorial attention and positioning the studio within a global craft dialogue.",
+    },
+    {
+      id: 'arisaa-show02',
+      exhibition_name: 'India Design ID',
+      city: 'New Delhi',
+      year: '2023',
+      booth: 'Epicentre, Gurugram',
+      images: ['https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/b17cc747-fe59-4b03-ad7e-509fa988f324/_R8A2413-edit.jpg'],
+      booth_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/b17cc747-fe59-4b03-ad7e-509fa988f324/_R8A2413-edit.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/6097b573-1fc9-4770-8965-2edcde445095/_R8A3250edited-new.jpg',
+      ],
+      product_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0300321c-5336-41ec-be26-4c0082d245ca/Of+the+Earth+%281%29.png',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/eb0013af-bbeb-40ec-8b21-77833b7e9bef/ARSD00415.jpg',
+      ],
+      about: "India's foremost curated design fair. Arisaa presented the full Of the Earth wall art collection alongside new sculptural pieces, engaging with architects, interior designers, and collectors from across India. The show generated strong inquiry for commissioned residential work.",
+    },
+    {
+      id: 'arisaa-show03',
+      exhibition_name: 'AD Design Show',
+      city: 'Mumbai',
+      year: '2023',
+      booth: 'NSCI Dome, Worli',
+      images: ['https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0309f91d-d641-4a6d-971b-0e875afae13e/ARSD00465+a.jpg'],
+      booth_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0309f91d-d641-4a6d-971b-0e875afae13e/ARSD00465+a.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0f54cb7d-3661-4bc6-a44c-dc96ef5e1b6b/Negi+Sculpture+%281%29.JPG',
+      ],
+      product_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/f85e0e44-1696-4063-baaa-a8c0bcaf3049/Gilded+current4a.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/46106f34-d750-4d09-bb66-4216b194acdd/Antelope+Chair1.jpg',
+      ],
+      about: "Curated by Architectural Digest India — one of the most visible platforms for design in the country. Arisaa debuted the Reflections mirror collection and the Antelope Chair, both of which received significant editorial interest. Condé Nast Traveler shot the booth for a subsequent India design feature.",
+    },
+    {
+      id: 'arisaa-show04',
+      exhibition_name: 'Index Furniture & Interiors',
+      city: 'Mumbai',
+      year: '2024',
+      booth: 'Bombay Exhibition Centre',
+      images: ['https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/50193dd1-52f1-4501-abe2-df9323063be4/Drava-web-3.png'],
+      booth_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/50193dd1-52f1-4501-abe2-df9323063be4/Drava-web-3.png',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/a7d37874-2573-494d-9eb9-a45b71997213/ARSD00404.jpg',
+      ],
+      product_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0300321c-5336-41ec-be26-4c0082d245ca/Of+the+Earth+%281%29.png',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/b17cc747-fe59-4b03-ad7e-509fa988f324/_R8A2413-edit.jpg',
+      ],
+      about: "Asia's largest furniture and interiors trade show. Arisaa presented the Woven Grounds rug collection alongside wall art and sculptural objects. The Drava rug drew particular attention for its approach to natural fibre and geometric restraint.",
+    },
+    {
+      id: 'arisaa-show05',
+      exhibition_name: 'Design Ahmedabad',
+      city: 'Ahmedabad',
+      year: '2022',
+      booth: 'AMA Auditorium',
+      images: ['https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/eb0013af-bbeb-40ec-8b21-77833b7e9bef/ARSD00415.jpg'],
+      booth_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/eb0013af-bbeb-40ec-8b21-77833b7e9bef/ARSD00415.jpg',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/7aad5460-9855-49de-a92a-a2afbb5fbbc4/ARSD00488.jpg',
+      ],
+      product_images: [
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0f54cb7d-3661-4bc6-a44c-dc96ef5e1b6b/Negi+Sculpture+%281%29.JPG',
+        'https://images.squarespace-cdn.com/content/v1/69904485b3641a103f437982/0300321c-5336-41ec-be26-4c0082d245ca/Of+the+Earth+%281%29.png',
+      ],
+      about: "A biennial showcase celebrating Ahmedabad as a UNESCO World Heritage City. Arisaa showed as a local studio with international reach, highlighting material sourcing from within Gujarat and Rajasthan. The first public showing in India.",
+    },
+  ],
+  'hjd-b01-2024': [
+    {
+      id: 'hjd-show01',
+      exhibition_name: 'AD Design Show',
+      city: 'Mumbai',
+      year: '2023',
+      booth: 'NSCI Dome, Worli',
+      images: ['https://static.wixstatic.com/media/67a4ef_56422cdaf100415fac61c15a5d349eb1~mv2.jpg'],
+      booth_images: [
+        'https://static.wixstatic.com/media/67a4ef_56422cdaf100415fac61c15a5d349eb1~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_090f6f2764474878a6a056f4ec953a2a~mv2.jpg',
+      ],
+      product_images: [
+        'https://static.wixstatic.com/media/67a4ef_dc0794650c6c43b696de70f4482da15b~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_09c382a29a234c62af7e01dd6ee2cfd4~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_0766e8810f124207b10082023d41f7b4~mv2.jpg',
+      ],
+      about: "India's premier design show curated by Architectural Digest India. HJD showcased the complete Rio collection in natural stone and debuted the new Totem series, drawing significant trade and editorial attention.",
+    },
+    {
+      id: 'hjd-show02',
+      exhibition_name: 'Index Furniture & Interiors',
+      city: 'Mumbai',
+      year: '2022',
+      booth: 'Bombay Exhibition Centre',
+      images: ['https://static.wixstatic.com/media/67a4ef_1219ac2b81634ab4af00330ea192d085~mv2.jpg'],
+      booth_images: [
+        'https://static.wixstatic.com/media/67a4ef_1219ac2b81634ab4af00330ea192d085~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_090f6f2764474878a6a056f4ec953a2a~mv2.jpg',
+      ],
+      product_images: [
+        'https://static.wixstatic.com/media/67a4ef_dbeb746a0e0d4818860f7ca0e1b47cb2~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_32a6d73160f94665aeec5fa37c1be4c3~mv2.jpg',
+      ],
+      about: "Asia's largest furniture and interiors trade exhibition. The brand exhibited the Kasa and Wilo collections alongside the Asteroid floor lamp, engaging architects and interior designers from across India.",
+    },
+    {
+      id: 'hjd-show03',
+      exhibition_name: 'India Design ID',
+      city: 'New Delhi',
+      year: '2022',
+      booth: 'Epicentre, Gurugram',
+      images: ['https://static.wixstatic.com/media/67a4ef_09c382a29a234c62af7e01dd6ee2cfd4~mv2.jpg'],
+      booth_images: [
+        'https://static.wixstatic.com/media/67a4ef_09c382a29a234c62af7e01dd6ee2cfd4~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_55b0829d87774f2395447d83d6754227~mv2.jpg',
+      ],
+      product_images: [
+        'https://static.wixstatic.com/media/67a4ef_d3f11a36233e4e7dbd50e9f3db2d0a91~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_0766e8810f124207b10082023d41f7b4~mv2.jpg',
+      ],
+      about: "A curated design fair showcasing the best of Indian design practice. HJD debuted the Bloom Pendant and Ring Chandelier, both of which received editorial coverage in multiple shelter magazines following the show.",
+    },
+    {
+      id: 'hjd-show04',
+      exhibition_name: 'Maison Mumbai',
+      city: 'Mumbai',
+      year: '2024',
+      booth: 'The St. Regis Mumbai',
+      images: ['https://static.wixstatic.com/media/67a4ef_32a6d73160f94665aeec5fa37c1be4c3~mv2.jpg'],
+      booth_images: [
+        'https://static.wixstatic.com/media/67a4ef_32a6d73160f94665aeec5fa37c1be4c3~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_b3d47c130492463ab3aa6937e01a3c30~mv2.jpg',
+      ],
+      product_images: [
+        'https://static.wixstatic.com/media/67a4ef_56422cdaf100415fac61c15a5d349eb1~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_f38a7995f1a54491ba9af44662cff605~mv2.jpg',
+      ],
+      about: "An exclusive showcase of luxury interiors and design products in a hotel setting. Featured the Legacy Totem and the new alabaster stone collection — the first time the full stone range was exhibited publicly.",
+    },
+    {
+      id: 'hjd-show05',
+      exhibition_name: 'Elle Décor Design Village',
+      city: 'Mumbai',
+      year: '2023',
+      booth: 'Mehboob Studios, Bandra',
+      images: ['https://static.wixstatic.com/media/67a4ef_cd84fd3879ee4b438781937ed5b8d8d7~mv2.jpg'],
+      booth_images: [
+        'https://static.wixstatic.com/media/67a4ef_cd84fd3879ee4b438781937ed5b8d8d7~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_a536db8364a149fb882c43f166803026~mv2.jpg',
+      ],
+      product_images: [
+        'https://static.wixstatic.com/media/67a4ef_4e5babfdbacd4af29647f93faed472c8~mv2.jpg',
+        'https://static.wixstatic.com/media/67a4ef_ccbe2d4fd03349b7bdee03fd7c6ab3ef~mv2.jpg',
+      ],
+      about: "Elle Décor India's annual design village bringing together the finest Indian interior and product designers. HJD showcased the full Orbis and Branch collections alongside the collaborative HJD × LBH pieces.",
     },
   ],
 };
