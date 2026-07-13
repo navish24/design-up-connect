@@ -630,26 +630,28 @@ if (isLoading) {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 40 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.lg, paddingBottom: 40 }}>
 
-              {/* Identity — matches ContactDetailPage gIdentity */}
+              {/* Identity — name left, avatar right (matches connection detail layout) */}
               <View style={s.previewIdentity}>
+                <View style={{ flex: 1, gap: 4, justifyContent: 'center' }}>
+                  <Text style={[s.previewName, { color: colors.text }]}>{user.first_name} {user.last_name}</Text>
+                  {user.company_name && <Text style={[s.previewCompany, { color: colors.accent }]}>{user.company_name}</Text>}
+                  {user.designation && <Text style={[s.previewDesig, { color: colors.textMuted }]}>{user.designation}</Text>}
+                  {user.city && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+                      <Text style={[s.previewDesig, { color: colors.textMuted }]}>
+                        {user.city}{user.country ? `, ${user.country}` : ''}
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 {user.profile_image_url ? (
                   <Image source={{ uri: user.profile_image_url }} style={s.previewPhoto} />
                 ) : (
                   <View style={[s.previewAvatarCircle, { backgroundColor: colors.accent + '22' }]}>
                     <Text style={[s.previewAvatarText, { color: colors.accent }]}>{initials}</Text>
-                  </View>
-                )}
-                <Text style={[s.previewName, { color: colors.text }]}>{user.first_name} {user.last_name}</Text>
-                {user.company_name && <Text style={[s.previewCompany, { color: colors.accent }]}>{user.company_name}</Text>}
-                {user.designation && <Text style={[s.previewDesig, { color: colors.textMuted }]}>{user.designation}</Text>}
-                {user.city && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                    <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-                    <Text style={[s.previewDesig, { color: colors.textMuted }]}>
-                      {user.city}{user.country ? `, ${user.country}` : ''}
-                    </Text>
                   </View>
                 )}
               </View>
@@ -1311,9 +1313,9 @@ function makeStyles(colors: any) {
     shareQrBtnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
 
     // Card preview modal — mirrors ContactDetailPage in connections.tsx
-    previewIdentity: { gap: 4, paddingBottom: Spacing.sm },
-    previewPhoto: { width: 56, height: 56, borderRadius: 28, marginBottom: Spacing.sm },
-    previewAvatarCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm },
+    previewIdentity: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingBottom: Spacing.sm },
+    previewPhoto: { width: 64, height: 64, borderRadius: 32 },
+    previewAvatarCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
     previewAvatarText: { fontSize: FontSize.xl, fontWeight: FontWeight.bold },
     previewName: { fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.3 },
     previewCompany: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },

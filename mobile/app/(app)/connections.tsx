@@ -680,11 +680,13 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
   const [showNotes, setShowNotes] = useState(false);
   const [expandedUri, setExpandedUri] = useState<string | null>(null);
   const [callSheetPhone, setCallSheetPhone] = useState<string | null>(null);
+  const [phonePicker, setPhonePicker] = useState<{ mode: 'call' | 'whatsapp'; numbers: string[] } | null>(null);
 
   const phoneFields = contact.fields.filter((f) => f.label === 'Phone');
   const waFields = contact.fields.filter((f) => f.label === 'WhatsApp');
-  const phoneField = phoneFields[0];
-  const waField = waFields[0] ?? phoneFields[0];
+  const faxFields = contact.fields.filter((f) => f.label === 'Fax');
+  const phoneField = phoneFields[0] ?? faxFields[0]; // fax as call fallback
+  const waField = waFields[0] ?? phoneFields[0]; // no fax for WhatsApp
   const emailField = contact.fields.find((f) => f.label === 'Email');
   const hasQuickActions = !!(waField || phoneField || emailField);
 
@@ -765,10 +767,7 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
                   if (targets.length <= 1) {
                     openWhatsApp(targets[0].value);
                   } else {
-                    Alert.alert('WhatsApp', 'Choose a number', [
-                      ...targets.map((f) => ({ text: f.value, onPress: () => openWhatsApp(f.value) })),
-                      { text: 'Cancel', style: 'cancel' as const },
-                    ]);
+                    setPhonePicker({ mode: 'whatsapp', numbers: targets.map((f) => f.value) });
                   }
                 }}>
                 <Ionicons name="logo-whatsapp" size={15} color={colors.accent} />
@@ -781,10 +780,7 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
                   if (phoneFields.length <= 1) {
                     setCallSheetPhone(phoneField.value);
                   } else {
-                    Alert.alert('Call', 'Choose a number', [
-                      ...phoneFields.map((f) => ({ text: f.value, onPress: () => setCallSheetPhone(f.value) })),
-                      { text: 'Cancel', style: 'cancel' as const },
-                    ]);
+                    setPhonePicker({ mode: 'call', numbers: phoneFields.map((f) => f.value) });
                   }
                 }}>
                 <Ionicons name="call-outline" size={15} color={colors.accent} />
@@ -898,6 +894,34 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
         </Modal>
       )}
 
+      {phonePicker && (
+        <Modal visible transparent animationType="slide">
+          <Pressable style={s.sheetOverlay} onPress={() => setPhonePicker(null)}>
+            <Pressable style={[s.callSheet, { backgroundColor: colors.surface }]} onPress={() => {}}>
+              <Text style={[s.callSheetNumber, { color: colors.textMuted }]}>
+                {phonePicker.mode === 'call' ? 'Call via' : 'WhatsApp via'}
+              </Text>
+              {phonePicker.numbers.map((num, i) => (
+                <Fragment key={i}>
+                  {i > 0 && <View style={[s.gDivider, { backgroundColor: colors.border, marginLeft: 0 }]} />}
+                  <Pressable style={s.callSheetOption} onPress={() => {
+                    setPhonePicker(null);
+                    if (phonePicker.mode === 'call') setCallSheetPhone(num);
+                    else openWhatsApp(num);
+                  }}>
+                    <Ionicons name={phonePicker.mode === 'call' ? 'call-outline' : 'logo-whatsapp'} size={20} color={colors.text} />
+                    <Text style={[s.callSheetOptionText, { color: colors.text }]}>{num}</Text>
+                  </Pressable>
+                </Fragment>
+              ))}
+              <Pressable style={[s.callSheetCancel, { borderTopColor: colors.border }]} onPress={() => setPhonePicker(null)}>
+                <Text style={[s.callSheetCancelText, { color: colors.textMuted }]}>Cancel</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
       {expandedUri && (
         <Modal visible transparent animationType="fade">
           <Pressable style={s.lightboxOverlay} onPress={() => setExpandedUri(null)}>
@@ -981,7 +1005,7 @@ function GroupedFieldRow({ field, colors, s }: { field: import('../../types').Ca
   const isPhone = field.label === 'Phone' || field.label === 'WhatsApp';
   const isLinkable = ONLINE_LABELS_SET.has(field.label) && field.label !== 'Social Handle';
   const isCopyable = CONTACT_LABELS_SET.has(field.label);
-  const multiLine = field.label === 'Address' || field.label === 'Other';
+  const multiLine = field.label === 'Address' || field.label === 'Other' || field.label === 'Services';
 
   return (
     <View style={[s.gRow, multiLine && { alignItems: 'flex-start' }]}>
@@ -1169,7 +1193,22 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         )}
 
         {/* Identity */}
-        <View style={s.gIdentity}>
+        <View style={[s.gTopRow, { paddingBottom: Spacing.md }]}>
+          <View style={{ flex: 1, gap: 4, justifyContent: 'center' }}>
+            <Text style={[s.gName, { color: colors.text }]}>{user.full_name}</Text>
+            {connection.brand_name && (
+              <Text style={[s.gCompany, { color: colors.accent }]}>{connection.brand_name}</Text>
+            )}
+            {user.designation && (
+              <Text style={[s.gDesignation, { color: colors.textMuted }]}>{user.designation}</Text>
+            )}
+            {user.city && (
+              <View style={s.gCityRow}>
+                <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+                <Text style={[s.gDesignation, { color: colors.textMuted }]}>{user.city}</Text>
+              </View>
+            )}
+          </View>
           {user.profile_image_url ? (
             <Pressable onPress={() => setPhotoExpanded(true)} style={s.gProfileThumb}>
               <Image source={{ uri: user.profile_image_url }} style={s.gProfileThumbImg} />
@@ -1179,19 +1218,6 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
               <Text style={{ fontSize: 20, fontWeight: '700', color: colors.accent }}>
                 {user.full_name.split(' ').filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
               </Text>
-            </View>
-          )}
-          <Text style={[s.gName, { color: colors.text }]}>{user.full_name}</Text>
-          {connection.brand_name && (
-            <Text style={[s.gCompany, { color: colors.accent }]}>{connection.brand_name}</Text>
-          )}
-          {user.designation && (
-            <Text style={[s.gDesignation, { color: colors.textMuted }]}>{user.designation}</Text>
-          )}
-          {user.city && (
-            <View style={s.gCityRow}>
-              <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-              <Text style={[s.gDesignation, { color: colors.textMuted }]}>{user.city}</Text>
             </View>
           )}
         </View>
@@ -1321,7 +1347,7 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         {/* Connection status / Exchange */}
         {connection.is_mutual ? (
           <View style={s.gActions}>
-            <View style={[s.gMutualBadge, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '44' }]}>
+            <View style={[s.gMutualBadge, { backgroundColor: colors.accent + '15' }]}>
               <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
               <Text style={[s.gMutualBadgeText, { color: colors.accent }]}>Mutual Connection</Text>
             </View>
@@ -1574,7 +1600,7 @@ function makeStyles(colors: any) {
     gThumbImg: { width: '100%', height: '100%' },
     gThumbLabel: { position: 'absolute', bottom: 4, right: 6, fontSize: 9, color: '#FFF', fontWeight: FontWeight.semibold, backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
     gIdentity: { gap: 4, paddingBottom: Spacing.md },
-    gProfileThumb: { width: 56, height: 56, borderRadius: 28, overflow: 'hidden', marginBottom: Spacing.sm },
+    gProfileThumb: { width: 64, height: 64, borderRadius: 32, overflow: 'hidden' },
     gProfileThumbImg: { width: '100%', height: '100%' },
     gName: { fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.3 },
     gCompany: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
@@ -1596,8 +1622,8 @@ function makeStyles(colors: any) {
     gBrandLetter: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     gBrandLetterText: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
     gActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
-    gMutualBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 5, paddingHorizontal: 12, borderRadius: Radius.full, borderWidth: 1, alignSelf: 'flex-start' },
-    gMutualBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
+    gMutualBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 10, borderRadius: Radius.sm, alignSelf: 'flex-start' },
+    gMutualBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium },
     slideTrack: { flex: 1, height: 52, borderRadius: 26, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     slideThumb: { position: 'absolute', top: SLIDE_PAD, width: SLIDE_THUMB, height: SLIDE_THUMB, borderRadius: SLIDE_THUMB / 2, alignItems: 'center', justifyContent: 'center' },
     slideLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, letterSpacing: 0.2 },

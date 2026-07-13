@@ -30,7 +30,7 @@ const YOUTUBE_RE = /youtube\.com\/(?:c\/|channel\/|@)[\w\-]+/gi;
 
 // Address cues
 const ADDRESS_KEYWORD_RE =
-  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste|bldg|taluka|taluk|dist)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
+  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|hills|hill|bagh|ganj|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste|bldg|taluka|taluk|dist)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|jubilee hills|banjara hills|madhapur|secunderabad|begumpet|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
 const PIN_RE = /\b[1-9]\d{5}\b/;
 
 // Designation keywords — "art" removed (too generic: matches "art collective" brand taglines)
@@ -563,7 +563,8 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         lineForName.split(' ').length >= 2 &&
         lineForName.split(' ').length <= 6 &&
         lineForName.split(/\s+/).every((w) => /^[A-Z]/.test(w)) &&
-        !lineForName.split(/\s+/).some((w) => ADDR_ABBREV_RE.test(w))
+        !lineForName.split(/\s+/).some((w) => ADDR_ABBREV_RE.test(w)) &&
+        !ADDRESS_KEYWORD_RE.test(lineForName)
       ) {
         fields.unshift({ label: 'Name', value: lineForName });
         nameAssigned = true;
