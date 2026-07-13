@@ -501,6 +501,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         const domBase = normDomain.replace(/\.[a-z]{2,}(?:\.[a-z]{2})?$/i, '').replace(/[.\-]/g, '');
         const lineNorm = line.toLowerCase().replace(/[._\-]/g, '');
         if (lineNorm.length >= 4 && lineNorm === domBase) {
+          // Skip if this bare word is the company/brand name itself (logo text misread as handle)
+          const companyValNow = fields.find((f) => f.label === 'Company')?.value ?? '';
+          if (companyValNow.toLowerCase() === line.toLowerCase()) return;
           if (!fields.some(
             (f) =>
               (f.label === 'Social Handle' || f.label === 'Instagram' || f.label === 'Facebook') &&
@@ -1012,6 +1015,18 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
           f.label = GLYPH_TO_PLATFORM[glyph];
         }
       }
+    }
+  }
+
+  // Post-pass: remove Social Handle entries whose handle (without @) matches the company
+  // name — happens when logo text matches the domain base but Company was assigned later.
+  {
+    const companyFinal = fields.find((f) => f.label === 'Company')?.value?.toLowerCase() ?? '';
+    if (companyFinal) {
+      const shIdx = fields.findIndex(
+        (f) => f.label === 'Social Handle' && f.value.replace(/^@/, '').toLowerCase() === companyFinal,
+      );
+      if (shIdx !== -1) fields.splice(shIdx, 1);
     }
   }
 
