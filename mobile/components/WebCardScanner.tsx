@@ -258,7 +258,7 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
           const pct = Math.min(100, Math.round((elapsed / 1500) * 100));
           setStabilityPct(pct);
           if (elapsed >= 1500) {
-            stableStartRef.current = null; lastSampleRef.current = null; setStabilityPct(0);
+            stableStartRef.current = null; lastSampleRef.current = null; setStabilityPct(100);
             capture();
             // Block the next auto-capture for 5 s — covers cloud-OCR latency (~2 s) plus
             // camera restart time (~1 s). pauseUntilRef survives stopStream() so this guard
@@ -522,18 +522,22 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
               <View style={s.hintErrorRow}>
                 <Ionicons name="phone-portrait-outline" size={14} color="#FFF" />
                 <Text style={s.hint}>
-                  {stabilityPct > 0
-                    ? `Card edges cut off — rotate to portrait for full capture (${stabilityPct}%)`
-                    : 'No card? Try rotating it to portrait (vertical)'}
+                  {stabilityPct >= 100
+                    ? 'Captured! Analysing card…'
+                    : stabilityPct > 0
+                      ? `Card edges cut off — rotate to portrait for full capture (${stabilityPct}%)`
+                      : 'No card? Try rotating it to portrait (vertical)'}
                 </Text>
               </View>
             ) : (
               <Text style={s.hint}>
                 {permState === 'pending'
                   ? 'Starting camera…'
-                  : stabilityPct > 0
-                    ? `Hold still… ${stabilityPct}%`
-                    : 'Hold card flat in the frame — auto-captures'}
+                  : stabilityPct >= 100
+                    ? 'Captured! Analysing card…'
+                    : stabilityPct > 0
+                      ? `Hold still… ${stabilityPct}%`
+                      : 'Hold card flat in the frame — auto-captures'}
               </Text>
             )}
           </View>
