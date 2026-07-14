@@ -53,7 +53,7 @@ interface AuthContextType {
   toggleWishlistItem: (item: { id: string; product_name: string; brand_name: string; brand_id: string; image_url: string; material?: string }) => void;
   // Notes (keyed by brand_id or connection_id)
   notes: Record<string, Note[]>;
-  addNote: (entityId: string, text: string) => void;
+  addNote: (entityId: string, text: string) => Promise<void>;
   // Profile setup
   completeProfile: (input: ProfileInput) => Promise<void>;
   setProfileComplete: () => void;
@@ -363,6 +363,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void loadConnections(user.id);
   }, [user?.id, loadConnections]);
 
+  const loadNotes = useCallback(async (userId: string) => {
+    const { data: rows } = await supabase
+      .from('notes')
+      .select('id, entity_id, entity_type, text, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (!rows || rows.length === 0) return;
+    const noteMap: Record<string, Note[]> = {};
+    for (const row of rows) {
+      // Connections are stored with the raw UUID; re-add demo- prefix to match UI keys
+      const key = row.entity_type === 'connection' ? `demo-${row.entity_id}` : row.entity_id;
+      if (!noteMap[key]) noteMap[key] = [];
+      noteMap[key].push({ id: row.id, text: row.text, created_at: row.created_at });
+    }
+    setNotes(noteMap);
+  }, []);
+
   const loadProfile = useCallback(async (userId: string) => {
     const { data: profile } = await supabase
       .from('profiles')
@@ -401,10 +418,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         company: profile.company_name ?? '',
       });
       void loadConnections(userId);
+      void loadNotes(userId);
     }
 
     setIsLoading(false);
-  }, [loadConnections, loadCardContacts]);
+  }, [loadConnections, loadCardContacts, loadNotes]);
 
   useEffect(() => {
     supabase.auth.getSession()
@@ -499,10 +517,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const addNote = (entityId: string, text: string) => {
-    const note: Note = { id: Date.now().toString(), text, created_at: new Date().toISOString() };
+  const addNote = async (entityId: string, text: string) => {
+    const noteId = crypto.randomUUID();
+    const created_at = new Date().toISOString();
+    const note: Note = { id: noteId, text, created_at };
     Analytics.noteAdded();
     setNotes((prev) => ({ ...prev, [entityId]: [note, ...(prev[entityId] ?? [])] }));
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      const isConnection = entityId.startsWith('demo-');
+      await supabase.from('notes').insert({
+        id: noteId,
+        user_id: authUser.id,
+        entity_id: isConnection ? entityId.slice(5) : entityId,
+        entity_type: isConnection ? 'connection' : 'card_contact',
+        text,
+        created_at,
+      });
+    }
   };
 
   const updateUser = (fields: Partial<User>) => {
