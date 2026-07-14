@@ -27,7 +27,10 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           requests: [{
             image: { content: imageBase64 },
-            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+            features: [
+              { type: 'DOCUMENT_TEXT_DETECTION' },
+              { type: 'LOGO_DETECTION' },
+            ],
           }],
         }),
       }

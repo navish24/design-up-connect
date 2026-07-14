@@ -137,9 +137,15 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const fields: CardContactField[] = [];
   const consumedRanges: Array<[number, number]> = [];
 
+  // Extract logo hints injected by cloudVisionToOcrBlocks — strip before text processing.
+  const logoHints = new Set(
+    blocks.filter((b) => b.text.startsWith('__LOGO__')).map((b) => b.text.slice(8).toLowerCase())
+  );
+  const textBlocks = blocks.filter((b) => !b.text.startsWith('__LOGO__'));
+
   // Pre-merge: when OCR splits a platform icon glyph onto its own line immediately
   // before the handle, re-join them so detectHandle has glyph context for platform detection.
-  const rawText = blocks.map((b) => b.text).join('\n');
+  const rawText = textBlocks.map((b) => b.text).join('\n');
   const premergedText = rawText
     // Merge platform icon glyph onto the same line as its handle
     .replace(
@@ -834,21 +840,19 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         serviceEntries.push(text);
         continue;
       }
-      // Underscore heuristic: on business cards, a bare word containing _ is almost
-      // exclusively an Instagram handle (data-verified — zero false positives found).
-      // Strip leading OCR artifacts (□, O glyph, etc.) before testing.
-      const underscoreCandidate = text
+      // Handle heuristic: strip leading OCR artifacts (□, O glyph, etc.) then classify.
+      const handleCandidate = text
         .replace(/^[^a-zA-Z0-9@_]+\s*/, '') // strip leading non-alphanumeric symbols (□, ■, etc.)
         .replace(/^[oO]\s+/, '')              // strip 'O ' glyph+space prefix
         .replace(/^[oO](?=[_a-z0-9])/i, '')  // strip 'O' glued before handle
         .replace(/^@/, '')
         .toLowerCase();
-      if (
-        underscoreCandidate.includes('_') &&
-        /^[a-z0-9_.]{3,30}$/.test(underscoreCandidate) &&
-        !underscoreCandidate.match(/\.(com|in|net|org|io|co)\b/)
-      ) {
-        const handle = `@${underscoreCandidate}`;
+      const isHandleLike = /^[a-z0-9_.]{3,30}$/.test(handleCandidate) &&
+        !handleCandidate.match(/\.(com|in|net|org|io|co)\b/);
+      // Underscore → always Instagram (data-verified, zero false positives).
+      // No underscore but Instagram logo detected on card → also Instagram.
+      if (isHandleLike && (handleCandidate.includes('_') || logoHints.has('instagram'))) {
+        const handle = `@${handleCandidate}`;
         const alreadyCaptured = fields.some(
           (f) => f.label === 'Instagram' && f.value.toLowerCase() === handle
         );
@@ -1278,10 +1282,19 @@ export function cloudVisionToOcrBlocks(response: any): OcrBlock[] {
     response?.responses?.[0]?.fullTextAnnotation?.text ??
     response?.responses?.[0]?.textAnnotations?.[0]?.description ??
     '';
-  return text
+  const textBlocks = text
     .split('\n')
     .filter((line) => line.trim().length > 0)
     .map((line, i) => ({ text: line.trim(), frameY: i * 20 }));
+
+  // Inject logo hint blocks — parsed out by parseCardFields before text processing.
+  const logos: any[] = response?.responses?.[0]?.logoAnnotations ?? [];
+  const logoBlocks = logos.map((logo: any) => ({
+    text: `__LOGO__${logo.description}`,
+    frameY: -999,
+  }));
+
+  return [...logoBlocks, ...textBlocks];
 }
 
 // ── Demo blocks (used in Expo Go / simulator where ML Kit is unavailable) ────
