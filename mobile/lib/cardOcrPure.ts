@@ -371,8 +371,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const ICON_GLYPH_PREFIX_RE = /^[O0@](?=[a-z0-9])/;
   // 1-3 letter glyph prefix (any case) + handle — icon misread on same line as handle.
   const ICON_GLYPH_TOKEN_RE = /^([a-zA-Z]{1,3})\s+(\S+)$/;
-  // Handles must end with an alphanumeric char — trailing "." or "_" are OCR artifacts, not real handles.
-  const BARE_HANDLE_RE = /^[a-z][a-z0-9_.]{2,28}[a-z0-9]$/;
+  // Allow _ at start/end — Instagram handles like @_absolut_decor_ and @creativehood_ are valid.
+  // Only trailing/leading "." is excluded (OCR sentence-end artifact).
+  const BARE_HANDLE_RE = /^[a-z_][a-z0-9_.]{1,28}[a-z0-9_]$/;
 
   // Strip diacritics so OCR artefacts like "theemínara" (italic font read as
   // accented í) still match the ASCII-only handle regex.
@@ -381,7 +382,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // Maps 1-3 char OCR icon misreads to platform names.
   const GLYPH_TO_PLATFORM: Record<string, string> = {
-    in: 'Instagram', ig: 'Instagram', i: 'Instagram',
+    in: 'Instagram', ig: 'Instagram', i: 'Instagram', o: 'Instagram',
     fb: 'Facebook', f: 'Facebook',
     tw: 'Twitter/X', x: 'Twitter/X',
     li: 'LinkedIn', ln: 'LinkedIn', lk: 'LinkedIn',
@@ -831,6 +832,27 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         !DESIGNATION_RE.test(text)
       ) {
         serviceEntries.push(text);
+        continue;
+      }
+      // Underscore heuristic: on business cards, a bare word containing _ is almost
+      // exclusively an Instagram handle (data-verified — zero false positives found).
+      // Strip leading OCR artifacts (□, O glyph, etc.) before testing.
+      const underscoreCandidate = text
+        .replace(/^[^a-zA-Z0-9@_]+\s*/, '') // strip leading non-alphanumeric symbols (□, ■, etc.)
+        .replace(/^[oO]\s+/, '')              // strip 'O ' glyph+space prefix
+        .replace(/^[oO](?=[_a-z0-9])/i, '')  // strip 'O' glued before handle
+        .replace(/^@/, '')
+        .toLowerCase();
+      if (
+        underscoreCandidate.includes('_') &&
+        /^[a-z0-9_.]{3,30}$/.test(underscoreCandidate) &&
+        !underscoreCandidate.match(/\.(com|in|net|org|io|co)\b/)
+      ) {
+        const handle = `@${underscoreCandidate}`;
+        const alreadyCaptured = fields.some(
+          (f) => f.label === 'Instagram' && f.value.toLowerCase() === handle
+        );
+        if (!alreadyCaptured) fields.push({ label: 'Instagram', value: handle });
         continue;
       }
       fields.push({ label: 'Other', value: text });
