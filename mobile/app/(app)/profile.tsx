@@ -353,13 +353,12 @@ if (isLoading) {
               {user.company_name && <Text style={[s.vcCompany, { color: colors.accent }]}>{user.company_name}</Text>}
             </View>
             <Pressable style={s.avatarWrap} onPress={handleAvatarPress}>
-              {user.profile_image_url ? (
-                <Image source={{ uri: user.profile_image_url }} style={s.vcPhoto} />
-              ) : (
-                <View style={[s.vcInitials, { backgroundColor: colors.accent + '22' }]}>
-                  <Text style={[s.vcInitialsText, { color: colors.accent }]}>{initials}</Text>
-                </View>
-              )}
+              <View style={[s.vcInitials, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={[s.vcInitialsText, { color: '#FFFFFF' }]}>{initials}</Text>
+                {user.profile_image_url ? (
+                  <Image source={{ uri: user.profile_image_url }} style={[s.vcPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
+                ) : null}
+              </View>
               <View style={[s.avatarCameraOverlay, { backgroundColor: colors.background + 'CC' }]}>
                 {uploadingPhoto
                   ? <ActivityIndicator size="small" color={colors.accent} />
@@ -647,13 +646,12 @@ if (isLoading) {
                     </View>
                   )}
                 </View>
-                {user.profile_image_url ? (
-                  <Image source={{ uri: user.profile_image_url }} style={s.previewPhoto} />
-                ) : (
-                  <View style={[s.previewAvatarCircle, { backgroundColor: colors.accent + '22' }]}>
-                    <Text style={[s.previewAvatarText, { color: colors.accent }]}>{initials}</Text>
-                  </View>
-                )}
+                <View style={[s.previewAvatarCircle, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={[s.previewAvatarText, { color: '#FFFFFF' }]}>{initials}</Text>
+                  {user.profile_image_url ? (
+                    <Image source={{ uri: user.profile_image_url }} style={[s.previewPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
+                  ) : null}
+                </View>
               </View>
 
               {/* CONTACT section */}
