@@ -33,14 +33,26 @@ function resolveId(raw: string): string {
   return raw;
 }
 
-// On web, resize Wix CDN images to avoid memory crashes in mobile browsers.
+// On web, resize and reformat images from Wix and Squarespace CDNs to avoid
+// memory crashes and cut load times on mobile browsers.
 // Native builds receive the full-res URL unchanged.
 function webImg(url: string, w = 700): string {
-  if (Platform.OS !== 'web') return url;
-  if (!url || !url.includes('wixstatic.com/media/')) return url;
-  const part = url.split('/media/')[1]?.split('/')[0];
-  if (!part) return url;
-  return `https://static.wixstatic.com/media/${part}/v1/fill/w_${w},h_${w},al_c,q_75/${part}`;
+  if (Platform.OS !== 'web' || !url) return url;
+
+  // Wix CDN — native resize + AVIF (smallest modern format, ~40% vs JPEG)
+  if (url.includes('wixstatic.com/media/')) {
+    const part = url.split('/media/')[1]?.split('/')[0];
+    if (!part) return url;
+    return `https://static.wixstatic.com/media/${part}/v1/fill/w_${w},h_${w},al_c,q_70,enc_avif/${part}`;
+  }
+
+  // Squarespace CDN — width resize param (CDN auto-serves WebP to supporting browsers)
+  if (url.includes('squarespace-cdn.com')) {
+    const base = url.split('?')[0];
+    return `${base}?format=${w}w`;
+  }
+
+  return url;
 }
 
 type SimState = 'idle' | 'capture' | 'saving' | 'success';
@@ -874,7 +886,7 @@ export default function BrandDetailScreen() {
                     {row.map((p: any, colIdx: number) => {
                       const productIdx = rowIdx * 2 + colIdx;
                       const fallbackImg = getCachedProductImage(brand.category, productIdx, brand.id);
-                      const imgUri = webImg(p.images[0] || fallbackImg, 400);
+                      const imgUri = webImg(p.images[0] || fallbackImg, 300);
                       return (
                         <Pressable
                           key={p.id}
@@ -928,7 +940,7 @@ export default function BrandDetailScreen() {
                   onPress={() => setSelectedPastShow(show)}
                 >
                   {show.images.length > 0 && (
-                    <Image source={{ uri: webImg(show.images[0], 500) }} style={s.pastShowImg} />
+                    <Image source={{ uri: webImg(show.images[0], 400) }} style={s.pastShowImg} />
                   )}
                   <View style={s.pastShowBody}>
                     <View style={s.pastShowMeta}>
