@@ -20,6 +20,11 @@ async function uploadOnce(localUri: string, publicId: string): Promise<string | 
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     formData.append('file', new Blob([bytes], { type: mime }), 'card.jpg');
+  } else if (localUri.startsWith('blob:')) {
+    // Web: fetch blob URL → Blob
+    const resp = await fetch(localUri);
+    const blob = await resp.blob();
+    formData.append('file', blob, 'image.jpg');
   } else {
     // Native: React Native FormData file object
     formData.append('file', { uri: localUri, type: 'image/jpeg', name: 'card.jpg' } as any);
@@ -46,6 +51,12 @@ async function uploadWithRetry(localUri: string, publicId: string): Promise<stri
     if (attempt < 2) await sleep(Math.pow(2, attempt + 1) * 1000);
   }
   return null;
+}
+
+// Upload a user profile photo. Stored at connect/profiles/{userId} — overwrites on re-upload.
+export async function uploadProfilePhoto(userId: string, localUri: string): Promise<string | null> {
+  if (!CLOUDINARY_UPLOAD_PRESET || CLOUDINARY_UPLOAD_PRESET === 'YOUR_UPLOAD_PRESET') return null;
+  return uploadWithRetry(localUri, `connect/profiles/${userId}`);
 }
 
 // Upload front + back card images in parallel.

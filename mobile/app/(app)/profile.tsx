@@ -12,6 +12,7 @@ import { ALL_BRANDS } from '../../data/brands';
 import { getAllBrandsForSearch, type BrandSearchResult } from '../../lib/api';
 import { isBeta } from '../../lib/betaConfig';
 import { supabase } from '../../lib/supabase';
+import { uploadProfilePhoto } from '../../lib/cloudinary';
 import { Analytics } from '../../lib/analytics';
 
 const PROFESSIONS = [
@@ -167,21 +168,7 @@ export default function ProfileScreen() {
 
   const uploadProfileImage = async (uri: string): Promise<string | null> => {
     if (!user?.id) return null;
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const ext = blob.type?.includes('png') ? 'png' : 'jpg';
-      const path = `${user.id}/profile.${ext}`;
-      const { error } = await supabase.storage
-        .from('profile-images')
-        .upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
-      if (error) { console.error('[uploadProfileImage]', error.message); return null; }
-      const { data } = supabase.storage.from('profile-images').getPublicUrl(path);
-      return `${data.publicUrl}?t=${Date.now()}`;
-    } catch (e) {
-      console.error('[uploadProfileImage] error:', e);
-      return null;
-    }
+    return uploadProfilePhoto(user.id, uri);
   };
 
   const pickProfilePhoto = async (source: 'library' | 'camera') => {

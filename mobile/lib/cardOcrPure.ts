@@ -57,7 +57,7 @@ const BARE_DOMAIN_RE =
 
 const LINKEDIN_RE = /linkedin\.com\/in\/[\w\-]+/gi;
 const INSTAGRAM_RE =
-  /(?:instagram\.com\/|ig:\s*@?)[\w.]+|(?<![a-zA-Z0-9_])@[\w.]{3,30}(?![a-zA-Z0-9_@])/g;
+  /(?:instagram\.com\/|ig:\s*@?)[\w.]+|(?<![a-zA-Z0-9_])@[\w.]{3,30}(?![a-zA-Z0-9_@])/gi;
 const FACEBOOK_RE = /(?:facebook\.com\/|fb\.com\/|fb:\s*)[\w.\-]+/gi;
 const TWITTER_RE = /(?:twitter\.com\/|x\.com\/|tw:\s*)[\w]+/gi;
 const BEHANCE_RE = /behance\.net\/[\w]+/gi;
