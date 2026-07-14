@@ -175,6 +175,7 @@ export default function ConnectionsScreen() {
   const [showSortDrop, setShowSortDrop] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>({ type: 'list' });
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
+  const [listStyle, setListStyle] = useState<'cards' | 'dividers'>('cards');
   const scrollRef = useRef<ScrollView>(null);
   const savedScrollY = useRef(0);
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
@@ -564,6 +565,20 @@ export default function ConnectionsScreen() {
           />
         </Pressable>
 
+        {/* List style toggle (cards vs dividers) */}
+        {viewMode === 'list' && (
+          <Pressable
+            style={[s.dropBtn, { backgroundColor: colors.surface, borderColor: colors.border, paddingHorizontal: 10 }]}
+            onPress={() => setListStyle((v) => v === 'cards' ? 'dividers' : 'cards')}
+          >
+            <Ionicons
+              name={listStyle === 'cards' ? 'reorder-four-outline' : 'albums-outline'}
+              size={16}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        )}
+
       </View>
 
       <ScrollView
@@ -630,6 +645,7 @@ export default function ConnectionsScreen() {
                   onExchange={(id, name) => handleExchangeContact(id, name)}
                   notes={notes[item.data.id] ?? []}
                   search={search}
+                  listStyle={listStyle}
                 />
               ) : (
                 <CardContactCard
@@ -638,6 +654,7 @@ export default function ConnectionsScreen() {
                   colors={colors}
                   onPress={() => setActiveView({ type: 'card_detail', contact: item.data })}
                   search={search}
+                  listStyle={listStyle}
                 />
               )
             )}
@@ -682,11 +699,12 @@ export default function ConnectionsScreen() {
 
 // ── Card contact list card ────────────────────────────────────────────────────
 
-function CardContactCard({ contact, colors, onPress, search }: {
+function CardContactCard({ contact, colors, onPress, search, listStyle = 'cards' }: {
   contact: CardContact;
   colors: any;
   onPress: () => void;
   search: string;
+  listStyle?: 'cards' | 'dividers';
 }) {
   const s = makeStyles(colors);
   const nameField = contact.fields.find((f) => f.label === 'Name');
@@ -705,7 +723,12 @@ function CardContactCard({ contact, colors, onPress, search }: {
   const matchedNote = q && contact.notes.toLowerCase().includes(q) ? contact.notes : null;
 
   return (
-    <Pressable style={[s.card, { backgroundColor: colors.surface }]} onPress={onPress}>
+    <Pressable
+      style={listStyle === 'dividers'
+        ? [s.cardDivider, { borderBottomColor: colors.border }]
+        : [s.card, { backgroundColor: colors.surface }]}
+      onPress={onPress}
+    >
       {/* Avatar or card thumbnail */}
       {contact.card_image_uri ? (
         <Image source={{ uri: contact.card_image_uri }} style={s.cardThumb} resizeMode="cover" />
@@ -1121,11 +1144,12 @@ function GroupedFieldRow({ field, colors, s }: { field: import('../../types').Ca
 
 // ── Connection components ─────────────────────────────────────────────────────
 
-function ConnectionCard({ connection, colors, onPress, onExchange, notes = [], search = '' }: {
+function ConnectionCard({ connection, colors, onPress, onExchange, notes = [], search = '', listStyle = 'cards' }: {
   connection: Connection; colors: any; onPress: () => void;
   onExchange: (id: string, name: string) => void;
   notes?: import('../../context/AuthContext').Note[];
   search?: string;
+  listStyle?: 'cards' | 'dividers';
 }) {
   const s = makeStyles(colors);
   const { user } = connection;
@@ -1137,7 +1161,12 @@ function ConnectionCard({ connection, colors, onPress, onExchange, notes = [], s
     : null;
 
   return (
-    <Pressable style={[s.card, { backgroundColor: colors.surface }]} onPress={onPress}>
+    <Pressable
+      style={listStyle === 'dividers'
+        ? [s.cardDivider, { borderBottomColor: colors.border }]
+        : [s.card, { backgroundColor: colors.surface }]}
+      onPress={onPress}
+    >
       <View style={[s.avatar, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
         <Text style={[s.avatarText, { color: '#FFFFFF' }]}>
           {user.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
@@ -1578,6 +1607,11 @@ function makeStyles(colors: any) {
     card: {
       flexDirection: 'row', borderRadius: Radius.lg, padding: Spacing.md,
       marginBottom: Spacing.md, gap: Spacing.md, alignItems: 'flex-start',
+    },
+    cardDivider: {
+      flexDirection: 'row', paddingVertical: Spacing.md, paddingHorizontal: 2,
+      gap: Spacing.md, alignItems: 'flex-start',
+      borderBottomWidth: StyleSheet.hairlineWidth,
     },
     avatar: {
       width: 44, height: 44, borderRadius: 22,
