@@ -313,7 +313,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const ids = rows.map((r: any) => r.connected_user_id);
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id, profile_image_url')
+      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id, profile_image_url, instagram_handle, linkedin_url, website_url')
       .in('id', ids);
 
     const profileMap: Record<string, any> = {};
@@ -333,6 +333,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           phone: p.phone ?? undefined,
           email: p.email ?? undefined,
           profile_image_url: p.profile_image_url ?? undefined,
+          instagram_handle: p.instagram_handle ?? undefined,
+          linkedin_url: p.linkedin_url ?? undefined,
+          website_url: p.website_url ?? undefined,
         },
         connection_type: 'networking' as ConnectionType,
         scope: 'personal' as ConnectionScope,
@@ -343,11 +346,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     });
 
-    // Preserve flat-format demo entries (added via addDemoConnection / QR scan) — they
-    // have no nested `user` object. Only full Connection-shaped rows come from Supabase.
-    // Without this, a TOKEN_REFRESHED event would wipe freshly-scanned demo contacts.
+    // Supabase connections take precedence — drop stale flat-format entries for any
+    // user now in the connections table so their latest profile is always shown.
+    const freshUserIds = new Set(rows.map((r: any) => String(r.connected_user_id)));
     setDemoAddedConnections((prev) => {
-      const flatOnly = prev.filter((p: any) => !(p.user && typeof p.user === 'object'));
+      const flatOnly = prev.filter((p: any) => {
+        if (p.user && typeof p.user === 'object') return false; // full Connection obj, replaced above
+        return !freshUserIds.has(String(p.id)); // drop stale flat entry for same user
+      });
       return [...connections, ...flatOnly];
     });
   }, []);

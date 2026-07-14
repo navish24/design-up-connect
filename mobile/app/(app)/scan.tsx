@@ -382,6 +382,9 @@ export default function ScanScreen() {
               phone: (u as any).phone || undefined,
               city: (u as any).city || undefined,
               profile_image_url: u.profile_image_url || undefined,
+              instagram_handle: (u as any).instagram_handle || undefined,
+              linkedin_url: (u as any).linkedin_url || undefined,
+              website_url: (u as any).website_url || undefined,
             });
           }
           setTimeout(() => setScanState('success_connection'), 1800);

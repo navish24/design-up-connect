@@ -179,7 +179,7 @@ export async function processScan(qrData: string, activeExhibitionId: string | n
 
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id, profile_image_url')
+      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id, profile_image_url, instagram_handle, linkedin_url, website_url')
       .eq('id', userId)
       .single();
 
@@ -195,6 +195,9 @@ export async function processScan(qrData: string, activeExhibitionId: string | n
       phone: profile.phone ?? undefined,
       city: profile.city ?? undefined,
       profile_image_url: profile.profile_image_url ?? undefined,
+      instagram_handle: profile.instagram_handle ?? undefined,
+      linkedin_url: profile.linkedin_url ?? undefined,
+      website_url: profile.website_url ?? undefined,
     };
 
     if (count && count > 0) {
