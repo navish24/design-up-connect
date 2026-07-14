@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.10.0';
+export const PARSER_VERSION = '1.11.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -485,6 +485,27 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     if ((PIN_RE.test(line) || ADDRESS_KEYWORD_RE.test(line)) && !line.includes('|')) {
       addressIdx.add(idx);
       return;
+    }
+
+    // Company suffix expansion: "PERFECT" captured as single-word company, next line is
+    // "Interior & Architect" → expand to "Perfect Interior & Architect" instead of Designation.
+    // Triggered when: company is a single bare word (no existing keyword) + this line has a
+    // company keyword and is short (≤5 words) + no structural address keywords.
+    {
+      const existingComp = fields.find((f) => f.label === 'Company');
+      if (
+        companyAssigned &&
+        existingComp &&
+        existingComp.value.split(/\s+/).length === 1 &&
+        COMPANY_KEYWORD_RE.test(line) &&
+        !ADDRESS_STRUCTURAL_RE.test(line) &&
+        !ADDRESS_KEYWORD_RE.test(line) &&
+        !PIN_RE.test(line) &&
+        line.split(/\s+/).filter(Boolean).length <= 5
+      ) {
+        existingComp.value = existingComp.value + ' ' + line;
+        return;
+      }
     }
 
     // Designation: contains a role keyword
@@ -973,7 +994,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
     // ── Path B: city-label grouping (Nandini-style multi-office) ────────────────
     } else {
-      const ordered = orderedIdxs.map((i) => remaining[i].replace(/,\s*$/, ''));
+      // Strip "HEAD OFFICE:", "2nd OFFICE:", "OFFICE:" label prefixes before joining.
+      const OFFICE_LABEL_RE = /^(?:(?:\d+(?:st|nd|rd|th)?\s+)?(?:head\s+|registered\s+|corporate\s+)?office)\s*:\s*/i;
+      const ordered = orderedIdxs.map((i) => remaining[i].replace(/,\s*$/, '').replace(OFFICE_LABEL_RE, '').trim());
 
       // ── Path B1: inline label splitting ("Atelier:- E-71...", "Flagship Store:- Plot...") ──
       // When ≥2 address lines start with a location-type label followed by :-  or :–,
