@@ -1011,7 +1011,7 @@ function BetaHomeScreen() {
               return (
                 <Pressable
                   key={contact.id}
-                  style={[b.contactRow, { backgroundColor: colors.surface }]}
+                  style={[b.contactRow, { borderBottomColor: colors.border }]}
                   onPress={() => {
                     if (contact.source === 'card') {
                       setPendingCardOpen(contact.id);
@@ -1184,7 +1184,8 @@ function betaStyles(colors: any) {
     // Contact rows
     contactRow: {
       flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
-      borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm,
+      paddingVertical: Spacing.md, paddingHorizontal: 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
     },
     contactAvatar: {
       width: 40, height: 40, borderRadius: 20,
