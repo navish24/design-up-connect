@@ -165,7 +165,7 @@ export default function CardReviewScreen() {
     return (
       <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
         <Pressable
-          style={[s.backBtn, { top: Platform.OS === 'web' ? 14 : 56 }]}
+          style={[s.backBtn, { top: headerPaddingTop as any }]}
           onPress={() => router.replace('/(app)')}
           hitSlop={8}
         >
