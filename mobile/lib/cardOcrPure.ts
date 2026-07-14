@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.4.0';
+export const PARSER_VERSION = '1.5.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -891,6 +891,45 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     } else {
       const ordered = orderedIdxs.map((i) => remaining[i].replace(/,\s*$/, ''));
 
+      // ── Path B1: inline label splitting ("Atelier:- E-71...", "Flagship Store:- Plot...") ──
+      // When ≥2 address lines start with a location-type label followed by :-  or :–,
+      // split them into separate address fields rather than merging into one blob.
+      const INLINE_LABEL_PREFIX_RE = /^([\w][\w\s.']{1,25}?)\s*:[-–]\s+/;
+      const INLINE_LABEL_KEYWORDS_RE = /\b(atelier|flagship|showroom|workshop|studio|boutique|gallery|outlet|factory|warehouse|plant|depot|office|store|shop|branch|unit)\b/i;
+      const inlineLabelLines = ordered.filter((line) => {
+        const m = line.match(INLINE_LABEL_PREFIX_RE);
+        return m != null && INLINE_LABEL_KEYWORDS_RE.test(m[1]);
+      });
+
+      if (inlineLabelLines.length >= 2) {
+        const inGroups: { label: string; lines: string[] }[] = [];
+        let curIn: { label: string; lines: string[] } = { label: '', lines: [] };
+        for (const line of ordered) {
+          const m = line.match(INLINE_LABEL_PREFIX_RE);
+          if (m && INLINE_LABEL_KEYWORDS_RE.test(m[1])) {
+            if (curIn.label || curIn.lines.length > 0) inGroups.push(curIn);
+            curIn = { label: m[1].trim(), lines: [line.slice(m[0].length).trim()] };
+          } else {
+            curIn.lines.push(line);
+          }
+        }
+        inGroups.push(curIn);
+
+        for (const g of inGroups) {
+          if (g.lines.length === 0) continue;
+          const val = g.lines
+            .join(', ')
+            .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
+            .replace(new RegExp(PHONE_RE.source, 'g'), '')
+            .replace(/\s{2,}/g, ' ')
+            .replace(/^[,\s]+|[,\s]+$/g, '')
+            .trim();
+          if (val.length > 0) {
+            fields.push({ label: g.label ? `Address (${g.label})` : 'Address', value: val });
+          }
+        }
+      } else {
+
       // City names worth using as address group labels (excludes generic countries like India/USA)
       const CITY_LABEL_RE =
         /\b(mumbai|delhi|new\s+delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|navi\s+mumbai|chandigarh|amravati|nagpur|nashik|aurangabad|vadodara|coimbatore|visakhapatnam|vizag|kochi|cochin|trivandrum|thiruvananthapuram|bhubaneswar|patna|raipur|dehradun|jodhpur|udaipur|indore|bhopal|kanpur|agra|varanasi|prayagraj|allahabad|ranchi|gwalior|jabalpur|madurai|tiruchirappalli|trichy|salem|tiruppur|vellore|erode|tirunelveli|vijayawada|warangal|guntur|nellore|tirupati|kurnool|kadapa|karimnagar|nizamabad|khammam|rajahmundry|mangalore|mangaluru|mysore|mysuru|hubli|dharwad|belagavi|belgaum|gulbarga|kalaburagi|shimoga|shivamogga|davangere|tumkur|bellary|ballari|hospet|bidar|vijayapura|kalyan|dombivali|vasai|virar|solapur|kolhapur|latur|akola|nanded|jalgaon|ahmednagar|rajkot|bhavnagar|jamnagar|junagadh|gandhinagar|anand|bharuch|mehsana|morbi|surendranagar|amritsar|ludhiana|jalandhar|patiala|mohali|bathinda|pathankot|ambala|panipat|hisar|rohtak|karnal|faridabad|ghaziabad|meerut|aligarh|moradabad|bareilly|gorakhpur|saharanpur|jhansi|mathura|ujjain|sagar|siliguri|jamshedpur|dhanbad|guwahati|cuttack|rourkela|solapur|thrissur|kozhikode|calicut|kannur|kollam|palakkad|kottayam|alappuzha|alleppey|haridwar|rishikesh|roorkee|haldwani|bhilai|bilaspur|korba|shillong|imphal|gangtok|srinagar|jammu|bikaner|ajmer|kota|alwar|howrah|durgapur|asansol|bardhaman|singapore|dubai|bahrain|kuwait|qatar|abu\s+dhabi|washington|chicago|new\s+york|los\s+angeles|san\s+francisco|london|toronto|sydney|seattle|boston|amsterdam|berlin|paris|milan|hong\s+kong)\b/i;
@@ -993,6 +1032,8 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
           }
         }
       }
+
+      } // end of inline-label else block (Path B2: city-label grouping)
     }
   }
 
