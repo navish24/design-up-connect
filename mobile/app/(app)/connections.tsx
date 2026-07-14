@@ -1135,15 +1135,14 @@ function ConnectionCard({ connection, colors, onPress, onExchange, notes = [], s
 
   return (
     <Pressable style={[s.card, { backgroundColor: colors.surface }]} onPress={onPress}>
-      {user.profile_image_url ? (
-        <Image source={{ uri: user.profile_image_url }} style={s.avatarPhoto} />
-      ) : (
-        <View style={[s.avatar, { backgroundColor: colors.accent }]}>
-          <Text style={[s.avatarText, { color: '#FFFFFF' }]}>
-            {user.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-          </Text>
-        </View>
-      )}
+      <View style={[s.avatar, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={[s.avatarText, { color: '#FFFFFF' }]}>
+          {user.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+        </Text>
+        {user.profile_image_url ? (
+          <Image source={{ uri: user.profile_image_url }} style={[s.avatarPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
+        ) : null}
+      </View>
 
       <View style={s.cardInfo}>
         <Text style={[s.userName, { color: colors.text }]}>{user.full_name}</Text>
@@ -1301,17 +1300,17 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
               </View>
             )}
           </View>
-          {user.profile_image_url ? (
-            <Pressable onPress={() => setPhotoExpanded(true)} style={s.gProfileThumb}>
-              <Image source={{ uri: user.profile_image_url }} style={s.gProfileThumbImg} />
-            </Pressable>
-          ) : (
-            <View style={[s.gProfileThumb, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF' }}>
-                {user.full_name.split(' ').filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
-              </Text>
-            </View>
-          )}
+          <Pressable
+            onPress={() => user.profile_image_url ? setPhotoExpanded(true) : undefined}
+            style={[s.gProfileThumb, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}
+          >
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF' }}>
+              {user.full_name.split(' ').filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+            </Text>
+            {user.profile_image_url ? (
+              <Image source={{ uri: user.profile_image_url }} style={[s.gProfileThumbImg, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
+            ) : null}
+          </Pressable>
         </View>
 
         {hasQRQuickActions && (
