@@ -385,6 +385,7 @@ export default function ScanScreen() {
               instagram_handle: (u as any).instagram_handle || undefined,
               linkedin_url: (u as any).linkedin_url || undefined,
               website_url: (u as any).website_url || undefined,
+              address: (u as any).address || undefined,
             });
           }
           setTimeout(() => setScanState('success_connection'), 1800);

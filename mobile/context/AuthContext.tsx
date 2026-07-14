@@ -313,7 +313,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const ids = rows.map((r: any) => r.connected_user_id);
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, designation, company_name, email, phone, city, designup_user_id, profile_image_url, instagram_handle, linkedin_url, website_url')
+      .select('id, first_name, last_name, designation, company_name, email, phone, city, address, designup_user_id, profile_image_url, instagram_handle, linkedin_url, website_url')
       .in('id', ids);
 
     const profileMap: Record<string, any> = {};
@@ -336,6 +336,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           instagram_handle: p.instagram_handle ?? undefined,
           linkedin_url: p.linkedin_url ?? undefined,
           website_url: p.website_url ?? undefined,
+          address: p.address ?? undefined,
         },
         connection_type: 'networking' as ConnectionType,
         scope: 'personal' as ConnectionScope,

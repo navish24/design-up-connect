@@ -95,6 +95,7 @@ export interface Connection {
     instagram_handle?: string;
     website_url?: string;
     profile_image_url?: string;
+    address?: string;
   };
   brand_name?: string;
   brand_id?: string;

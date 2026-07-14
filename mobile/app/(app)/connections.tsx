@@ -305,6 +305,7 @@ export default function ConnectionsScreen() {
           instagram_handle: person.instagram_handle || undefined,
           linkedin_url: person.linkedin_url || undefined,
           website_url: person.website_url || undefined,
+          address: person.address || undefined,
         },
         brand_name: (person.company_name ?? person.company) || undefined,
         brand_id: person.brand_id || undefined,
@@ -1433,6 +1434,20 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
                 <Ionicons name="open-outline" size={15} color={colors.accent} />
               </Pressable>
             )}
+          </GroupedSection>
+        )}
+
+        {/* LOCATION */}
+        {user.address && (
+          <GroupedSection label="LOCATION" colors={colors} s={s}>
+            <View style={s.gRow}>
+              <Ionicons name="location-outline" size={18} color={colors.textSecondary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.gRowLabel, { color: colors.textMuted }]}>Address</Text>
+                <Text style={[s.gRowValue, { color: colors.text }]}>{user.address}</Text>
+              </View>
+              <CopyButton value={user.address} label="Address" size={15} />
+            </View>
           </GroupedSection>
         )}
 
