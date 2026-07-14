@@ -935,9 +935,14 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // ── Multiple offices ─────────────────────────────────────────────────────
     } else {
       for (const group of groups) {
-        if (group.lines.length === 0) continue;
         // Skip unlabeled prefix lines (e.g. country name "India" before first header)
         if (group.city === null) continue;
+
+        // City header with no street lines — use the city name itself as the value
+        if (group.lines.length === 0) {
+          fields.push({ label: 'Address', value: group.city });
+          continue;
+        }
 
         let addressStr = group.lines
           .join(', ')
