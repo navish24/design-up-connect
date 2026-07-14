@@ -1138,8 +1138,8 @@ function ConnectionCard({ connection, colors, onPress, onExchange, notes = [], s
       {user.profile_image_url ? (
         <Image source={{ uri: user.profile_image_url }} style={s.avatarPhoto} />
       ) : (
-        <View style={[s.avatar, { backgroundColor: '#E8EAE6' }]}>
-          <Text style={[s.avatarText, { color: '#6B7280' }]}>
+        <View style={[s.avatar, { backgroundColor: colors.accent }]}>
+          <Text style={[s.avatarText, { color: '#FFFFFF' }]}>
             {user.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
           </Text>
         </View>
@@ -1306,8 +1306,8 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
               <Image source={{ uri: user.profile_image_url }} style={s.gProfileThumbImg} />
             </Pressable>
           ) : (
-            <View style={[s.gProfileThumb, { backgroundColor: colors.accent + '22', alignItems: 'center', justifyContent: 'center' }]}>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: colors.accent }}>
+            <View style={[s.gProfileThumb, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF' }}>
                 {user.full_name.split(' ').filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
               </Text>
             </View>
@@ -1439,10 +1439,10 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         {/* Connection status / Exchange */}
         {connection.is_mutual ? (
           <View style={s.gActions}>
-            <View style={[s.slideTrack, { backgroundColor: colors.accent + '22', borderColor: colors.accent + '55' }]}>
+            <View style={[s.slideTrack, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
               <View style={s.slideSuccess}>
-                <Ionicons name="checkmark-circle" size={17} color={colors.accent} />
-                <Text style={[s.slideLabel, { color: colors.accent }]}>Mutual Connection</Text>
+                <Ionicons name="checkmark-circle" size={17} color={colors.text} />
+                <Text style={[s.slideLabel, { color: colors.text }]}>Mutual Connection</Text>
               </View>
             </View>
           </View>
