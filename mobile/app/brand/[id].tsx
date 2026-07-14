@@ -639,9 +639,6 @@ export default function BrandDetailScreen() {
               ) : (
                 // ── Scrollable image grid ─────────────────────────────────────
                 <View style={s.galleryModal}>
-                  <View style={s.galleryHeader}>
-                    <Text style={s.galleryTitle}>{selectedProduct.name}</Text>
-                  </View>
                   <Pressable style={s.galleryClose} onPress={() => setShowGallery(false)}>
                     <Ionicons name="close" size={24} color="#FFF" />
                   </Pressable>
@@ -1385,11 +1382,6 @@ function makeStyles(_colors?: any) {
       position: 'absolute', top: 52, right: Spacing.lg, zIndex: 10,
       backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, padding: 8,
     },
-    galleryHeader: {
-      paddingTop: Platform.OS === 'web' ? 14 : 56, paddingBottom: Spacing.md,
-      paddingHorizontal: Spacing.lg, paddingRight: 60,
-    },
-    galleryTitle: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.bold },
     galleryGrid: { gap: 3, padding: 3 },
     galleryGridImg: { width: APP_W - 6, height: APP_W - 6, backgroundColor: '#111' },
 
