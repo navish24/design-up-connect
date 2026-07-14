@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.3.0';
+export const PARSER_VERSION = '1.4.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -65,7 +65,7 @@ const YOUTUBE_RE = /youtube\.com\/(?:c\/|channel\/|@)[\w\-]+/gi;
 
 // Address cues
 const ADDRESS_KEYWORD_RE =
-  /\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|hills|hill|bagh|ganj|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste|bldg|taluka|taluk|dist)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|jubilee hills|banjara hills|madhapur|secunderabad|begumpet|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
+  /\bc\/o\b|\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|no\.|#|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|hills|hill|bagh|ganj|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste|bldg|taluka|taluk|dist)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|telangana|andhra\s+pradesh|tamil\s+nadu|kerala|punjab|haryana|uttarakhand|uttar\s+pradesh|madhya\s+pradesh|west\s+bengal|odisha|assam|jharkhand|chhattisgarh|bihar|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|jubilee hills|banjara hills|madhapur|secunderabad|begumpet|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
 const PIN_RE = /\b[1-9]\d{5}\b/;
 
 // Designation keywords — "art" removed (too generic: matches "art collective" brand taglines)
@@ -347,9 +347,6 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // "Website", "Address") — after the value is extracted the bare label remains.
       // Also catches common abbreviations and variants without a trailing colon.
       if (/^(phone|phones|mobile|mob|cell|tel|telephone|fax|email|e-mail|e\.mail|website|web|url|address|addr)\.?$/i.test(line)) return false;
-      // Address section headers printed as labels on the card (e.g. "Office Address",
-      // "Store Address") — these are UI decoration, not a second person's name.
-      if (/^(office|store|branch|head|registered|corporate|correspondence|mailing|billing|regd?\.?)\s+(address|addr\.?)$/i.test(line)) return false;
       // Trailing "@" with no handle (e.g. "visit us @" after the URL was extracted from
       // the next OCR line) — prose use of "@" as "at", not a social handle or email.
       if (/^[\w\s.''\-,]{2,40}@\s*$/.test(line)) return false;
@@ -418,6 +415,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const designationLines: string[] = [];
   const designationIndices: number[] = [];
   const addressIdx = new Set<number>();
+  const addrSectionHeaders = new Map<number, string>(); // remaining idx → section label
   const otherEntries: Array<{ idx: number; text: string }> = [];
 
   // True when a line is entirely uppercase letters (plus spaces/hyphens/dots/&)
@@ -435,6 +433,17 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const LABEL_PREFIX_RE = /^(?:[A-Za-z](?:\s*:|\s+(?=[\d(+]))|(?:tel|fax|ph|mob|mobile|phone)\s*\.?\s*:?)\s*/i;
 
   remaining.forEach((line, idx) => {
+    // Address section headers ("Office Address", "Store Address") — used as group
+    // separators in multi-address consolidation, not contact data or person names.
+    const ADDR_SECTION_HDR_RE = /^(office|store|branch|head|registered|corporate|correspondence|mailing|billing|regd?\.?)\s+(address|addr\.?)$/i;
+    const sectionMatch = ADDR_SECTION_HDR_RE.exec(line);
+    if (sectionMatch) {
+      const sectionLabel = sectionMatch[1].charAt(0).toUpperCase() + sectionMatch[1].slice(1).toLowerCase();
+      addrSectionHeaders.set(idx, sectionLabel);
+      addressIdx.add(idx);
+      return;
+    }
+
     // Company keyword check runs BEFORE address — company names often contain words
     // like "India", "Studio", "Park" that also appear in ADDRESS_KEYWORD_RE.
     // Condition: starts with uppercase, has a strong company keyword, no PIN,
@@ -846,117 +855,142 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // Consolidate address lines — supports multiple offices via location headers.
   if (addressIdx.size > 0) {
-    const ordered = [...addressIdx].sort((a, b) => a - b).map((i) => remaining[i].replace(/,\s*$/, ''));
+    const orderedIdxs = [...addressIdx].sort((a, b) => a - b);
 
-    // City names worth using as address group labels (excludes generic countries like India/USA)
-    const CITY_LABEL_RE =
-      /\b(mumbai|delhi|new\s+delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|navi\s+mumbai|chandigarh|amravati|nagpur|nashik|aurangabad|vadodara|coimbatore|visakhapatnam|vizag|kochi|cochin|trivandrum|bhubaneswar|patna|raipur|dehradun|jodhpur|udaipur|singapore|dubai|bahrain|kuwait|qatar|abu\s+dhabi|washington|chicago|new\s+york|los\s+angeles|san\s+francisco|london|toronto|sydney|seattle|boston|amsterdam|berlin|paris|milan|hong\s+kong)\b/i;
-    const ADDR_STRUCTURAL_RE =
-      /\b(road|street|nagar|marg|avenue|floor|sector|plot|block|house|tower|no\.|phase|opposite|opp)\b/i;
-
-    // Returns the city label if this line is a location header ("Hyderabad", "HEAD OFFICE Singapore"),
-    // null if it is regular address content.
-    const asLocationHeader = (line: string): string | null => {
-      const cityMatch = line.match(CITY_LABEL_RE);
-      if (!cityMatch) return null;
-      if (line.trim().split(/\s+/).length > 5) return null; // too many words → address content
-      if (PIN_RE.test(line)) return null; // has a pin code → address content
-      if (/\d{1,4}[,\/]/.test(line)) return null; // street number pattern
-      const withoutCity = line.replace(CITY_LABEL_RE, '').trim();
-      if (ADDR_STRUCTURAL_RE.test(withoutCity)) return null; // structural word alongside city
-      const city = cityMatch[0].replace(/\s+/g, ' ').trim();
-      return city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
-    };
-
-    // Group address lines by location headers
-    const groups: { city: string | null; lines: string[] }[] = [];
-    let cur: { city: string | null; lines: string[] } = { city: null, lines: [] };
-    for (const line of ordered) {
-      const city = asLocationHeader(line);
-      if (city !== null) {
-        if (cur.lines.length > 0 || cur.city !== null) groups.push(cur);
-        cur = { city, lines: [] };
-      } else {
-        cur.lines.push(line);
-      }
-    }
-    groups.push(cur);
-
-    const isMultiAddress = groups.length > 1 || (groups.length === 1 && groups[0].city !== null);
-
-    // ── Single address (existing behavior) ──────────────────────────────────
-    if (!isMultiAddress) {
-      let addressStr = ordered.join(', ').replace(/,?\s*[A-Z]\s*:\s*$/, '').trim();
-
-      addressStr = addressStr.replace(/^([A-Za-z]{2,12}),\s*/, (_, word) =>
-        ADDRESS_KEYWORD_RE.test(word) ? `${word}, ` : '',
-      );
-      addressStr = addressStr
-        .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
-        .replace(new RegExp(PHONE_RE.source, 'g'), '')
-        .replace(/\s{2,}/g, ' ')
-        .replace(/^[,\s]+|[,\s]+$/g, '')
-        .trim();
-
-      if (!companyAssigned) {
-        const m = addressStr.match(/^(.+?\b(?:PVT\.?\s*LTD\.?|LIMITED|LLP|INC))\.?(?:\s*,\s*|\s+)/i);
-        if (m) {
-          const companyName = m[1].trim();
-          const nameIdx = fields.findIndex((f) => f.label === 'Name');
-          fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: companyName });
-          companyAssigned = true;
-          addressStr = addressStr.slice(m[0].length).trim();
+    // ── Path A: section-header grouping ("Office Address", "Store Address" etc.) ──
+    // Takes priority when the card uses explicit section labels to delimit offices.
+    if (addrSectionHeaders.size > 0) {
+      const sectionGroups: { label: string | null; lines: string[] }[] = [];
+      let curSect: { label: string | null; lines: string[] } = { label: null, lines: [] };
+      for (const i of orderedIdxs) {
+        if (addrSectionHeaders.has(i)) {
+          if (curSect.lines.length > 0 || curSect.label !== null) sectionGroups.push(curSect);
+          curSect = { label: addrSectionHeaders.get(i)!, lines: [] };
+        } else {
+          curSect.lines.push(remaining[i].replace(/,\s*$/, ''));
         }
       }
+      sectionGroups.push(curSect);
 
-      if (!nameAssigned) {
-        const segments = addressStr.split(/,\s*/);
-        let nameSegIdx = -1;
-        for (let si = 0; si < segments.length; si++) {
-          const seg = segments[si].trim();
-          if (
-            /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}$/.test(seg) &&
-            !ADDRESS_KEYWORD_RE.test(seg) &&
-            !DESIGNATION_RE.test(seg) &&
-            !COMPANY_KEYWORD_RE.test(seg)
-          ) {
-            nameSegIdx = si;
-            break;
-          }
-        }
-        if (nameSegIdx !== -1) {
-          const possibleName = segments[nameSegIdx].trim();
-          segments.splice(nameSegIdx, 1);
-          fields.unshift({ label: 'Name', value: possibleName });
-          nameAssigned = true;
-          addressStr = segments.join(', ').trim();
-        }
-      }
-
-      if (addressStr.length > 0) fields.push({ label: 'Address', value: addressStr });
-
-    // ── Multiple offices ─────────────────────────────────────────────────────
-    } else {
-      for (const group of groups) {
-        // Skip unlabeled prefix lines (e.g. country name "India" before first header)
-        if (group.city === null) continue;
-
-        // City header with no street lines — use the city name itself as the value
-        if (group.lines.length === 0) {
-          fields.push({ label: 'Address', value: group.city });
-          continue;
-        }
-
-        let addressStr = group.lines
+      for (const group of sectionGroups) {
+        if (group.label === null) continue; // pre-header lines with no section label
+        if (group.lines.length === 0) continue; // header with no content lines
+        const addressStr = group.lines
           .join(', ')
           .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
           .replace(new RegExp(PHONE_RE.source, 'g'), '')
           .replace(/\s{2,}/g, ' ')
           .replace(/^[,\s]+|[,\s]+$/g, '')
           .trim();
-
         if (addressStr.length > 0) {
-          fields.push({ label: `Address (${group.city})`, value: addressStr });
+          fields.push({ label: `Address (${group.label})`, value: addressStr });
+        }
+      }
+
+    // ── Path B: city-label grouping (Nandini-style multi-office) ────────────────
+    } else {
+      const ordered = orderedIdxs.map((i) => remaining[i].replace(/,\s*$/, ''));
+
+      // City names worth using as address group labels (excludes generic countries like India/USA)
+      const CITY_LABEL_RE =
+        /\b(mumbai|delhi|new\s+delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|navi\s+mumbai|chandigarh|amravati|nagpur|nashik|aurangabad|vadodara|coimbatore|visakhapatnam|vizag|kochi|cochin|trivandrum|thiruvananthapuram|bhubaneswar|patna|raipur|dehradun|jodhpur|udaipur|indore|bhopal|kanpur|agra|varanasi|prayagraj|allahabad|ranchi|gwalior|jabalpur|madurai|tiruchirappalli|trichy|salem|tiruppur|vellore|erode|tirunelveli|vijayawada|warangal|guntur|nellore|tirupati|kurnool|kadapa|karimnagar|nizamabad|khammam|rajahmundry|mangalore|mangaluru|mysore|mysuru|hubli|dharwad|belagavi|belgaum|gulbarga|kalaburagi|shimoga|shivamogga|davangere|tumkur|bellary|ballari|hospet|bidar|vijayapura|kalyan|dombivali|vasai|virar|solapur|kolhapur|latur|akola|nanded|jalgaon|ahmednagar|rajkot|bhavnagar|jamnagar|junagadh|gandhinagar|anand|bharuch|mehsana|morbi|surendranagar|amritsar|ludhiana|jalandhar|patiala|mohali|bathinda|pathankot|ambala|panipat|hisar|rohtak|karnal|faridabad|ghaziabad|meerut|aligarh|moradabad|bareilly|gorakhpur|saharanpur|jhansi|mathura|ujjain|sagar|siliguri|jamshedpur|dhanbad|guwahati|cuttack|rourkela|solapur|thrissur|kozhikode|calicut|kannur|kollam|palakkad|kottayam|alappuzha|alleppey|haridwar|rishikesh|roorkee|haldwani|bhilai|bilaspur|korba|shillong|imphal|gangtok|srinagar|jammu|bikaner|ajmer|kota|alwar|howrah|durgapur|asansol|bardhaman|singapore|dubai|bahrain|kuwait|qatar|abu\s+dhabi|washington|chicago|new\s+york|los\s+angeles|san\s+francisco|london|toronto|sydney|seattle|boston|amsterdam|berlin|paris|milan|hong\s+kong)\b/i;
+      const ADDR_STRUCTURAL_RE =
+        /\b(road|street|nagar|marg|avenue|floor|sector|plot|block|house|tower|no\.|phase|opposite|opp)\b/i;
+
+      const asLocationHeader = (line: string): string | null => {
+        const cityMatch = line.match(CITY_LABEL_RE);
+        if (!cityMatch) return null;
+        if (line.trim().split(/\s+/).length > 5) return null;
+        if (PIN_RE.test(line)) return null;
+        if (/\d{1,4}[,\/]/.test(line)) return null;
+        const withoutCity = line.replace(CITY_LABEL_RE, '').trim();
+        if (ADDR_STRUCTURAL_RE.test(withoutCity)) return null;
+        const city = cityMatch[0].replace(/\s+/g, ' ').trim();
+        return city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
+      };
+
+      const groups: { city: string | null; lines: string[] }[] = [];
+      let cur: { city: string | null; lines: string[] } = { city: null, lines: [] };
+      for (const line of ordered) {
+        const city = asLocationHeader(line);
+        if (city !== null) {
+          if (cur.lines.length > 0 || cur.city !== null) groups.push(cur);
+          cur = { city, lines: [] };
+        } else {
+          cur.lines.push(line);
+        }
+      }
+      groups.push(cur);
+
+      const isMultiAddress = groups.length > 1 || (groups.length === 1 && groups[0].city !== null);
+
+      if (!isMultiAddress) {
+        let addressStr = ordered.join(', ').replace(/,?\s*[A-Z]\s*:\s*$/, '').trim();
+
+        addressStr = addressStr.replace(/^([A-Za-z]{2,12}),\s*/, (_, word) =>
+          ADDRESS_KEYWORD_RE.test(word) ? `${word}, ` : '',
+        );
+        addressStr = addressStr
+          .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
+          .replace(new RegExp(PHONE_RE.source, 'g'), '')
+          .replace(/\s{2,}/g, ' ')
+          .replace(/^[,\s]+|[,\s]+$/g, '')
+          .trim();
+
+        if (!companyAssigned) {
+          const m = addressStr.match(/^(.+?\b(?:PVT\.?\s*LTD\.?|LIMITED|LLP|INC))\.?(?:\s*,\s*|\s+)/i);
+          if (m) {
+            const companyName = m[1].trim();
+            const nameIdx = fields.findIndex((f) => f.label === 'Name');
+            fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: companyName });
+            companyAssigned = true;
+            addressStr = addressStr.slice(m[0].length).trim();
+          }
+        }
+
+        if (!nameAssigned) {
+          const segments = addressStr.split(/,\s*/);
+          let nameSegIdx = -1;
+          for (let si = 0; si < segments.length; si++) {
+            const seg = segments[si].trim();
+            if (
+              /^[A-Za-z][a-z]+(?:\s[A-Za-z][a-z]+){1,2}$/.test(seg) &&
+              !ADDRESS_KEYWORD_RE.test(seg) &&
+              !DESIGNATION_RE.test(seg) &&
+              !COMPANY_KEYWORD_RE.test(seg)
+            ) {
+              nameSegIdx = si;
+              break;
+            }
+          }
+          if (nameSegIdx !== -1) {
+            const possibleName = segments[nameSegIdx].trim();
+            segments.splice(nameSegIdx, 1);
+            fields.unshift({ label: 'Name', value: possibleName });
+            nameAssigned = true;
+            addressStr = segments.join(', ').trim();
+          }
+        }
+
+        if (addressStr.length > 0) fields.push({ label: 'Address', value: addressStr });
+
+      } else {
+        for (const group of groups) {
+          if (group.city === null) continue;
+          if (group.lines.length === 0) {
+            fields.push({ label: 'Address', value: group.city });
+            continue;
+          }
+          let addressStr = group.lines
+            .join(', ')
+            .replace(/[,.]?\s*\b(?:tel|fax|phone|ph|mob|mobile)\b\.?\s*:\s*/gi, ' ')
+            .replace(new RegExp(PHONE_RE.source, 'g'), '')
+            .replace(/\s{2,}/g, ' ')
+            .replace(/^[,\s]+|[,\s]+$/g, '')
+            .trim();
+          if (addressStr.length > 0) {
+            fields.push({ label: `Address (${group.city})`, value: addressStr });
+          }
         }
       }
     }
