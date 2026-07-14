@@ -154,7 +154,7 @@ export default function CardScannerScreen() {
   if (!permission.granted) {
     return (
       <View style={[s.root, s.centered]}>
-        <Ionicons name="camera-off-outline" size={52} color={colors.accent} />
+        <Ionicons name="camera-outline" size={52} color={colors.accent} />
         <Text style={[s.title, { color: colors.text }]}>Camera required</Text>
         <Text style={[s.body, { color: colors.textMuted }]}>
           Allow camera access to scan visiting cards

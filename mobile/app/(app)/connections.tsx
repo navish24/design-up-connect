@@ -1195,6 +1195,7 @@ const SLIDE_THUMB = 44;
 const SLIDE_PAD = 4;
 
 function SlideToExchange({ onComplete, colors }: { onComplete: () => void; colors: any }) {
+  const s = makeStyles(colors);
   const pan = useRef(new Animated.Value(0)).current;
   const trackWidthRef = useRef(0);
   const doneRef = useRef(false);

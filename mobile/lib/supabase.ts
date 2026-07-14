@@ -92,7 +92,7 @@ export async function processScan(qrData: string, activeExhibitionId: string | n
           tagline: b.tagline,
           booth_number: b.booth_number,
           hall_number: b.hall_number,
-          exhibition_name: exhibitionName,
+          exhibition_name: exhibitionName ?? '',
           product_images: b.images,
         },
       };
@@ -124,7 +124,7 @@ export async function processScan(qrData: string, activeExhibitionId: string | n
           tagline: brandData.tagline ?? '',
           booth_number: '',
           hall_number: '',
-          exhibition_name: exhibitionName,
+          exhibition_name: exhibitionName ?? '',
           product_images: productImages.slice(0, 3),
         },
       };

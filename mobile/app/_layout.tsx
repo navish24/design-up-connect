@@ -109,7 +109,7 @@ function InstallBanner() {
               {/* Steps */}
               {[
                 { icon: 'share-outline' as const, label: 'Tap ••• (bottom right) → Share' },
-                { icon: 'add-square-outline' as const, label: 'Tap "Add to Home Screen"' },
+                { icon: 'add-outline' as const, label: 'Tap "Add to Home Screen"' },
                 { icon: 'checkmark-circle-outline' as const, label: 'Tap "Add" to confirm' },
               ].map((step, i) => (
                 <View key={i} style={[banner.sheetStep, { backgroundColor: colors.background }]}>

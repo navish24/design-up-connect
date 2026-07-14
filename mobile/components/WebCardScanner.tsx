@@ -463,7 +463,7 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   if (permState === 'denied') {
     return (
       <View style={[s.fallback, { backgroundColor: '#000' }]}>
-        <Ionicons name="camera-off-outline" size={44} color="#888" />
+        <Ionicons name="camera-outline" size={44} color="#888" />
         <Text style={s.fallbackTitle}>Camera access denied</Text>
         <Text style={s.fallbackBody}>
           Reload the page — a prompt will appear to allow camera access.
@@ -481,7 +481,7 @@ const WebCardScanner = forwardRef<WebCardScannerHandle, Props>(({ active, onCapt
   if (permState === 'unavailable') {
     return (
       <View style={[s.fallback, { backgroundColor: '#000' }]}>
-        <Ionicons name="camera-off-outline" size={44} color="#888" />
+        <Ionicons name="camera-outline" size={44} color="#888" />
         <Text style={s.fallbackTitle}>Camera not available</Text>
         <Text style={s.fallbackBody}>Your browser doesn't support camera access.</Text>
       </View>

@@ -427,7 +427,7 @@ export default function ScanScreen() {
     if (!permission.granted) {
       return (
         <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
-          <Ionicons name="camera-off-outline" size={56} color={colors.textSecondary} />
+          <Ionicons name="camera-outline" size={56} color={colors.textSecondary} />
           <Text style={[s.permTitle, { color: colors.text }]}>Camera Access Required</Text>
           <Text style={[s.permBody, { color: colors.textSecondary }]}>
             Connect needs camera access to scan QR codes and visiting cards.

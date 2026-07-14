@@ -210,7 +210,7 @@ export default function WebQRScanner({ active, onScan, onDetected, torchOn, onTo
   if (permState === 'denied') {
     return (
       <View style={[s.fallback, { backgroundColor: '#000' }]}>
-        <Ionicons name="camera-off-outline" size={44} color="#888" />
+        <Ionicons name="camera-outline" size={44} color="#888" />
         <Text style={s.fallbackTitle}>Camera access denied</Text>
         <Text style={s.fallbackBody}>
           Reload the page — a prompt will appear to allow camera access.
@@ -228,7 +228,7 @@ export default function WebQRScanner({ active, onScan, onDetected, torchOn, onTo
   if (permState === 'unavailable') {
     return (
       <View style={[s.fallback, { backgroundColor: '#000' }]}>
-        <Ionicons name="camera-off-outline" size={44} color="#888" />
+        <Ionicons name="camera-outline" size={44} color="#888" />
         <Text style={s.fallbackTitle}>Camera not available</Text>
         <Text style={s.fallbackBody}>
           Your browser or device doesn't support camera access.
