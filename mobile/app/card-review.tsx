@@ -364,7 +364,7 @@ export default function CardReviewScreen() {
       </ScrollView>
 
       {/* Sticky save footer */}
-      <View style={[s.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: bottomInset + 4 }]}>
+      <View style={[s.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: bottomInset }]}>
         <Pressable style={[s.solidBtn, { backgroundColor: colors.accent }]} onPress={handleSave}>
           <Ionicons name="checkmark-circle" size={19} color="#FFF" />
           <Text style={s.solidBtnText}>Save Contact</Text>
@@ -713,7 +713,7 @@ const s = StyleSheet.create({
     borderWidth: 1, width: '100%',
   },
   outlineBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.medium },
-  ghostBtn: { alignItems: 'center', paddingTop: 8, paddingBottom: 2 },
+  ghostBtn: { alignItems: 'center', paddingTop: 6, paddingBottom: 0 },
   ghostBtnText: { fontSize: FontSize.sm },
 
   // Shared modal overlay
