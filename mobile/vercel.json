@@ -3,5 +3,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "alias": ["connect-designup.vercel.app"]
 }
