@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.8.0';
+export const PARSER_VERSION = '1.10.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -648,9 +648,18 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       const CREDENTIAL_SUFFIX_RE = /\s*\([A-Za-z][A-Za-z.\s]{1,15}\)\s*$/;
       const lineForName = line.replace(CREDENTIAL_SUFFIX_RE, '').trim();
       const ADDR_ABBREV_RE = /^(rd|st|ave|blvd|dr|ln|ct|pl|extn?)$/i;
+      // Reject name candidates sandwiched between address content — e.g. "Andheri East"
+      // sitting between "Saki Vihar Road" and "Mumbai, Maharashtra 400072" is an address
+      // locality, not a person's name, even though it looks like "First Last".
+      const nameNextLine = remaining[idx + 1] ?? '';
+      const nameAdjacentToAddr =
+        addressIdx.has(idx - 1) ||
+        ADDRESS_KEYWORD_RE.test(nameNextLine) ||
+        PIN_RE.test(nameNextLine);
       if (
         !nameAssigned &&
         !lineIsAllCaps &&
+        !nameAdjacentToAddr &&
         /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName) &&
         lineForName.split(' ').length >= 2 &&
         lineForName.split(' ').length <= 6 &&
@@ -672,9 +681,15 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       const CREDENTIAL_SUFFIX_RE = /\s*\([A-Za-z][A-Za-z.\s]{1,15}\)\s*$/;
       const lineForName2 = line.replace(CREDENTIAL_SUFFIX_RE, '').trim();
       const ADDR_ABBREV_RE = /^(rd|st|ave|blvd|dr|ln|ct|pl|extn?)$/i;
+      const name2NextLine = remaining[idx + 1] ?? '';
+      const name2AdjacentToAddr =
+        addressIdx.has(idx - 1) ||
+        ADDRESS_KEYWORD_RE.test(name2NextLine) ||
+        PIN_RE.test(name2NextLine);
       if (
         nameAssigned &&
         !lineIsAllCaps &&
+        !name2AdjacentToAddr &&
         /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName2) &&
         lineForName2.split(' ').length >= 2 &&
         lineForName2.split(' ').length <= 6 &&
@@ -849,7 +864,12 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     !COMPANY_KEYWORD_RE.test(text);
 
   for (const { idx, text } of otherEntries) {
-    if (looksLikeAddressFragment(text) && (addressIdx.has(idx - 1) || addressIdx.has(idx + 1))) {
+    // A line sandwiched between two already-classified address lines is part of the address
+    // regardless of whether it looks like a person name (e.g. "Andheri East" between road/city).
+    const sandwichedByAddr = addressIdx.has(idx - 1) && addressIdx.has(idx + 1);
+    if (sandwichedByAddr && text.length >= 4 && /^[A-Za-z0-9\s,.\-/#()]+$/.test(text)) {
+      addressIdx.add(idx);
+    } else if (looksLikeAddressFragment(text) && (addressIdx.has(idx - 1) || addressIdx.has(idx + 1))) {
       addressIdx.add(idx);
     } else {
       // Suppress single-word all-caps brand logo text already covered by the Company field
@@ -1025,7 +1045,15 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       }
       groups.push(cur);
 
-      const isMultiAddress = groups.length > 1 || (groups.length === 1 && groups[0].city !== null);
+      // Indian address convention: city appears as the last line (e.g. "Hyderabad" below
+      // the street). This creates a null-city group (street lines) + an empty named group.
+      // Re-classify as single address so `ordered` is joined correctly with the city included.
+      const cityAtEnd =
+        groups.length >= 2 &&
+        groups[0].city === null &&
+        groups[0].lines.length > 0 &&
+        groups.slice(1).every((g) => g.lines.length === 0);
+      const isMultiAddress = !cityAtEnd && (groups.length > 1 || (groups.length === 1 && groups[0].city !== null));
 
       if (!isMultiAddress) {
         let addressStr = ordered.join(', ').replace(/,?\s*[A-Z]\s*:\s*$/, '').trim();
