@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.2.0';
+export const PARSER_VERSION = '1.3.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -347,6 +347,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // "Website", "Address") — after the value is extracted the bare label remains.
       // Also catches common abbreviations and variants without a trailing colon.
       if (/^(phone|phones|mobile|mob|cell|tel|telephone|fax|email|e-mail|e\.mail|website|web|url|address|addr)\.?$/i.test(line)) return false;
+      // Address section headers printed as labels on the card (e.g. "Office Address",
+      // "Store Address") — these are UI decoration, not a second person's name.
+      if (/^(office|store|branch|head|registered|corporate|correspondence|mailing|billing|regd?\.?)\s+(address|addr\.?)$/i.test(line)) return false;
       // Trailing "@" with no handle (e.g. "visit us @" after the URL was extracted from
       // the next OCR line) — prose use of "@" as "at", not a social handle or email.
       if (/^[\w\s.''\-,]{2,40}@\s*$/.test(line)) return false;
@@ -546,7 +549,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
               (f.label === 'Social Handle' || f.label === 'Instagram' || f.label === 'Facebook') &&
               f.value.replace(/^@/, '').toLowerCase() === line.toLowerCase()
           )) {
-            fields.push({ label: 'Social Handle', value: `@${line.toLowerCase()}` });
+            fields.push({ label: 'Instagram', value: `@${line.toLowerCase()}` });
           }
           return;
         }
@@ -847,7 +850,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
     // City names worth using as address group labels (excludes generic countries like India/USA)
     const CITY_LABEL_RE =
-      /\b(mumbai|delhi|new\s+delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|navi\s+mumbai|singapore|dubai|bahrain|kuwait|qatar|washington|chicago|new\s+york|los\s+angeles|san\s+francisco|london|toronto|sydney|seattle|boston)\b/i;
+      /\b(mumbai|delhi|new\s+delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|navi\s+mumbai|chandigarh|amravati|nagpur|nashik|aurangabad|vadodara|coimbatore|visakhapatnam|vizag|kochi|cochin|trivandrum|bhubaneswar|patna|raipur|dehradun|jodhpur|udaipur|singapore|dubai|bahrain|kuwait|qatar|abu\s+dhabi|washington|chicago|new\s+york|los\s+angeles|san\s+francisco|london|toronto|sydney|seattle|boston|amsterdam|berlin|paris|milan|hong\s+kong)\b/i;
     const ADDR_STRUCTURAL_RE =
       /\b(road|street|nagar|marg|avenue|floor|sector|plot|block|house|tower|no\.|phase|opposite|opp)\b/i;
 
