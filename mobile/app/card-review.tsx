@@ -19,7 +19,7 @@ import type { CardContact, CardContactField } from '../types';
 import { CountryCodePicker } from '../components/CountryCodePicker';
 
 const FIELD_LABELS = [
-  'Name', 'Company', 'Designation', 'Phone', 'WhatsApp',
+  'Name', 'Name 2', 'Company', 'Designation', 'Phone', 'WhatsApp',
   'Email', 'Website', 'LinkedIn', 'Instagram', 'Facebook', 'Twitter/X',
   'Behance', 'YouTube', 'Social Handle', 'Address', 'Services', 'Other',
 ];

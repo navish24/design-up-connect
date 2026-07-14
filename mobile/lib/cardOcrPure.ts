@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.6.0';
+export const PARSER_VERSION = '1.8.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -190,8 +190,13 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   // ── 2. Instagram ─────────────────────────────────────────────────────────────
   const igRaw = fullText.match(INSTAGRAM_RE) ?? [];
   const igMatches = [...new Set(igRaw)].filter((m) => {
-    // Skip if this @ handle is actually inside an email already captured
-    return !EMAIL_RE.test(m) && !m.includes('@gmail') && !m.includes('@yahoo') && !m.includes('@hotmail');
+    if (EMAIL_RE.test(m) || m.includes('@gmail') || m.includes('@yahoo') || m.includes('@hotmail')) return false;
+    // Skip domain-like handles (e.g. "@zerodesignstudio.in") — these are website URLs that
+    // INSTAGRAM_RE grabs before Website extraction consumes them. Handles with underscores
+    // are always real handles (underscores are invalid in domain names), so exempt those.
+    const handle = m.match(/[\w.]+$/)?.[0] ?? '';
+    if (handle.includes('.') && /\.(in|com|co|net|org|io)$/.test(handle) && !handle.includes('_')) return false;
+    return true;
   });
   for (const m of igMatches) {
     if (isConsumed(m)) continue;
@@ -519,6 +524,21 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         fields.push({ label: 'Email', value: line });
         return;
       }
+      // "@ First Last" — social icon (LinkedIn/etc.) misread as "@" before a person's name.
+      // Handles cannot contain spaces, so multi-word text after "@" is always an icon misread.
+      // If the text matches the primary Name, drop silently; otherwise strip "@" and let the
+      // text fall through to the name/company/other classifiers as plain text.
+      if (/^@\s+\S/.test(line) && line.slice(1).trim().includes(' ')) {
+        const stripped = line.replace(/^@\s+/, '');
+        const primaryNameNorm = fields.find((f) => f.label === 'Name')?.value
+          ?.toLowerCase().replace(/[^a-z]/g, '') ?? '';
+        const strippedNorm = stripped.toLowerCase().replace(/[^a-z]/g, '');
+        if (primaryNameNorm && (primaryNameNorm.includes(strippedNorm) || strippedNorm.includes(primaryNameNorm))) {
+          return; // duplicate of primary name from icon misread — drop
+        }
+        otherEntries.push({ idx, text: stripped });
+        return;
+      }
       // Falls through — re-evaluated as name/company/designation/other
     }
 
@@ -582,9 +602,22 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     if (lineIsAllCaps && line.split(/\s+/).filter(Boolean).length >= 2) {
       const wordCount = line.split(/\s+/).filter(Boolean).length;
       const hasCompanyKeyword = COMPANY_KEYWORD_RE.test(line);
-      if (!nameAssigned && !hasCompanyKeyword && wordCount <= 3) {
+      if (!nameAssigned && !hasCompanyKeyword && wordCount <= 5) {
         fields.unshift({ label: 'Name', value: line });
         nameAssigned = true;
+        return;
+      }
+      // Second person on two-person card (e.g. "AR. MOHIT KIRAN BHOLE")
+      if (
+        nameAssigned &&
+        !hasCompanyKeyword &&
+        !DESIGNATION_RE.test(line) &&
+        !ADDRESS_KEYWORD_RE.test(line) &&
+        wordCount >= 2 &&
+        wordCount <= 5 &&
+        !fields.some((f) => f.label === 'Name 2')
+      ) {
+        fields.push({ label: 'Name 2', value: line });
         return;
       }
       if (!companyAssigned) {
@@ -623,6 +656,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         lineForName.split(' ').length <= 6 &&
         lineForName.split(/\s+/).every((w) => /^[A-Z]/.test(w)) &&
         !lineForName.split(/\s+/).some((w) => ADDR_ABBREV_RE.test(w)) &&
+        !lineForName.split(/\s+/).some((w) => w.length > 3 && w.endsWith('.')) &&
         !ADDRESS_KEYWORD_RE.test(lineForName)
       ) {
         fields.unshift({ label: 'Name', value: lineForName });
@@ -646,6 +680,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         lineForName2.split(' ').length <= 6 &&
         lineForName2.split(/\s+/).every((w) => /^[A-Z]/.test(w)) &&
         !lineForName2.split(/\s+/).some((w) => ADDR_ABBREV_RE.test(w)) &&
+        // Reject dotted-tagline pattern: "Residential. Commercial. Hospitality" —
+        // words > 3 chars ending in "." are service/product category labels, not name words.
+        // Short abbreviations like "Ar.", "ID.", "Dr." (≤3 chars) are still allowed.
+        !lineForName2.split(/\s+/).some((w) => w.length > 3 && w.endsWith('.')) &&
         !ADDRESS_KEYWORD_RE.test(lineForName2) &&
         !DESIGNATION_RE.test(lineForName2) &&
         !COMPANY_KEYWORD_RE.test(lineForName2)
@@ -1250,8 +1288,75 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
   }
 
+  // Post-process: fuzzy Name==Company dedup — catches OCR variants of the same company
+  // text, e.g. "Bsquare Designstudio" (Name) vs "B Square Design Studio." (Company).
+  // Stripping all non-alphanumeric chars from both → "BSQUAREDESIGNSTUDIO" == "BSQUAREDESIGNSTUDIO".
+  // When matched: promote Name 2 → Name, then look for the next Other person-name for Name 2.
+  {
+    const normAlpha = (s: string) => s.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const variantComp = fields.find((f) => f.label === 'Company');
+    const variantName = fields.find((f) => f.label === 'Name');
+    if (
+      variantComp &&
+      variantName &&
+      variantName.value !== variantComp.value &&
+      normAlpha(variantComp.value) === normAlpha(variantName.value)
+    ) {
+      const name2Field = fields.find((f) => f.label === 'Name 2');
+      const variantNameIdx = fields.indexOf(variantName);
+      if (name2Field && variantNameIdx !== -1) {
+        fields.splice(variantNameIdx, 1);
+        name2Field.label = 'Name';
+        const nextPersonIdx = fields.findIndex(
+          (f) =>
+            f.label === 'Other' &&
+            /^[A-Za-z][A-Za-z\s.']{3,60}$/.test(f.value) &&
+            !COMPANY_KEYWORD_RE.test(f.value) &&
+            !DESIGNATION_RE.test(f.value) &&
+            !ADDRESS_KEYWORD_RE.test(f.value),
+        );
+        if (nextPersonIdx !== -1) fields[nextPersonIdx].label = 'Name 2';
+      }
+    }
+  }
+
+  // Post-process: two-person card — pair Name 2 with its adjacent phone in the OCR.
+  // When a person's name and phone appear on consecutive lines (common on Indian business
+  // cards listing two architects/partners), embed the phone in the Name 2 value so the
+  // reviewer sees "AR. Mohit Kiran Bhole · +91 8209717720" as one grouped entry.
+  {
+    const name2Field = fields.find((f) => f.label === 'Name 2');
+    if (name2Field && !name2Field.value.includes('·')) {
+      const name2Upper = name2Field.value.toUpperCase().replace(/\s+/g, ' ').trim();
+      const name2LineIdx = lines.findIndex(
+        (l) => l.toUpperCase().replace(/\s+/g, ' ').trim() === name2Upper,
+      );
+      if (name2LineIdx !== -1) {
+        const PHONE_RE_LOCAL = new RegExp(PHONE_RE.source);
+        for (let di = 1; di <= 3; di++) {
+          const candidate = lines[name2LineIdx + di];
+          if (!candidate) break;
+          const phoneMatch = candidate.match(PHONE_RE_LOCAL);
+          if (phoneMatch) {
+            const pairedNorm = normalizePhone(phoneMatch[0]);
+            const last10 = (v: string) => v.replace(/\D/g, '').slice(-10);
+            const pairedIdx = fields.findIndex(
+              (f) =>
+                (f.label === 'Phone' || f.label === 'WhatsApp') &&
+                last10(f.value) === last10(pairedNorm),
+            );
+            if (pairedIdx !== -1) {
+              name2Field.value = `${name2Field.value} · ${fields[pairedIdx].value}`;
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+
   // Normalize text fields to title case — cards are often all-caps or all-lowercase
-  const TEXT_LABELS = new Set(['Name', 'Company', 'Designation', 'Address', 'Services', 'Other']);
+  const TEXT_LABELS = new Set(['Name', 'Name 2', 'Company', 'Designation', 'Address', 'Services', 'Other']);
   return fields.map((f) =>
     TEXT_LABELS.has(f.label)
       ? { ...f, value: toTitleCase(f.value) }
