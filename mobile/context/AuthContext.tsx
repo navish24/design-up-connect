@@ -8,6 +8,7 @@ import type { User, CardContact, ConnectionType, ConnectionScope } from '../type
 const SAVED_BRANDS_KEY = 'saved_brands_v1';
 const CARD_CONTACTS_KEY = 'card_contacts_v1';
 const CONNECTIONS_KEY = 'connections_v1';
+const NOTES_KEY = 'entity_notes_v1';
 
 export interface Note {
   id: string;
@@ -126,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [demoRegisteredExhibitions, setDemoRegisteredExhibitions] = useState<string[]>([]);
   const [demoWishlist, setDemoWishlist] = useState<any[]>([]);
   const [notes, setNotes] = useState<Record<string, Note[]>>({});
+  const [notesLoaded, setNotesLoaded] = useState(false);
   const [showProfileNudge, setShowProfileNudge] = useState(false);
   const [cardContacts, setCardContacts] = useState<CardContact[]>([]);
   const [cardContactsLoaded, setCardContactsLoaded] = useState(false);
@@ -180,6 +182,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!connectionsLoaded) return;
     AsyncStorage.setItem(CONNECTIONS_KEY, JSON.stringify(demoAddedConnections));
   }, [demoAddedConnections, connectionsLoaded]);
+
+  // Load notes on mount
+  useEffect(() => {
+    AsyncStorage.getItem(NOTES_KEY).then((raw) => {
+      if (raw) {
+        try { setNotes(JSON.parse(raw)); } catch (_) {}
+      }
+      setNotesLoaded(true);
+    });
+  }, []);
+
+  // Persist notes whenever they change (after initial load)
+  useEffect(() => {
+    if (!notesLoaded) return;
+    AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  }, [notes, notesLoaded]);
 
   // ── Real Supabase auth ───────────────────────────────────────────────────────
 
