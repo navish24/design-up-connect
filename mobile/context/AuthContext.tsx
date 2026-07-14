@@ -557,7 +557,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (fields.website_url !== undefined) dbFields.website_url = fields.website_url;
       if (fields.linkedin_url !== undefined) dbFields.linkedin_url = fields.linkedin_url;
       if (fields.address !== undefined) dbFields.address = fields.address;
-      if (fields.profile_image_url !== undefined) dbFields.profile_image_url = fields.profile_image_url;
+      if ('profile_image_url' in fields) dbFields.profile_image_url = fields.profile_image_url ?? null;
       if (Object.keys(dbFields).length > 1) {
         supabase.from('profiles').upsert(dbFields, { onConflict: 'id' }).then(({ error }) => {
           if (error) console.error('[updateUser] upsert failed:', error.message, dbFields);

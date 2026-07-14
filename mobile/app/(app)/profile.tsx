@@ -31,6 +31,7 @@ export default function ProfileScreen() {
   const editOriginalRef = useRef<Record<string, string>>({});
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [invitePhone, setInvitePhone] = useState('');
   const [inviteSent, setInviteSent] = useState(false);
@@ -205,10 +206,11 @@ export default function ProfileScreen() {
     }
     if (!result.canceled && result.assets[0]) {
       const localUri = result.assets[0].uri;
-      updateUser({ profile_image_url: localUri }); // optimistic
+      setPendingPhotoUri(localUri); // show preview locally without saving blob to Supabase
       setUploadingPhoto(true);
       const publicUrl = await uploadProfileImage(localUri);
       setUploadingPhoto(false);
+      setPendingPhotoUri(null);
       if (publicUrl) updateUser({ profile_image_url: publicUrl });
     }
   };
@@ -355,8 +357,8 @@ if (isLoading) {
             <Pressable style={s.avatarWrap} onPress={handleAvatarPress}>
               <View style={[s.vcInitials, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
                 <Text style={[s.vcInitialsText, { color: '#FFFFFF' }]}>{initials}</Text>
-                {user.profile_image_url ? (
-                  <Image source={{ uri: user.profile_image_url }} style={[s.vcPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
+                {(pendingPhotoUri || user.profile_image_url) ? (
+                  <Image source={{ uri: pendingPhotoUri || user.profile_image_url! }} style={[s.vcPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
                 ) : null}
               </View>
               <View style={[s.avatarCameraOverlay, { backgroundColor: colors.background + 'CC' }]}>
@@ -570,8 +572,8 @@ if (isLoading) {
       <Modal visible={showPhotoPreview} transparent animationType="fade" onRequestClose={() => setShowPhotoPreview(false)}>
         <Pressable style={s.photoOverlay} onPress={() => setShowPhotoPreview(false)}>
           <Pressable style={[s.photoPreviewCard, { backgroundColor: colors.surface }]} onPress={() => {}}>
-            {user?.profile_image_url ? (
-              <Image source={{ uri: user.profile_image_url }} style={s.photoPreviewImg} resizeMode="cover" />
+            {(pendingPhotoUri || user?.profile_image_url) ? (
+              <Image source={{ uri: pendingPhotoUri || user!.profile_image_url! }} style={s.photoPreviewImg} resizeMode="cover" />
             ) : (
               <View style={{ width: '100%', aspectRatio: 1, backgroundColor: colors.accent + '18', alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 64, fontWeight: '700', color: colors.accent }}>{initials}</Text>
@@ -582,15 +584,15 @@ if (isLoading) {
                 style={[s.photoPreviewBtn, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '55' }]}
                 onPress={() => { setShowPhotoPreview(false); showPhotoSourcePicker(); }}
               >
-                <Ionicons name={user?.profile_image_url ? 'pencil-outline' : 'add-outline'} size={16} color={colors.accent} />
+                <Ionicons name={(pendingPhotoUri || user?.profile_image_url) ? 'pencil-outline' : 'add-outline'} size={16} color={colors.accent} />
                 <Text style={[s.photoPreviewBtnText, { color: colors.accent }]}>
-                  {user?.profile_image_url ? 'Edit' : 'Add Photo'}
+                  {(pendingPhotoUri || user?.profile_image_url) ? 'Edit' : 'Add Photo'}
                 </Text>
               </Pressable>
               {user?.profile_image_url && (
                 <Pressable
                   style={[s.photoPreviewBtn, { backgroundColor: '#ef444418', borderColor: '#ef444455' }]}
-                  onPress={() => { setShowPhotoPreview(false); updateUser({ profile_image_url: undefined }); }}
+                  onPress={() => { setShowPhotoPreview(false); updateUser({ profile_image_url: null as any }); }}
                 >
                   <Ionicons name="trash-outline" size={16} color="#ef4444" />
                   <Text style={[s.photoPreviewBtnText, { color: '#ef4444' }]}>Delete</Text>
@@ -648,8 +650,8 @@ if (isLoading) {
                 </View>
                 <View style={[s.previewAvatarCircle, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
                   <Text style={[s.previewAvatarText, { color: '#FFFFFF' }]}>{initials}</Text>
-                  {user.profile_image_url ? (
-                    <Image source={{ uri: user.profile_image_url }} style={[s.previewPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
+                  {(pendingPhotoUri || user.profile_image_url) ? (
+                    <Image source={{ uri: pendingPhotoUri || user.profile_image_url! }} style={[s.previewPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
                   ) : null}
                 </View>
               </View>
