@@ -86,20 +86,21 @@ export default function CardReviewScreen() {
     setShowAddField(false);
   }, [newFieldLabel, newFieldValue]);
 
+  // Compare last 10 digits so "+91 9876543210" and "9876543210" both become "9876543210"
+  const last10 = (v: string) => { const d = v.replace(/\D/g, ''); return d.slice(-10); };
+
   const findDuplicate = useCallback((): CardContact | null => {
-    const phones = fields.filter((f) => f.label === 'Phone' || f.label === 'WhatsApp').map((f) => f.value.replace(/\D/g, ''));
-    const emails = fields.filter((f) => f.label === 'Email').map((f) => f.value.toLowerCase());
+    const phones = fields.filter((f) => f.label === 'Phone' || f.label === 'WhatsApp').map((f) => last10(f.value));
+    const emails = fields.filter((f) => f.label === 'Email').map((f) => f.value.toLowerCase().trim());
     return cardContacts.find((c) => {
-      const cPhones = c.fields.filter((f) => f.label === 'Phone' || f.label === 'WhatsApp').map((f) => f.value.replace(/\D/g, ''));
-      const cEmails = c.fields.filter((f) => f.label === 'Email').map((f) => f.value.toLowerCase());
-      return phones.some((p) => cPhones.includes(p)) || emails.some((e) => cEmails.includes(e));
+      const cPhones = c.fields.filter((f) => f.label === 'Phone' || f.label === 'WhatsApp').map((f) => last10(f.value));
+      const cEmails = c.fields.filter((f) => f.label === 'Email').map((f) => f.value.toLowerCase().trim());
+      return phones.some((p) => p.length >= 7 && cPhones.includes(p)) || emails.some((e) => e.length > 3 && cEmails.includes(e));
     }) ?? null;
   }, [fields, cardContacts]);
 
-  const doSave = useCallback(() => {
-    const id = generateId();
-    // For Phone/WhatsApp fields that don't have a country code, prepend the selected prefix
-    const normalizedFields = fields
+  const normalizeContactFields = useCallback(() =>
+    fields
       .filter((f) => f.value.trim())
       .map((f, idx) => {
         if ((f.label === 'Phone' || f.label === 'WhatsApp') && !f.value.trim().startsWith('+')) {
@@ -114,7 +115,12 @@ export default function CardReviewScreen() {
           return { ...f, value: `${prefix} ${trimmed}` };
         }
         return f;
-      });
+      }),
+  [fields, phonePrefixes]);
+
+  const doSave = useCallback(() => {
+    const id = generateId();
+    const normalizedFields = normalizeContactFields();
     const contact: CardContact = {
       id,
       source: 'card_scan',
@@ -132,7 +138,7 @@ export default function CardReviewScreen() {
     setSaved(true);
     void uploadCardImages(contact, updateCardContact);
     void saveOcrQuality(id, user?.id ?? null, rawText, normalizedFields);
-  }, [imageUri, backImageUri, fields, notes, rawText, user, addCardContact, updateCardContact, phonePrefixes]);
+  }, [imageUri, backImageUri, normalizeContactFields, notes, rawText, user, addCardContact, updateCardContact]);
 
   const handleSave = useCallback(() => {
     const dup = findDuplicate();
@@ -469,9 +475,7 @@ export default function CardReviewScreen() {
               style={[s.solidBtn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
               onPress={() => {
                 if (!dupContact) return;
-                const existingLabels = new Set(dupContact.fields.map((f) => f.label));
-                const newFields = fields.filter((f) => f.value.trim() && !existingLabels.has(f.label));
-                updateCardContact({ ...dupContact, fields: [...dupContact.fields, ...newFields] });
+                updateCardContact({ ...dupContact, fields: normalizeContactFields() });
                 setSavedContactId(dupContact.id);
                 setDupContact(null);
                 setSaved(true);
