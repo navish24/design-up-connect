@@ -942,6 +942,36 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     }
   }
 
+  // If Company is a single generic industry keyword (e.g. "Films", "Studio") and the email
+  // domain base is a proper-noun brand (not a generic provider and not itself a keyword),
+  // prepend the brand to Company. Handles cases where the logo/brand text was consumed
+  // by the website-domain-base → Instagram classifier before the prefix merger could run.
+  // e.g. sanjana@pixelak.in + Company="Films" → Company="Pixelak Films"
+  {
+    const GENERIC_EMAIL_PROVIDERS = ['gmail', 'yahoo', 'hotmail', 'outlook', 'rediffmail', 'icloud', 'ymail', 'live', 'msn'];
+    const compF = fields.find((f) => f.label === 'Company');
+    const emailF = fields.find((f) => f.label === 'Email');
+    if (companyAssigned && compF && emailF) {
+      const rawDomain = emailF.value.split('@')[1] ?? '';
+      const domainBase = rawDomain
+        .replace(/\.[a-z]{2,}(?:\.[a-z]{2})?$/i, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+      const companyWords = compF.value.split(/\s+/).filter(Boolean);
+      const companyNormalized = compF.value.toLowerCase().replace(/\s/g, '');
+      if (
+        domainBase.length >= 4 &&
+        !GENERIC_EMAIL_PROVIDERS.includes(domainBase) &&
+        !COMPANY_KEYWORD_RE.test(domainBase) &&
+        !companyNormalized.includes(domainBase) &&
+        companyWords.length === 1 &&
+        COMPANY_KEYWORD_RE.test(compF.value)
+      ) {
+        compF.value = domainBase.charAt(0).toUpperCase() + domainBase.slice(1) + ' ' + compF.value;
+      }
+    }
+  }
+
   // Collect service-type lines printed on firm cards (e.g. "Architecture", "Interiors",
   // "Landscape", "Turn-Key Projects") to merge into a single Services field.
   const serviceEntries: string[] = [];

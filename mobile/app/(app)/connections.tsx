@@ -851,6 +851,11 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
             <Text style={[s.scannedAt, { color: colors.textMuted, textAlign: 'left', marginTop: 4 }]}>
               Scanned {new Date(contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
             </Text>
+            {contact.updated_at && contact.updated_at !== contact.scanned_at && (
+              <Text style={[s.scannedAt, { color: colors.accent, textAlign: 'left' }]}>
+                Updated {new Date(contact.updated_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+              </Text>
+            )}
           </View>
           {contact.card_image_uri && (
             <View style={s.gThumbStack}>

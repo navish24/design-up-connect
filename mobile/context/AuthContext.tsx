@@ -215,7 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: rows, error: ccError } = await supabase
       .from('card_contacts')
-      .select('id, scanned_at, fields, notes, tags, connect_user_id, card_image_uri, card_image_uri_back')
+      .select('id, scanned_at, updated_at, fields, notes, tags, connect_user_id, card_image_uri, card_image_uri_back')
       .eq('user_id', userId)
       .order('scanned_at', { ascending: false });
     if (ccError) console.error('[loadCardContacts] query failed:', ccError.message);
@@ -245,7 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('[loadCardContacts] sync complete — re-querying');
         const { data: fresh } = await supabase
           .from('card_contacts')
-          .select('id, scanned_at, fields, notes, tags, connect_user_id, card_image_uri, card_image_uri_back')
+          .select('id, scanned_at, updated_at, fields, notes, tags, connect_user_id, card_image_uri, card_image_uri_back')
           .eq('user_id', userId)
           .order('scanned_at', { ascending: false });
         finalRows = fresh ?? finalRows;
@@ -263,6 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: r.id,
         source: 'card_scan' as const,
         scanned_at: r.scanned_at,
+        updated_at: r.updated_at ?? null,
         card_image_uri: r.card_image_uri ?? null,
         card_image_uri_back: r.card_image_uri_back ?? null,
         fields: r.fields ?? [],
@@ -282,6 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!r) return c; // local-only (offline scan not yet uploaded), keep as is
         return {
           ...c,
+          updated_at: r.updated_at ?? c.updated_at ?? null,
           card_image_uri: r.card_image_uri ?? c.card_image_uri ?? null,
           card_image_uri_back: r.card_image_uri_back ?? c.card_image_uri_back ?? null,
           fields: r.fields ?? c.fields ?? [],

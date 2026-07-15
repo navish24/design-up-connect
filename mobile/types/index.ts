@@ -126,6 +126,7 @@ export interface CardContact {
   id: string;
   source: 'card_scan';
   scanned_at: string;
+  updated_at?: string | null;
   card_image_uri: string | null;
   card_image_uri_back: string | null;
   fields: CardContactField[];

@@ -14,6 +14,7 @@ import { setPendingCardOpen } from '../lib/pendingNav';
 import { uploadCardImages } from '../lib/cloudinary';
 import { Analytics } from '../lib/analytics';
 import { saveOcrQuality } from '../lib/cardOcr';
+import { supabase } from '../lib/supabase';
 import { Spacing, FontSize, FontWeight, Radius } from '../constants/theme';
 import type { CardContact, CardContactField } from '../types';
 import { CountryCodePicker } from '../components/CountryCodePicker';
@@ -51,6 +52,7 @@ export default function CardReviewScreen() {
   const [showNoteSheet, setShowNoteSheet] = useState(false);
   const [noteInput, setNoteInput] = useState('');
   const [dupContact, setDupContact] = useState<import('../types').CardContact | null>(null);
+  const [isUpdate, setIsUpdate] = useState(false);
   const [phonePrefixes, setPhonePrefixes] = useState<Record<number, string>>({});
   const [showPrefixPicker, setShowPrefixPicker] = useState<number | null>(null);
 
@@ -175,10 +177,12 @@ export default function CardReviewScreen() {
           <Ionicons name="checkmark-circle" size={52} color={colors.accent} />
         </View>
         <Text style={[s.successTitle, { color: colors.text }]}>
-          {nameField ? `${nameField.value} saved!` : 'Contact saved!'}
+          {isUpdate
+            ? (nameField ? `${nameField.value} updated!` : 'Contact updated!')
+            : (nameField ? `${nameField.value} saved!` : 'Contact saved!')}
         </Text>
         <Text style={[s.successSub, { color: colors.textSecondary }]}>
-          Added to your visiting card contacts
+          {isUpdate ? 'Existing contact updated with new scan' : 'Added to your visiting card contacts'}
         </Text>
         <Pressable
           style={[s.solidBtn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
@@ -467,16 +471,74 @@ export default function CardReviewScreen() {
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setDupContact(null)} />
           <View style={[s.sheet, { backgroundColor: colors.surface }]}>
             <View style={[s.noteSheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[s.sheetTitle, { color: colors.text }]}>Possible Duplicate</Text>
+            <Text style={[s.sheetTitle, { color: colors.text }]}>Already Saved</Text>
             <Text style={[s.dupBody, { color: colors.textSecondary }]}>
-              A contact matching {dupContact?.fields.find((f) => f.label === 'Name')?.value ?? 'this person'} already exists.
+              {dupContact?.fields.find((f) => f.label === 'Name')?.value ?? 'This person'} is already in your contacts.
             </Text>
+
+            {/* Field diff */}
+            {dupContact && (() => {
+              const newFields = normalizeContactFields();
+              const changed = newFields.filter((nf) => {
+                const old = dupContact.fields.find((of) => of.label === nf.label);
+                return !old || old.value.trim() !== nf.value.trim();
+              });
+              if (changed.length === 0) {
+                return (
+                  <View style={[s.diffBox, { backgroundColor: colors.surfaceElevated }]}>
+                    <Text style={[s.diffNone, { color: colors.textMuted }]}>No new information detected in this scan</Text>
+                  </View>
+                );
+              }
+              return (
+                <View style={[s.diffBox, { backgroundColor: colors.surfaceElevated }]}>
+                  <Text style={[s.diffHeader, { color: colors.textMuted }]}>
+                    {changed.length} FIELD{changed.length !== 1 ? 'S' : ''} NEW / CHANGED
+                  </Text>
+                  {changed.slice(0, 5).map((nf, i) => {
+                    const old = dupContact.fields.find((of) => of.label === nf.label);
+                    return (
+                      <View key={i} style={s.diffRow}>
+                        <Text style={[s.diffLabel, { color: colors.textMuted }]}>{nf.label.toUpperCase()}</Text>
+                        {old ? (
+                          <View style={s.diffValues}>
+                            <Text style={[s.diffOld, { color: colors.textMuted }]} numberOfLines={1}>{old.value}</Text>
+                            <Ionicons name="arrow-forward" size={10} color={colors.accent} />
+                            <Text style={[s.diffNew, { color: colors.text }]} numberOfLines={1}>{nf.value}</Text>
+                          </View>
+                        ) : (
+                          <Text style={[s.diffNew, { color: colors.accent }]} numberOfLines={1}>{nf.value}</Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                  {changed.length > 5 && (
+                    <Text style={[s.diffMore, { color: colors.textMuted }]}>+{changed.length - 5} more</Text>
+                  )}
+                </View>
+              );
+            })()}
+
             <Pressable
               style={[s.solidBtn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
               onPress={() => {
                 if (!dupContact) return;
-                updateCardContact({ ...dupContact, fields: normalizeContactFields() });
+                const newFields = normalizeContactFields();
+                void (async () => {
+                  const { data: { user: authUser } } = await supabase.auth.getUser();
+                  if (authUser) {
+                    await supabase.from('card_contacts_history').insert({
+                      card_contact_id: dupContact.id,
+                      user_id: authUser.id,
+                      change_type: 'rescan',
+                      fields_before: dupContact.fields,
+                      fields_after: newFields,
+                    });
+                  }
+                })();
+                updateCardContact({ ...dupContact, fields: newFields });
                 setSavedContactId(dupContact.id);
+                setIsUpdate(true);
                 setDupContact(null);
                 setSaved(true);
               }}
@@ -492,7 +554,7 @@ export default function CardReviewScreen() {
               <Text style={[s.outlineBtnText, { color: colors.textSecondary }]}>Save as New Contact</Text>
             </Pressable>
             <Pressable style={s.ghostBtn} onPress={() => setDupContact(null)}>
-              <Text style={[s.ghostBtnText, { color: colors.textMuted }]}>Cancel</Text>
+              <Text style={[s.ghostBtnText, { color: colors.textMuted }]}>Keep Reviewing</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -772,6 +834,17 @@ const s = StyleSheet.create({
   addNoteLink: { paddingVertical: 12, paddingHorizontal: Spacing.lg, marginTop: Spacing.sm },
   addNoteLinkText: { fontSize: FontSize.sm, textAlign: 'center' },
   dupBody: { fontSize: FontSize.sm, lineHeight: 20, marginTop: 4 },
+
+  // Rescan diff
+  diffBox: { borderRadius: Radius.md, padding: Spacing.md, gap: 7, marginTop: Spacing.md },
+  diffHeader: { fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.8, marginBottom: 2 },
+  diffRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  diffLabel: { fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.5, width: 72, flexShrink: 0 },
+  diffValues: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, overflow: 'hidden' },
+  diffOld: { fontSize: 12, textDecorationLine: 'line-through' as const, flexShrink: 1 },
+  diffNew: { fontSize: 12, fontWeight: '600' as const, flexShrink: 1 },
+  diffMore: { fontSize: 11, marginTop: 2 },
+  diffNone: { fontSize: 12, textAlign: 'center' as const, paddingVertical: 4 },
 
   // Note bottom sheet
   noteSheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },

@@ -16,6 +16,7 @@ export async function saveOcrQuality(
     await supabase.from('ocr_quality').insert({
       card_contact_id: cardContactId,
       user_id: userId,
+      parsed_fields: fields,
       ...computeOcrQuality(rawText, fields),
     });
   } catch {
