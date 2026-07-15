@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.14.0';
+export const PARSER_VERSION = '1.16.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -53,7 +53,7 @@ const EXPLICIT_URL_RE =
 
 // Bare domains that look like a website (e.g. "studiomehta.com")
 const BARE_DOMAIN_RE =
-  /\b[a-zA-Z0-9\-]{2,}\.(?:com|in|co|net|org|io|art|design|studio|agency)\b(?:\/\S*)*/g;
+  /\b[a-zA-Z0-9\-]{2,}\.(?:com|in|co|net|org|io|art|design|studio|agency)\b(?:\/\S*)*/gi;
 
 const LINKEDIN_RE = /linkedin\.com\/in\/[\w\-]+/gi;
 const INSTAGRAM_RE =
@@ -65,12 +65,12 @@ const YOUTUBE_RE = /youtube\.com\/(?:c\/|channel\/|@)[\w\-]+/gi;
 
 // Address cues
 const ADDRESS_KEYWORD_RE =
-  /\bc\/o\b|\bno\.\s*\d|\b(?:shop|flat|unit|room)\s*no\b|\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estate|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|hills|hill|bagh|ganj|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste|bldg|taluka|taluk|dist)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|telangana|andhra\s+pradesh|tamil\s+nadu|kerala|punjab|haryana|uttarakhand|uttar\s+pradesh|madhya\s+pradesh|west\s+bengal|odisha|assam|jharkhand|chhattisgarh|bihar|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|jubilee hills|banjara hills|madhapur|secunderabad|begumpet|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
+  /\bc\/o\b|\bno\.\s*\d|\b(?:shop|flat|unit|room)\s*no\b|\b(street|road|nagar|marg|avenue|lane|plot|sector|floor|bhavan|house|tower|complex|estates?|park|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|blvd|highway|expressway|enclave|extension|ext|residency|residences|apartments|apt|flat|villa|bungalow|farm|farms|gardens|garden|heights|hills|hill|bagh|ganj|view|vihar|puram|bazaar|bazar|market|mandal|suite|ste|bldg|taluka|taluk|dist)\b|\((west|east|north|south|w|e|n|s)\)|\b(india|uae|usa|uk|canada|australia|singapore|dubai|bahrain|kuwait|qatar|oman|united states|united kingdom|united arab emirates|maharashtra|gujarat|karnataka|rajasthan|telangana|andhra\s+pradesh|tamil\s+nadu|kerala|punjab|haryana|uttarakhand|uttar\s+pradesh|madhya\s+pradesh|west\s+bengal|odisha|assam|jharkhand|chhattisgarh|bihar|mumbai|delhi|bangalore|bengaluru|chennai|hyderabad|pune|kolkata|ahmedabad|surat|jaipur|lucknow|noida|gurgaon|gurugram|thane|new delhi|chattarpur|jubilee hills|banjara hills|madhapur|secunderabad|begumpet|washington|illinois|california|new york|texas|florida|chicago|dc|new jersey|pennsylvania|massachusetts|georgia|ohio|michigan|virginia|arizona|colorado|minnesota|oregon|nevada|utah|connecticut)\b|^\d+\s+[A-Z]|\b\d{5}(?:-\d{4})?\b/im;
 const PIN_RE = /\b[1-9]\d{5}\b/;
 
 // Designation keywords — "art" removed (too generic: matches "art collective" brand taglines)
 const DESIGNATION_RE =
-  /\b(founder|co-founder|ceo|cto|coo|cmo|cso|director|directed|manager|architect|designer|engineer|consultant|associate|principal|partner|head|lead|senior|junior|intern|president|vice|vp|md|gm|dgm|cgm|officer|executive|strategist|illustrator|creative|senator|representative|minister|secretary|governor|attorney|commissioner|councillor|counsel|ambassador|deputy|spokesperson|chairman|chairperson|trustee|parliamentarian)\b/i;
+  /\b(founder|co-founder|ceo|cto|coo|cmo|cso|director|directed|manager|architect|designer|engineer|consultant|associate|principal|partner|head|lead|senior|junior|intern|president|vice|vp|md|gm|dgm|cgm|officer|executive|strategist|illustrator|creative|senator|representative|minister|secretary|governor|attorney|commissioner|councillor|counsel|ambassador|deputy|spokesperson|chairman|chairperson|trustee|parliamentarian|practitioner|awardee|fellow|laureate|recipient|professor|lecturer|researcher|scholar|curator|therapist|physician|surgeon|dentist|doctor|advocate|solicitor|chartered|certified|coordinator|co-ordinator|ordinator|contractor|publisher|editor|proprietor)\b|(?<!\w)[A-Z]\.(?:[A-Z]\.)+[A-Z]?(?!\w)/i;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -249,8 +249,18 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   const urlsBare = fullText.match(BARE_DOMAIN_RE) ?? [];
   const allUrls = [...urlsExplicit, ...urlsBare].filter((u) => {
     const norm = normalizeUrl(u);
+    // Reject bare all-caps short words that are brand name fragments (e.g. "WORLD.in" from
+    // "CW Construction World.in" OCR split) — real website URLs appear lowercase or with www/https.
+    const rawPreTld = u.replace(/^https?:\/\//, '').replace(/^www\./, '').split('.')[0];
+    const isAllCapsBrandFragment = /^[A-Z]{2,8}$/.test(rawPreTld) && !u.startsWith('www.') && !/^https?:\/\//.test(u);
+    // Extract just the domain part (no path) for provider checks
+    const normDomainOnly = norm.split('/')[0];
+    // Reject if an email address is embedded in the URL path (e.g. "gmail.com/user@gmail.com")
+    const pathAfterDomain = norm.slice(normDomainOnly.length);
     return (
-      !EMAIL_PROVIDER_RE.test(norm) &&
+      !isAllCapsBrandFragment &&
+      !EMAIL_PROVIDER_RE.test(normDomainOnly) &&
+      !pathAfterDomain.includes('@') &&
       norm.includes('.') &&           // bare TLD fragments like "in" (from "www.in.domain.com") are not real sites
       !norm.includes('linkedin') &&
       !norm.includes('instagram') &&
@@ -461,7 +471,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // Condition: starts with uppercase, has a strong company keyword, no PIN,
     // and the line does NOT also have unambiguous address keywords (floor/street/sector etc.)
     const ADDRESS_STRUCTURAL_RE =
-      /\b(floor|street|road|nagar|marg|avenue|lane|plot|sector|bhavan|house|tower|complex|estate|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|highway|expressway|enclave|extension|residency|residences|apartments|apt|flat|villa|bungalow|farm|bldg)\b/i;
+      /\b(floor|street|road|nagar|marg|avenue|lane|plot|sector|bhavan|house|tower|complex|estates?|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|highway|expressway|enclave|extension|residency|residences|apartments|apt|flat|villa|bungalow|farm|bldg)\b/i;
     // "C/O Firm Name", "Nr. Junction", "Opp. Mall" — care-of and direction prefixes
     // signal this is an address fragment even when it contains company keywords (pvt/ltd).
     const ADDR_PREFIX_RE = /^(c\/o|nr\.?|opp\.?|near|behind|beside|opposite)\b/i;
@@ -472,6 +482,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       /^[A-Za-z]/.test(line) &&
       line.length <= 100 &&
       !line.includes('_') &&
+      !line.includes('|') &&
       !ADDR_PREFIX_RE.test(line) &&
       COMPANY_KEYWORD_RE.test(line) &&
       !ADDRESS_STRUCTURAL_RE.test(line)
@@ -640,6 +651,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         !ADDRESS_KEYWORD_RE.test(line) &&
         wordCount >= 2 &&
         wordCount <= 5 &&
+        !/\d/.test(line) &&
         !fields.some((f) => f.label === 'Name 2')
       ) {
         fields.push({ label: 'Name 2', value: line });
@@ -672,7 +684,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     {
       const CREDENTIAL_SUFFIX_RE = /\s*\([A-Za-z][A-Za-z.\s]{1,15}\)\s*$/;
       const lineForName = line.replace(CREDENTIAL_SUFFIX_RE, '').trim();
-      const ADDR_ABBREV_RE = /^(rd|st|ave|blvd|dr|ln|ct|pl|extn?)$/i;
+      const ADDR_ABBREV_RE = /^(rd|st|ave|blvd|dr|ln|ct|pl|ph|blk|extn?)$/i;
       // Reject name candidates sandwiched between address content — e.g. "Andheri East"
       // sitting between "Saki Vihar Road" and "Mumbai, Maharashtra 400072" is an address
       // locality, not a person's name, even though it looks like "First Last".
@@ -681,10 +693,18 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         addressIdx.has(idx - 1) ||
         ADDRESS_KEYWORD_RE.test(nameNextLine) ||
         PIN_RE.test(nameNextLine);
+      // Reject tagline fragments starting with a definite/indefinite article (e.g. "The Budget")
+      const startsWithArticle = /^(the|a|an)\s+/i.test(lineForName);
+      // Reject building/location names that OCR split off from an address line already captured
+      const alreadyInAddressLine = [...addressIdx].some(
+        (i) => remaining[i].toLowerCase().includes(lineForName.toLowerCase()),
+      );
       if (
         !nameAssigned &&
         !lineIsAllCaps &&
         !nameAdjacentToAddr &&
+        !startsWithArticle &&
+        !alreadyInAddressLine &&
         /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName) &&
         lineForName.split(' ').length >= 2 &&
         lineForName.split(' ').length <= 6 &&
@@ -705,7 +725,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     {
       const CREDENTIAL_SUFFIX_RE = /\s*\([A-Za-z][A-Za-z.\s]{1,15}\)\s*$/;
       const lineForName2 = line.replace(CREDENTIAL_SUFFIX_RE, '').trim();
-      const ADDR_ABBREV_RE = /^(rd|st|ave|blvd|dr|ln|ct|pl|extn?)$/i;
+      const ADDR_ABBREV_RE = /^(rd|st|ave|blvd|dr|ln|ct|pl|ph|blk|extn?)$/i;
       const name2NextLine = remaining[idx + 1] ?? '';
       const name2AdjacentToAddr =
         addressIdx.has(idx - 1) ||
@@ -715,6 +735,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         nameAssigned &&
         !lineIsAllCaps &&
         !name2AdjacentToAddr &&
+        !fields.some((f) => f.label === 'Name 2') &&
         /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName2) &&
         lineForName2.split(' ').length >= 2 &&
         lineForName2.split(' ').length <= 6 &&
@@ -912,12 +933,23 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       // (e.g. card shows "@aalaya_home" but OCR returns "Aalaya_home" as a separate block)
       const igVal = fields.find((f) => f.label === 'Instagram')?.value?.replace(/^@/, '').toLowerCase() ?? '';
       if (igVal && text.replace(/^@/, '').toLowerCase() === igVal) continue;
+      // Hashtag specialties (#Paintings, #Murals, #Sculptures) — artist/creator cards use
+      // these as service tags. Classify as Services regardless of whether company is assigned.
+      if (/^#\w/.test(text) && text.split(/\s+/).length <= 4) {
+        serviceEntries.push(text);
+        continue;
+      }
+
       // Collect service-type lines when the company is already found — e.g. an architecture
       // firm printing "Architecture / Interiors / Landscape" as service descriptions.
       // These are industry terms, not contact data, so merge them into one Services field.
       // Also catches pipe-separated product/offering taglines like "Objects | Rugs | Sculptures".
+      // Guard: lines with incorporation suffixes (PVT LTD, Inc, LLP) are company entity names,
+      // not service descriptions — let them fall through to Other instead.
+      const CORP_SUFFIX_RE = /\b(pvt\.?\s*ltd\.?|pvt|ltd|llp|inc\.?|limited|corp\.?)\b/i;
       if (
         companyAssigned &&
+        !CORP_SUFFIX_RE.test(text) &&
         (COMPANY_KEYWORD_RE.test(text) || (
           text.includes('|') &&
           text.split(/\s*\|\s*/).length >= 2 &&
@@ -962,9 +994,29 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     const insertAfter = fields.findIndex((f) => f.label === 'Company' || f.label === 'Name');
     const insertAt = insertAfter === -1 ? 0 : insertAfter + 1;
     for (const d of designationLines) {
-      // Strip trailing hyphen/dash that results from OCR splitting "Director-Business Development"
-      // across two lines — the continuation is handled by fragComp or ignored, not the designation.
       const cleaned = d.replace(/[-–—\s]+$/, '').trim();
+      // If the designation line has a trailing word that isn't itself a designation keyword
+      // and no company is assigned yet, extract it as Company — e.g. "Founder Copo" → "Copo".
+      if (!companyAssigned) {
+        const words = cleaned.split(/\s+/).filter(Boolean);
+        if (words.length >= 2) {
+          const lastWord = words[words.length - 1];
+          const desigOnly = words.slice(0, -1).join(' ');
+          if (
+            DESIGNATION_RE.test(desigOnly) &&
+            !DESIGNATION_RE.test(lastWord) &&
+            !ADDRESS_KEYWORD_RE.test(lastWord) &&
+            lastWord.length >= 2 &&
+            /^[A-Za-z]/.test(lastWord)
+          ) {
+            const nameIdx2 = fields.findIndex((f) => f.label === 'Name');
+            fields.splice(nameIdx2 === -1 ? 0 : nameIdx2 + 1, 0, { label: 'Company', value: lastWord });
+            companyAssigned = true;
+            fields.splice(insertAt, 0, { label: 'Designation', value: desigOnly });
+            continue;
+          }
+        }
+      }
       fields.splice(insertAt, 0, { label: 'Designation', value: cleaned });
     }
   }
@@ -1171,7 +1223,14 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     const domainBase = domain.replace(/\.(?:co\.in|com\.au|[a-z]{2,})$/i, '');
     const GENERIC_DOMAIN =
       /^(gmail|yahoo|hotmail|outlook|rediffmail|icloud|live|msn|aol|protonmail|zoho|ymail)$/i;
-    if (domainBase && !GENERIC_DOMAIN.test(domainBase)) {
+    // Also reject OCR misspellings of generic providers (edit-distance 1) — e.g. "gamil" for "gmail"
+    const GENERIC_PROVIDERS = ['gmail', 'yahoo', 'hotmail', 'outlook', 'rediffmail', 'icloud'];
+    const isCloseToGeneric = GENERIC_PROVIDERS.some(
+      (g) =>
+        Math.abs(g.length - domainBase.length) <= 1 &&
+        [...domainBase.toLowerCase()].filter((c, i) => c !== (g[i] ?? '')).length <= 1,
+    );
+    if (domainBase && !GENERIC_DOMAIN.test(domainBase) && !isCloseToGeneric) {
       const hint = domainBase.charAt(0).toUpperCase() + domainBase.slice(1).toLowerCase();
       const nameIdx = fields.findIndex((f) => f.label === 'Name');
       fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: hint });
