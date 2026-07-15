@@ -430,7 +430,7 @@ export default function ConnectionsScreen() {
         onBack={() => { navOpenedDetailRef.current = false; setActiveView({ type: 'list' }); }}
         onExchange={(id, name) => { navOpenedDetailRef.current = false; handleExchangeContact(id, name); setActiveView({ type: 'list' }); }}
         notes={notes[currentConn.id] ?? []}
-        onAddNote={(text) => addNote(currentConn.id, text)}
+        onAddNote={(text) => { addNote(currentConn.id, text); Analytics.noteAdded(); }}
         router={router}
       />
     );
@@ -442,10 +442,10 @@ export default function ConnectionsScreen() {
         contact={activeView.contact}
         colors={colors}
         onBack={() => setActiveView({ type: 'list' })}
-        onDelete={(id) => { deleteCardContact(id); setActiveView({ type: 'list' }); }}
+        onDelete={(id) => { deleteCardContact(id); Analytics.contactDeleted(); setActiveView({ type: 'list' }); }}
         onUpdate={updateCardContact}
         notes={notes[activeView.contact.id] ?? []}
-        onAddNote={(text) => addNote(activeView.contact.id, text)}
+        onAddNote={(text) => { addNote(activeView.contact.id, text); Analytics.noteAdded(); }}
       />
     );
   }
@@ -592,10 +592,15 @@ export default function ConnectionsScreen() {
                 <Pressable
                   key={id}
                   style={[s.galleryCell, { backgroundColor: colors.surface }]}
-                  onPress={() => isCard
-                    ? setActiveView({ type: 'card_detail', contact: item.data as CardContact })
-                    : setActiveView({ type: 'connect_detail', connection: item.data as Connection })
-                  }
+                  onPress={() => {
+                    if (isCard) {
+                      Analytics.contactDetailOpened('card', id);
+                      setActiveView({ type: 'card_detail', contact: item.data as CardContact });
+                    } else {
+                      Analytics.contactDetailOpened('connection', id);
+                      setActiveView({ type: 'connect_detail', connection: item.data as Connection });
+                    }
+                  }}
                 >
                   {imgUri ? (
                     <ImageWithFallback uri={imgUri} style={s.galleryCellImg} fallback={
@@ -633,7 +638,7 @@ export default function ConnectionsScreen() {
                   key={item.data.id}
                   connection={item.data}
                   colors={colors}
-                  onPress={() => setActiveView({ type: 'connect_detail', connection: item.data })}
+                  onPress={() => { Analytics.contactDetailOpened('connection', item.data.id); setActiveView({ type: 'connect_detail', connection: item.data }); }}
                   onExchange={(id, name) => handleExchangeContact(id, name)}
                   notes={notes[item.data.id] ?? []}
                   search={search}
@@ -643,7 +648,7 @@ export default function ConnectionsScreen() {
                   key={item.data.id}
                   contact={item.data}
                   colors={colors}
-                  onPress={() => setActiveView({ type: 'card_detail', contact: item.data })}
+                  onPress={() => { Analytics.contactDetailOpened('card', item.data.id); setActiveView({ type: 'card_detail', contact: item.data }); }}
                   search={search}
                 />
               )

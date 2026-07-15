@@ -175,4 +175,28 @@ export const Analytics = {
   otpResendTapped() {
     track('otp_resend_tapped');
   },
+
+  contactTapped(source: 'card' | 'qr', contactId: string) {
+    track('contact_tapped', { source, contact_id: contactId });
+  },
+
+  seeAllConnectionsTapped() {
+    track('see_all_connections_tapped');
+  },
+
+  scanCardCtaTapped() {
+    track('scan_card_cta_tapped');
+  },
+
+  contactDetailOpened(type: 'card' | 'connection', contactId: string) {
+    track('contact_detail_opened', { type, contact_id: contactId });
+  },
+
+  contactDeleted() {
+    track('contact_deleted');
+  },
+
+  rescanUpdateTapped(contactId: string) {
+    track('rescan_update_tapped', { contact_id: contactId });
+  },
 };

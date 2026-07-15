@@ -845,6 +845,8 @@ function BetaHomeScreen() {
   const [popupEmail, setPopupEmail] = useState(user?.email ?? '');
   const [popupWebsite, setPopupWebsite] = useState('');
 
+  useEffect(() => { Analytics.screenViewed('home'); }, []);
+
   useEffect(() => {
     AsyncStorage.getItem(POPUP_SHOWN_KEY).then((val) => {
       if (!val) setShowPopup(true);
@@ -1001,7 +1003,7 @@ function BetaHomeScreen() {
           <View style={b.section}>
             <View style={b.sectionHeader}>
               <Text style={[b.sectionTitle, { color: colors.text }]}>Recent Contacts</Text>
-              <Pressable onPress={() => router.push('/(app)/connections')}>
+              <Pressable onPress={() => { Analytics.seeAllConnectionsTapped(); router.push('/(app)/connections'); }}>
                 <Text style={[b.seeAll, { color: colors.accent }]}>See all →</Text>
               </Pressable>
             </View>
@@ -1013,6 +1015,7 @@ function BetaHomeScreen() {
                   key={contact.id}
                   style={[b.contactRow, { borderBottomColor: colors.border }]}
                   onPress={() => {
+                    Analytics.contactTapped(contact.source, contact.id);
                     if (contact.source === 'card') {
                       setPendingCardOpen(contact.id);
                     } else {
@@ -1054,7 +1057,7 @@ function BetaHomeScreen() {
             </Text>
             <Pressable
               style={[b.primaryCta, { backgroundColor: colors.accent }]}
-              onPress={() => router.push('/(app)/scan')}
+              onPress={() => { Analytics.scanCardCtaTapped(); router.push('/(app)/scan'); }}
             >
               <Ionicons name="camera-outline" size={18} color="#FFF" />
               <Text style={b.primaryCtaText}>Scan a card</Text>

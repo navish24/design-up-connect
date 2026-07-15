@@ -525,6 +525,7 @@ export default function CardReviewScreen() {
               style={[s.solidBtn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
               onPress={() => {
                 if (!dupContact) return;
+                Analytics.rescanUpdateTapped(dupContact.id);
                 const newFields = normalizeContactFields();
                 void (async () => {
                   const { data: { user: authUser } } = await supabase.auth.getUser();
