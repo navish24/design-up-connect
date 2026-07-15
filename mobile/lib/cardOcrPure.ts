@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.16.0';
+export const PARSER_VERSION = '1.17.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -70,7 +70,7 @@ const PIN_RE = /\b[1-9]\d{5}\b/;
 
 // Designation keywords — "art" removed (too generic: matches "art collective" brand taglines)
 const DESIGNATION_RE =
-  /\b(founder|co-founder|ceo|cto|coo|cmo|cso|director|directed|manager|architect|designer|engineer|consultant|associate|principal|partner|head|lead|senior|junior|intern|president|vice|vp|md|gm|dgm|cgm|officer|executive|strategist|illustrator|creative|senator|representative|minister|secretary|governor|attorney|commissioner|councillor|counsel|ambassador|deputy|spokesperson|chairman|chairperson|trustee|parliamentarian|practitioner|awardee|fellow|laureate|recipient|professor|lecturer|researcher|scholar|curator|therapist|physician|surgeon|dentist|doctor|advocate|solicitor|chartered|certified|coordinator|co-ordinator|ordinator|contractor|publisher|editor|proprietor)\b|(?<!\w)[A-Z]\.(?:[A-Z]\.)+[A-Z]?(?!\w)/i;
+  /\b(founder|co-founder|ceo|cto|coo|cmo|cso|director|directed|manager|architect|designer|engineer|consultant|associate|principal|partner|head|lead|senior|junior|intern|president|vice|vp|md|gm|dgm|cgm|officer|executive|strategist|illustrator|creative|senator|representative|minister|secretary|governor|attorney|commissioner|councillor|counsel|ambassador|deputy|spokesperson|chairman|chairperson|trustee|parliamentarian|practitioner|awardee|fellow|laureate|recipient|professor|lecturer|researcher|scholar|curator|therapist|physician|surgeon|dentist|doctor|advocate|solicitor|chartered|certified|coordinator|co-ordinator|ordinator|contractor|publisher|editor|proprietor|specialist)\b|(?<!\w)[A-Z]\.(?:[A-Z]\.)+[A-Z]?(?!\w)/i;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -151,6 +151,13 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     .replace(
       /^(in|ig|i|fb|f|tw|x|li|ln|lk|be|yt)\n([a-zA-Z][a-zA-Z0-9_.]{2,28}[a-zA-Z0-9])/gim,
       (_, g, h) => `${g.toLowerCase()} ${h}`,
+    )
+    // Merge a partial email where OCR splits the domain across two lines:
+    // "user@company" + "luxury.com" → "user@companyluxury.com"
+    // Only fires when the first line has @word with no dot (incomplete domain).
+    .replace(
+      /([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9][a-zA-Z0-9\-]*)\n([a-zA-Z0-9][a-zA-Z0-9\-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2})?)/gm,
+      '$1$2',
     )
     // Merge a bare area code "(NXX)" or label+area-code "M (NXX)" with the phone digits
     // on the next OCR line — OCR commonly splits them because they're visually separated.
@@ -447,14 +454,20 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
 
   // Words that appear in firm/studio/brand names but not in personal names.
   const COMPANY_KEYWORD_RE =
-    /\b(studio|studios|architects|architecture|interiors|interior|landscape|landscaping|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal|capital|ventures|holdings|finance|financial|wealth|advisory|advisors|investments|investment|securities|broking|insurance|leasing|logistics|infrastructure|pharma|pharmaceuticals|chemicals|polymers|packaging|print|printing|publications|publishers|events|promotions|marketing|consultancy|outsourcing|staffing|recruitment|furniture|furnishings|modular|planters|nursery|nurseries|florist|florists|gardens)\b|\bstate\s+of\b/i;
+    /\b(studio|studios|architects|architecture|interiors|interior|landscape|landscaping|design|designers|group|associates|consultants|enterprises|solutions|services|industries|builders|developers|construction|pvt|ltd|inc|llp|limited|technologies|tech|media|creative|photography|jewellers|jewellery|fashion|textiles|trading|exports|imports|suppliers|manufacturing|projects|properties|realty|estates|hospital|clinic|labs|diagnostics|academy|institution|institute|college|school|agency|agencies|co\.|corp|government|ministry|department|authority|corporation|bank|council|committee|commission|board|foundation|trust|union|federation|association|chamber|senate|national|international|municipal|capital|ventures|holdings|finance|financial|wealth|advisory|advisors|investments|investment|securities|broking|insurance|leasing|logistics|infrastructure|pharma|pharmaceuticals|chemicals|polymers|packaging|print|printing|publications|publishers|events|promotions|marketing|consultancy|outsourcing|staffing|recruitment|furniture|furnishings|modular|planters|nursery|nurseries|florist|florists|gardens|decor|professional|films|management)\b|\bstate\s+of\b/i;
 
   // Label prefix common on cards: "M:" / "M (400)…" / "Tel. " / "Fax: " / "Ph: "
   // The space-only variant (no colon) is guarded by a lookahead for digit/paren/+ so we
   // don't accidentally strip the first letter of a real name like "Emily Bates".
   const LABEL_PREFIX_RE = /^(?:[A-Za-z](?:\s*:|\s+(?=[\d(+]))|(?:tel|fax|ph|mob|mobile|phone)\s*\.?\s*:?)\s*/i;
 
+  // QR code instruction text that OCR picks up but is never contact data.
+  const SCAN_INSTRUCTION_RE = /^(scan\s+here|scan\s+me|scan\s+qr|qr\s+code|scan\s+now|scan\s+for|scan\s+to|point\s+here)$/i;
+
   remaining.forEach((line, idx) => {
+    // Drop QR / instruction text printed near QR codes — not a person's name or contact field.
+    if (SCAN_INSTRUCTION_RE.test(line)) return;
+
     // Address section headers ("Office Address", "Store Address") — used as group
     // separators in multi-address consolidation, not contact data or person names.
     const ADDR_SECTION_HDR_RE = /^(office|store|branch|head|registered|corporate|correspondence|mailing|billing|regd?\.?)\s+(address|addr\.?)$/i;
@@ -638,7 +651,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     if (lineIsAllCaps && line.split(/\s+/).filter(Boolean).length >= 2) {
       const wordCount = line.split(/\s+/).filter(Boolean).length;
       const hasCompanyKeyword = COMPANY_KEYWORD_RE.test(line);
-      if (!nameAssigned && !hasCompanyKeyword && wordCount <= 5) {
+      if (!nameAssigned && !hasCompanyKeyword && wordCount <= 5 && !/\d/.test(line)) {
         fields.unshift({ label: 'Name', value: line });
         nameAssigned = true;
         return;
@@ -657,7 +670,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         fields.push({ label: 'Name 2', value: line });
         return;
       }
-      if (!companyAssigned) {
+      if (!companyAssigned && !/\d/.test(line)) {
         const nameIdx = fields.findIndex((f) => f.label === 'Name');
         fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: line });
         companyAssigned = true;
@@ -699,12 +712,18 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       const alreadyInAddressLine = [...addressIdx].some(
         (i) => remaining[i].toLowerCase().includes(lineForName.toLowerCase()),
       );
+      // Reject inspirational taglines printed below logos (e.g. "Promises Delivered", "Quality Assured")
+      // that pass the name shape test but are clearly not person names.
+      const TAGLINE_PARTICIPLE_RE =
+        /\b(delivered|trusted|established|driven|focused|dedicated|committed|guaranteed|built|crafted|designed|created|inspired|powered|connected|managed|certified|licensed|registered|approved|unlimited|beyond|assured|renewed|redefined|reimagined|transformed)\b/i;
+      const looksLikeTagline = TAGLINE_PARTICIPLE_RE.test(lineForName);
       if (
         !nameAssigned &&
         !lineIsAllCaps &&
         !nameAdjacentToAddr &&
         !startsWithArticle &&
         !alreadyInAddressLine &&
+        !looksLikeTagline &&
         /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName) &&
         lineForName.split(' ').length >= 2 &&
         lineForName.split(' ').length <= 6 &&
@@ -738,7 +757,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         !fields.some((f) => f.label === 'Name 2') &&
         /^[A-Za-z\s.''\-]{3,60}$/.test(lineForName2) &&
         lineForName2.split(' ').length >= 2 &&
-        lineForName2.split(' ').length <= 6 &&
+        lineForName2.split(' ').length <= 4 &&
         lineForName2.split(/\s+/).every((w) => /^[A-Z]/.test(w)) &&
         !lineForName2.split(/\s+/).some((w) => ADDR_ABBREV_RE.test(w)) &&
         // Reject dotted-tagline pattern: "Residential. Commercial. Hospitality" —
@@ -747,12 +766,18 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         !lineForName2.split(/\s+/).some((w) => w.length > 3 && w.endsWith('.')) &&
         !ADDRESS_KEYWORD_RE.test(lineForName2) &&
         !DESIGNATION_RE.test(lineForName2) &&
-        !COMPANY_KEYWORD_RE.test(lineForName2)
+        !COMPANY_KEYWORD_RE.test(lineForName2) &&
+        !/\b(delivered|trusted|established|driven|focused|dedicated|committed|guaranteed|built|crafted|designed|created|inspired|powered|connected|managed|certified|licensed|registered|approved|unlimited|beyond|assured|renewed|redefined|reimagined|transformed)\b/i.test(lineForName2)
       ) {
         fields.push({ label: 'Name 2', value: lineForName2 });
         return;
       }
     }
+
+    // Drop lines with no alphabetic characters — OCR artifacts like "0°", "---", "123".
+    if (!/[a-zA-Z]/.test(line)) return;
+    // Drop lone TLD fragments like ".Com", ".in" — URL split by OCR, no useful data.
+    if (/^\.[a-zA-Z]{2,6}$/.test(line)) return;
 
     // Defer: may turn out to be a city/state line that belongs to the address
     otherEntries.push({ idx, text: line });
@@ -775,6 +800,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
           // Don't absorb a line whose predecessor is a designation (e.g. "Business Development"
           // after "Associate Director-" is a role continuation, not a company name prefix).
           !designationIndices.includes(idx - 1) &&
+          text.trim().length > 1 &&
           text.split(/\s+/).filter(Boolean).length >= 1 &&
           text.split(/\s+/).filter(Boolean).length <= 3
       );
@@ -890,6 +916,29 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         const oIdx = otherEntries.indexOf(surnameEntry);
         if (oIdx !== -1) otherEntries.splice(oIdx, 1);
       }
+    }
+  }
+
+  // If name is still unassigned after all mergers, the person's first and last name may
+  // have been OCR'd as two separate single-word blocks (e.g. "Somesh" + "Anant" on a card
+  // where a QR code text grabbed the Name slot and was later skipped). When a designation
+  // exists (confirming this is a person's card), assemble the first two single proper-noun
+  // words from otherEntries as the Name.
+  if (!nameAssigned && designationLines.length > 0) {
+    const nameCandidates = otherEntries.filter(
+      (e) =>
+        /^[A-Z][a-z]{1,}$/.test(e.text) &&
+        !DESIGNATION_RE.test(e.text) &&
+        !COMPANY_KEYWORD_RE.test(e.text) &&
+        !ADDRESS_KEYWORD_RE.test(e.text),
+    );
+    if (nameCandidates.length >= 2) {
+      const [first, second] = nameCandidates;
+      fields.unshift({ label: 'Name', value: first.text + ' ' + second.text });
+      nameAssigned = true;
+      otherEntries.splice(otherEntries.indexOf(first), 1);
+      const si = otherEntries.indexOf(second);
+      if (si !== -1) otherEntries.splice(si, 1);
     }
   }
 
@@ -1018,6 +1067,42 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         }
       }
       fields.splice(insertAt, 0, { label: 'Designation', value: cleaned });
+    }
+  }
+
+  // If Company is only incorporation suffixes (e.g. "Pvt. Ltd.", "Inc.") with no actual
+  // company name, the real name was likely absorbed into the address because it contained
+  // a country/city keyword (e.g. "Messe Frankfurt Trade Fairs India" → addressIdx via "India").
+  // Look at the OCR line immediately before the suffix line; if it has no structural address
+  // words (road/floor/sector etc.) it is the missing company name prefix — merge and remove
+  // it from the address set so it doesn't appear in both places.
+  {
+    const SUFFIX_ONLY_RE =
+      /^(?:(?:pvt\.?\s*)?(?:ltd\.?|llp|inc\.?|limited|corp\.?|pvt\.?)\s*)+\.?$/i;
+    const ADDR_STRUCT_INLINE =
+      /\b(floor|street|road|nagar|marg|avenue|lane|plot|sector|bhavan|house|tower|complex|estates?|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|highway|expressway|enclave|extension|residency|residences|apartments|apt|flat|villa|bungalow|farm|bldg)\b/i;
+    const suffixComp = fields.find(
+      (f) => f.label === 'Company' && SUFFIX_ONLY_RE.test(f.value.trim()),
+    );
+    if (suffixComp) {
+      const compIdx = remaining.findIndex((l) => l.trim() === suffixComp.value.trim());
+      if (compIdx > 0) {
+        for (let i = compIdx - 1; i >= Math.max(0, compIdx - 3); i--) {
+          const candidate = remaining[i];
+          if (
+            addressIdx.has(i) &&
+            !ADDR_STRUCT_INLINE.test(candidate) &&
+            !PIN_RE.test(candidate) &&
+            /^[A-Za-z]/.test(candidate) &&
+            candidate.split(/\s+/).filter(Boolean).length >= 2 &&
+            candidate.split(/\s+/).filter(Boolean).length <= 8
+          ) {
+            suffixComp.value = candidate + ' ' + suffixComp.value;
+            addressIdx.delete(i);
+            break;
+          }
+        }
+      }
     }
   }
 
