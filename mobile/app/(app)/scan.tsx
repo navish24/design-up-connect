@@ -286,7 +286,7 @@ export default function ScanScreen() {
       } catch (_) {}
       const blocks = await recognizeCardText(imageUri);
       const fields = parseCardFields(blocks);
-      cardScanStore.set({ imageUri, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText: blocks.map((b: any) => b.text).join('\n') });
+      cardScanStore.set({ imageUri, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText: blocks.map((b: any) => b.text).join('\n'), scanSource: 'gallery_native' });
       setIsGalleryImporting(false);
       router.push('/card-review');
     }).catch(() => setIsGalleryImporting(false));
@@ -312,7 +312,7 @@ export default function ScanScreen() {
       let blocks: any[] = [];
       try { blocks = await recognizeCardTextWeb(imageBase64); } catch (_) {}
       const fields = parseCardFields(blocks);
-      cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText: blocks.map((b: any) => b.text).join('\n') });
+      cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText: blocks.map((b: any) => b.text).join('\n'), scanSource: 'gallery_web' });
       Analytics.cardScanned(fields.length > 0);
       setIsGalleryImporting(false);
       router.push('/card-review');
@@ -798,7 +798,7 @@ export default function ScanScreen() {
                   cardScanErrorTimer.current = setTimeout(() => setCardScanError(null), 2500);
                   return;
                 }
-                cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText: blocks.map((b: any) => b.text).join('\n') });
+                cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText: blocks.map((b: any) => b.text).join('\n'), scanSource: 'camera_web' });
                 Analytics.cardScanned(fields.length > 0);
                 if (wasManual) setIsCaptureProcessing(false);
                 router.push('/card-review');

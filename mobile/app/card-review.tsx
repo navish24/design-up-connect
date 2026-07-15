@@ -41,6 +41,7 @@ export default function CardReviewScreen() {
   const [notes, setNotes] = useState('');
   const [isBlurry, setIsBlurry] = useState(false);
   const [rawText, setRawText] = useState('');
+  const [scanSource, setScanSource] = useState<import('../lib/cardScanStore').ScanSource | null>(null);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [editingLabelIdx, setEditingLabelIdx] = useState<number | null>(null);
   const [showAddField, setShowAddField] = useState(false);
@@ -64,6 +65,7 @@ export default function CardReviewScreen() {
       setFields(data.fields);
       setIsBlurry(data.isBlurry);
       setRawText(data.rawText ?? '');
+      setScanSource(data.scanSource ?? null);
     }
   }, []);
 
@@ -139,7 +141,7 @@ export default function CardReviewScreen() {
     setSavedContactId(id);
     setSaved(true);
     void uploadCardImages(contact, updateCardContact);
-    void saveOcrQuality(id, user?.id ?? null, rawText, normalizedFields);
+    void saveOcrQuality(id, user?.id ?? null, rawText, normalizedFields, scanSource ?? undefined);
   }, [imageUri, backImageUri, normalizeContactFields, notes, rawText, user, addCardContact, updateCardContact]);
 
   const handleSave = useCallback(() => {

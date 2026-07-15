@@ -11,12 +11,14 @@ export async function saveOcrQuality(
   userId: string | null,
   rawText: string,
   fields: CardContactField[],
+  scanSource?: string,
 ): Promise<void> {
   try {
     await supabase.from('ocr_quality').insert({
       card_contact_id: cardContactId,
       user_id: userId,
       parsed_fields: fields,
+      scan_source: scanSource ?? null,
       ...computeOcrQuality(rawText, fields),
     });
   } catch {

@@ -73,6 +73,7 @@ export default function CardScannerScreen() {
           fields: merged,
           isBlurry: frontRef.current.isBlurry,
           rawText: frontRef.current.rawText + '\n' + rawText,
+          scanSource: 'camera_native',
         });
         Analytics.cardScanned(true);
         frontRef.current = null;
@@ -143,6 +144,7 @@ export default function CardScannerScreen() {
       fields: front?.fields ?? [],
       isBlurry: front?.isBlurry ?? false,
       rawText: front?.rawText ?? '',
+      scanSource: 'camera_native',
     });
     router.replace('/card-review');
   };
@@ -365,7 +367,7 @@ function WebCardScanner({ colors, insets }: { colors: any; insets: any }) {
       const blocks = await recognizeCardTextWeb(imageBase64);
       const fields = parseCardFields(blocks);
       const rawText = blocks.map((b) => b.text).join('\n');
-      cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText });
+      cardScanStore.set({ imageUri: imageDataUrl, backImageUri: null, fields, isBlurry: blocks.length < 2, rawText, scanSource: 'gallery_web' });
       Analytics.cardScanned(fields.length > 0);
       router.replace('/card-review');
     } catch (err: any) {
