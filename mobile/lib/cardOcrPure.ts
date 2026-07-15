@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.13.0';
+export const PARSER_VERSION = '1.14.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -1395,7 +1395,10 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       const splitNamePos = fields.indexOf(splitNameF);
       const splitCompPos = fields.indexOf(splitCompF);
       const compWords = splitCompF.value.split(/\s+/).filter(Boolean);
-      if (compWords.length === 1 && COMPANY_KEYWORD_RE.test(splitCompF.value) && splitCompPos === splitNamePos + 1) {
+      // Allow Designation fields between Name and Company (Designation is inserted after forEach)
+      const fieldsBetween = fields.slice(splitNamePos + 1, splitCompPos);
+      const onlyDesignationsBetween = fieldsBetween.every((f) => f.label === 'Designation');
+      if (compWords.length === 1 && COMPANY_KEYWORD_RE.test(splitCompF.value) && onlyDesignationsBetween) {
         splitCompF.value = splitNameF.value + ' ' + splitCompF.value;
         // Strip paired phone from Name 2 value before promoting (phone is already in Phone field)
         const name2Clean = splitName2F.value.includes('·')
