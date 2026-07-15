@@ -23,6 +23,7 @@ export default function SignInScreen() {
   const [suggestion, setSuggestion] = useState('');
 
   useEffect(() => {
+    Analytics.screenViewed('sign_in');
     AsyncStorage.getItem('connect_last_email').then((saved) => {
       if (saved) setEmail(saved);
     });

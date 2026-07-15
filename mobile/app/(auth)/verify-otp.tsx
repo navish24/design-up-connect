@@ -21,6 +21,8 @@ export default function VerifyOTPScreen() {
   const inputs = useRef<(TextInput | null)[]>([]);
   const s = makeStyles(colors);
 
+  useEffect(() => { Analytics.screenViewed('otp'); }, []);
+
   useEffect(() => {
     if (countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
@@ -84,6 +86,7 @@ export default function VerifyOTPScreen() {
 
   const handleResend = async () => {
     if (countdown > 0) return;
+    Analytics.otpResendTapped();
     setCountdown(60);
     setError('');
     setResendSent(false);

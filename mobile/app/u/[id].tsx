@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { Analytics } from '../../lib/analytics';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import { setPendingConnectionOpen } from '../../lib/pendingNav';
 
@@ -38,13 +39,14 @@ export default function PublicProfilePage() {
       .single()
       .then(({ data, error }) => {
         if (error || !data) { setNotFound(true); }
-        else { setProfile(data); }
+        else { setProfile(data); Analytics.qrLandingViewed(id); }
         setLoading(false);
       });
   }, [id]);
 
   const addOnConnect = async () => {
     if (!profile || adding || added) return;
+    Analytics.addOnConnectTapped(id);
     setAdding(true);
     addDemoConnection({
       id,
@@ -134,7 +136,7 @@ export default function PublicProfilePage() {
           Don't have Connect?{' '}
           <Text
             style={{ color: colors.accent, fontWeight: FontWeight.semibold }}
-            onPress={() => (globalThis as any).window?.open(PWA_URL, '_blank')}
+            onPress={() => { Analytics.getTheAppTapped(); (globalThis as any).window?.open(PWA_URL, '_blank'); }}
           >
             Get the app
           </Text>

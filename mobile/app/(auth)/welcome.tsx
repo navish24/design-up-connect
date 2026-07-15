@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { Analytics } from '../../lib/analytics';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 
 const VALUE_PROPS = [
@@ -25,6 +27,8 @@ const VALUE_PROPS = [
 export default function WelcomeScreen() {
   const { colors } = useTheme();
   const s = makeStyles(colors);
+
+  useEffect(() => { Analytics.screenViewed('welcome'); }, []);
 
   return (
     <View style={s.root}>

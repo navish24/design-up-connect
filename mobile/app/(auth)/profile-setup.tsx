@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, Pressable,
   ScrollView, KeyboardAvoidingView, Platform, Alert,
@@ -30,6 +30,8 @@ export default function ProfileSetupScreen() {
   const { completeProfile } = useAuth();
   const { email: authEmail, name: authName, context } = useLocalSearchParams<{ email: string; name?: string; context?: string }>();
   const s = makeStyles(colors);
+
+  useEffect(() => { Analytics.screenViewed('profile_setup'); }, []);
 
   const [fullName, setFullName] = useState(authName ?? '');
   const [profession, setProfession] = useState('');

@@ -159,4 +159,20 @@ export const Analytics = {
   linkBrandTapped() {
     track('Link Brand Tapped');
   },
+
+  qrLandingViewed(viewedUserId: string) {
+    track('qr_landing_viewed', { viewed_user_id: viewedUserId });
+  },
+
+  addOnConnectTapped(viewedUserId: string) {
+    track('add_on_connect_tapped', { viewed_user_id: viewedUserId });
+  },
+
+  getTheAppTapped() {
+    track('get_the_app_tapped');
+  },
+
+  otpResendTapped() {
+    track('otp_resend_tapped');
+  },
 };

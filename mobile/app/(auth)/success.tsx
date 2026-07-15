@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { Analytics } from '../../lib/analytics';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import { isBeta } from '../../lib/betaConfig';
 
@@ -16,6 +18,8 @@ export default function SuccessScreen() {
   const initials = user?.first_name && user?.last_name
     ? `${user.first_name[0]}${user.last_name[0]}`.toUpperCase()
     : user?.first_name?.[0]?.toUpperCase() ?? 'U';
+
+  useEffect(() => { Analytics.screenViewed('success'); }, []);
 
   const handleExplore = () => {
     if (context) {
