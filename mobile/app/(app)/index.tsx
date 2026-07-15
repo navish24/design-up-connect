@@ -881,7 +881,7 @@ function BetaHomeScreen() {
     const qrs = (demoAddedConnections as any[]).map((c) => {
       const isConnection = c.user && typeof c.user === 'object';
       return {
-        id: String(c.id),
+        id: isConnection ? String(c.user.id) : String(c.id),
         name: (isConnection ? c.user.full_name : c.full_name) as string,
         sub: [
           isConnection ? c.user.designation : c.designation,
