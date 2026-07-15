@@ -16,6 +16,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
 import NotesModal from '../../components/NotesModal';
 import { Analytics } from '../../lib/analytics';
+import { cloudinaryThumb } from '../../lib/cloudinary';
 import type { Connection, CardContact } from '../../types';
 import { getPendingConnectionOpen, setPendingConnectionOpen, getPendingCardOpen, setPendingCardOpen } from '../../lib/pendingNav';
 
@@ -585,7 +586,9 @@ export default function ConnectionsScreen() {
               const isCard = item.type === 'card';
               const contact = isCard ? (item.data as CardContact) : null;
               const conn = !isCard ? (item.data as Connection) : null;
-              const imgUri = isCard ? contact!.card_image_uri : conn!.user.profile_image_url;
+              const imgUri = isCard
+                ? cloudinaryThumb(contact!.card_image_uri, 400)
+                : cloudinaryThumb(conn!.user.profile_image_url, 400);
               const name = isCard ? getCardDisplayName(contact!.fields) : conn!.user.full_name;
               const initials = name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
               return (
@@ -729,7 +732,7 @@ function CardContactCard({ contact, colors, onPress, search }: {
     >
       {/* Avatar or card thumbnail */}
       {contact.card_image_uri ? (
-        <Image source={{ uri: contact.card_image_uri }} style={s.cardThumb} resizeMode="cover" />
+        <Image source={{ uri: cloudinaryThumb(contact.card_image_uri, 400) ?? contact.card_image_uri }} style={s.cardThumb} resizeMode="cover" />
       ) : (
         <View style={[s.avatar, { backgroundColor: colors.surfaceElevated }]}>
           <Text style={[s.avatarText, { color: colors.textSecondary }]}>{initials}</Text>
@@ -865,12 +868,12 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
           {contact.card_image_uri && (
             <View style={s.gThumbStack}>
               <Pressable onPress={() => setExpandedUri(contact.card_image_uri)} style={s.gThumb}>
-                <Image source={{ uri: contact.card_image_uri! }} style={s.gThumbImg} resizeMode="cover" />
+                <Image source={{ uri: cloudinaryThumb(contact.card_image_uri, 400) ?? contact.card_image_uri! }} style={s.gThumbImg} resizeMode="cover" />
                 <Text style={s.gThumbLabel}>Front</Text>
               </Pressable>
               {contact.card_image_uri_back && (
                 <Pressable onPress={() => setExpandedUri(contact.card_image_uri_back)} style={[s.gThumb, { marginTop: -18 }]}>
-                  <Image source={{ uri: contact.card_image_uri_back! }} style={s.gThumbImg} resizeMode="cover" />
+                  <Image source={{ uri: cloudinaryThumb(contact.card_image_uri_back, 400) ?? contact.card_image_uri_back! }} style={s.gThumbImg} resizeMode="cover" />
                   <Text style={s.gThumbLabel}>Back</Text>
                 </Pressable>
               )}
@@ -1172,7 +1175,7 @@ function ConnectionCard({ connection, colors, onPress, onExchange, notes = [], s
           {user.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
         </Text>
         {user.profile_image_url ? (
-          <Image source={{ uri: user.profile_image_url }} style={[s.avatarPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
+          <Image source={{ uri: cloudinaryThumb(user.profile_image_url, 120) ?? user.profile_image_url }} style={[s.avatarPhoto, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
         ) : null}
       </View>
 
@@ -1341,7 +1344,7 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
               {user.full_name.split(' ').filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
             </Text>
             {user.profile_image_url ? (
-              <Image source={{ uri: user.profile_image_url }} style={[s.gProfileThumbImg, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
+              <Image source={{ uri: cloudinaryThumb(user.profile_image_url, 160) ?? user.profile_image_url }} style={[s.gProfileThumbImg, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]} />
             ) : null}
           </Pressable>
         </View>

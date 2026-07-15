@@ -1,6 +1,13 @@
 import { CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET } from './betaConfig';
 import type { CardContact } from '../types';
 
+// Rewrites a Cloudinary URL to serve a width-limited, auto-quality thumbnail.
+// Non-Cloudinary URLs (Unsplash, local, etc.) are returned unchanged.
+export function cloudinaryThumb(url: string | null | undefined, width: number): string | null | undefined {
+  if (!url || !url.includes('res.cloudinary.com')) return url;
+  return url.replace('/upload/', `/upload/w_${width},f_auto,q_auto/`);
+}
+
 const BASE_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
 async function sleep(ms: number) {
