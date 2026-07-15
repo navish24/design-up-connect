@@ -1,7 +1,7 @@
 import type { CardContactField } from '../types';
 
 // Bump whenever parser logic changes so Supabase queries can compare before/after.
-export const PARSER_VERSION = '1.11.0';
+export const PARSER_VERSION = '1.13.0';
 
 // ── OCR quality signals (saved silently to Supabase after every scan) ─────────
 
@@ -462,6 +462,9 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
     // and the line does NOT also have unambiguous address keywords (floor/street/sector etc.)
     const ADDRESS_STRUCTURAL_RE =
       /\b(floor|street|road|nagar|marg|avenue|lane|plot|sector|bhavan|house|tower|complex|estate|junction|circle|chowk|cross|layout|society|colony|phase|block|near|opp|opposite|behind|beside|drive|boulevard|highway|expressway|enclave|extension|residency|residences|apartments|apt|flat|villa|bungalow|farm|bldg)\b/i;
+    // "C/O Firm Name", "Nr. Junction", "Opp. Mall" — care-of and direction prefixes
+    // signal this is an address fragment even when it contains company keywords (pvt/ltd).
+    const ADDR_PREFIX_RE = /^(c\/o|nr\.?|opp\.?|near|behind|beside|opposite)\b/i;
     if (
       !companyAssigned &&
       !DESIGNATION_RE.test(line) &&
@@ -469,6 +472,7 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       /^[A-Za-z]/.test(line) &&
       line.length <= 100 &&
       !line.includes('_') &&
+      !ADDR_PREFIX_RE.test(line) &&
       COMPANY_KEYWORD_RE.test(line) &&
       !ADDRESS_STRUCTURAL_RE.test(line)
     ) {
@@ -878,11 +882,18 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
   // being absorbed into the address just because they're adjacent to an address line.
   // Personal-name shape: "First Last", "First M Last", "First M. Last" — don't absorb into address
   const PERSON_NAME_SHAPE_RE = /^[A-Z][a-z]{2,}(?:\s+[A-Z]\.?|\s+[A-Z][a-z]{2,}){1,2}$/;
-  const looksLikeAddressFragment = (text: string) =>
-    text.length >= 6 && text.length <= 60 &&
-    /^[A-Za-z0-9\s,.\-/#]+$/.test(text) &&
-    !PERSON_NAME_SHAPE_RE.test(text) &&
-    !COMPANY_KEYWORD_RE.test(text);
+  const looksLikeAddressFragment = (text: string) => {
+    // Single-word domain-like strings (e.g. "BBAREBOHO.HOME", "example.com") are
+    // websites, not address fragments — exclude them even when adjacent to address lines.
+    const isDomainLike = !text.includes(' ') && /^[A-Za-z0-9][\w.-]*\.[A-Za-z]{2,10}$/.test(text);
+    return (
+      text.length >= 6 && text.length <= 60 &&
+      /^[A-Za-z0-9\s,.\-/#]+$/.test(text) &&
+      !isDomainLike &&
+      !PERSON_NAME_SHAPE_RE.test(text) &&
+      !COMPANY_KEYWORD_RE.test(text)
+    );
+  };
 
   for (const { idx, text } of otherEntries) {
     // A line sandwiched between two already-classified address lines is part of the address
@@ -1367,6 +1378,31 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
             !ADDRESS_KEYWORD_RE.test(f.value),
         );
         if (nextPersonIdx !== -1) fields[nextPersonIdx].label = 'Name 2';
+      }
+    }
+  }
+
+  // Post-process: brand name split across lines misread as Name + single-word Company.
+  // "Elevate Nest" (Name) + "Media" (Company, 1 keyword) + "Rahul Shirsat" (Name 2) →
+  // Company = "Elevate Nest Media", Name = "Rahul Shirsat".
+  // Guard: Company must be exactly one word that is itself a company keyword, and it
+  // must appear immediately after Name in the fields array (consecutive OCR lines).
+  {
+    const splitNameF = fields.find((f) => f.label === 'Name');
+    const splitCompF = fields.find((f) => f.label === 'Company');
+    const splitName2F = fields.find((f) => f.label === 'Name 2');
+    if (splitNameF && splitCompF && splitName2F) {
+      const splitNamePos = fields.indexOf(splitNameF);
+      const splitCompPos = fields.indexOf(splitCompF);
+      const compWords = splitCompF.value.split(/\s+/).filter(Boolean);
+      if (compWords.length === 1 && COMPANY_KEYWORD_RE.test(splitCompF.value) && splitCompPos === splitNamePos + 1) {
+        splitCompF.value = splitNameF.value + ' ' + splitCompF.value;
+        // Strip paired phone from Name 2 value before promoting (phone is already in Phone field)
+        const name2Clean = splitName2F.value.includes('·')
+          ? splitName2F.value.split('·')[0].trim()
+          : splitName2F.value;
+        splitNameF.value = name2Clean;
+        fields.splice(fields.indexOf(splitName2F), 1);
       }
     }
   }
