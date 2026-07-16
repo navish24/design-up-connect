@@ -1145,7 +1145,7 @@ function makeStyles(colors: any) {
     photoPreviewBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
 
     qrOverlay: {
-      flex: 1, backgroundColor: '#000',
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
       alignItems: 'center', justifyContent: 'center', gap: Spacing.lg,
     },
     qrModal: {
