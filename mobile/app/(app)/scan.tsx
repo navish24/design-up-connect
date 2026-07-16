@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, Image,
+  View, Text, StyleSheet, Pressable, Image, TextInput, KeyboardAvoidingView,
   ScrollView, Modal, ActivityIndicator, LogBox, Platform,
 } from 'react-native';
 import { isInAppBrowser } from '../../lib/inAppBrowser';
@@ -168,7 +168,7 @@ async function decodeQRFromFile(file: any): Promise<string | null> {
 
 export default function ScanScreen() {
   const { colors } = useTheme();
-  const { activeExhibitionId, user, addDemoSavedBrand, addDemoConnection, setActiveExhibition } =
+  const { activeExhibitionId, user, addDemoSavedBrand, addDemoConnection, setActiveExhibition, addNote } =
     useAuth();
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
@@ -187,6 +187,8 @@ export default function ScanScreen() {
   const [webTorchSupported, setWebTorchSupported] = useState(false);
   const [showCameraNotice, setShowCameraNotice] = useState(false);
   const [cardScanError, setCardScanError] = useState<string | null>(null);
+  const [showConnNoteSheet, setShowConnNoteSheet] = useState(false);
+  const [connNoteInput, setConnNoteInput] = useState('');
   const cardScanErrorTimer = useRef<any>(null);
   const pendingScanView = useRef<'card' | 'qr'>('card');
   const isProcessing = useRef(false);
@@ -207,17 +209,16 @@ export default function ScanScreen() {
     }
   }, [isFocused, mode]);
 
-  // Hide tab bar only while actively scanning — restore on choice screen AND
-  // all result/error states so the user is never fully stuck without navigation.
-  const isActivelyScanning = scanView !== 'choice' &&
-    !['success_brand', 'success_connection', 'success_entry', 'already_saved', 'already_connected', 'error'].includes(scanState);
+  // Hide tab bar whenever the user is in the scan flow (scanning or on a result screen).
+  // Only restore it on the idle choice screen — the back arrow is sufficient on result screens.
+  const shouldHideTabBar = scanView !== 'choice' || scanState !== 'idle';
   useEffect(() => {
     navigation.setOptions({
-      tabBarStyle: isActivelyScanning
+      tabBarStyle: shouldHideTabBar
         ? { display: 'none' }
         : getTabBarStyle(colors, Platform.OS === 'web' ? 0 : bottomInset),
     });
-  }, [isActivelyScanning, colors, bottomInset, navigation]);
+  }, [shouldHideTabBar, colors, bottomInset, navigation]);
 
   // Reset torch and web torch support detection when switching scanner modes
   useEffect(() => {
@@ -328,6 +329,8 @@ export default function ScanScreen() {
     setScanResult(null);
     setScanError('');
     isProcessing.current = false;
+    setShowConnNoteSheet(false);
+    setConnNoteInput('');
   };
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
@@ -488,6 +491,11 @@ export default function ScanScreen() {
     const { brand } = scanResult;
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
+        <View style={[s.successHeader, { paddingTop: headerPaddingTop as any }]}>
+          <Pressable onPress={resetToIdle} style={s.backBtn} hitSlop={8}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+        </View>
         <ScrollView contentContainerStyle={s.successScroll}>
           <Ionicons name="checkmark-circle" size={64} color={colors.accent} />
           <Text style={[s.successTitle, { color: colors.text }]}>{brand.name} saved!</Text>
@@ -524,18 +532,25 @@ export default function ScanScreen() {
   // ── Already saved ─────────────────────────────────────────────────────────
   if (scanState === 'already_saved' && scanResult?.brand) {
     return (
-      <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
-        <Ionicons name="bookmark" size={48} color={colors.accent} />
-        <Text style={[s.successTitle, { color: colors.text }]}>Already saved</Text>
-        <Text style={[s.successSub, { color: colors.textSecondary }]}>
-          {scanResult.brand.name} is already in your saves
-        </Text>
-        <Pressable
-          style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
-          onPress={resetToIdle}
-        >
-          <Text style={s.btnText}>Scan Next</Text>
-        </Pressable>
+      <View style={[s.root, { backgroundColor: colors.background }]}>
+        <View style={[s.successHeader, { paddingTop: headerPaddingTop as any }]}>
+          <Pressable onPress={resetToIdle} style={s.backBtn} hitSlop={8}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+        </View>
+        <View style={s.successContent}>
+          <Ionicons name="bookmark" size={48} color={colors.accent} />
+          <Text style={[s.successTitle, { color: colors.text }]}>Already saved</Text>
+          <Text style={[s.successSub, { color: colors.textSecondary }]}>
+            {scanResult.brand.name} is already in your saves
+          </Text>
+          <Pressable
+            style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
+            onPress={resetToIdle}
+          >
+            <Text style={s.btnText}>Scan Next</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -543,8 +558,15 @@ export default function ScanScreen() {
   // ── Already connected ─────────────────────────────────────────────────────
   if (scanState === 'already_connected' && scanResult?.connection) {
     const { user: connUser } = scanResult.connection;
+    const connEntityId = `demo-${(connUser as any).id ?? connUser.designup_user_id}`;
     return (
-      <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
+      <View style={[s.root, { backgroundColor: colors.background }]}>
+        <View style={[s.successHeader, { paddingTop: headerPaddingTop as any }]}>
+          <Pressable onPress={resetToIdle} style={s.backBtn} hitSlop={8}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+        </View>
+        <View style={s.successContent}>
         <Ionicons name="people" size={52} color={colors.accent} />
         <Text style={[s.successTitle, { color: colors.text }]}>Already connected</Text>
         <Text style={[s.successSub, { color: colors.textSecondary }]}>
@@ -560,9 +582,49 @@ export default function ScanScreen() {
         >
           <Text style={s.btnText}>View Connection</Text>
         </Pressable>
-        <Pressable style={s.textBtn} onPress={resetToIdle}>
-          <Text style={[s.textBtnText, { color: colors.textMuted }]}>Done</Text>
+        <Pressable
+          style={[s.outlineBtn, { borderColor: colors.border, marginTop: Spacing.sm, flexDirection: 'row', gap: Spacing.sm, justifyContent: 'center' }]}
+          onPress={() => setShowConnNoteSheet(true)}
+        >
+          <Ionicons name="create-outline" size={16} color={colors.textMuted} />
+          <Text style={[s.outlineBtnText, { color: colors.textMuted }]}>Add a note</Text>
         </Pressable>
+        </View>
+        <Modal visible={showConnNoteSheet} animationType="slide" transparent>
+          <KeyboardAvoidingView
+            style={s.noteSheetBackdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowConnNoteSheet(false)} />
+            <View style={[s.noteSheet, { backgroundColor: colors.background }]}>
+              <View style={[s.noteSheetHandle, { backgroundColor: colors.border }]} />
+              <Text style={[s.noteSheetTitle, { color: colors.text }]}>Add a note</Text>
+              <TextInput
+                style={[s.noteSheetInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+                placeholder={`Where did you meet ${connUser.full_name ?? 'them'}? Any context…`}
+                placeholderTextColor={colors.textMuted}
+                value={connNoteInput}
+                onChangeText={setConnNoteInput}
+                multiline
+                autoFocus
+                maxLength={500}
+              />
+              <Pressable
+                style={[s.btn, { backgroundColor: connNoteInput.trim() ? colors.accent : colors.border }]}
+                disabled={!connNoteInput.trim()}
+                onPress={() => {
+                  if (connNoteInput.trim()) {
+                    addNote(connEntityId, connNoteInput.trim());
+                    setConnNoteInput('');
+                    setShowConnNoteSheet(false);
+                  }
+                }}
+              >
+                <Text style={s.btnText}>Done</Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     );
   }
@@ -570,28 +632,75 @@ export default function ScanScreen() {
   // ── Connection created ────────────────────────────────────────────────────
   if (scanState === 'success_connection' && scanResult?.connection) {
     const { user: connUser } = scanResult.connection;
+    const connEntityId = `demo-${(connUser as any).id ?? connUser.designup_user_id}`;
     return (
-      <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
-        <Ionicons name="person-add" size={52} color={colors.accent} />
-        <Text style={[s.successTitle, { color: colors.text }]}>
-          {connUser.full_name} saved!
-        </Text>
-        <Text style={[s.successSub, { color: colors.textSecondary }]}>
-          {connUser.designation} · {connUser.company_name}
-        </Text>
-        <Pressable
-          style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
-          onPress={() => {
-            resetToIdle();
-            setPendingConnectionOpen((connUser as any).id ?? connUser.designup_user_id ?? null);
-            router.push('/(app)/connections');
-          }}
-        >
-          <Text style={s.btnText}>View Card</Text>
-        </Pressable>
-        <Pressable style={s.textBtn} onPress={resetToIdle}>
-          <Text style={[s.textBtnText, { color: colors.textMuted }]}>Done</Text>
-        </Pressable>
+      <View style={[s.root, { backgroundColor: colors.background }]}>
+        <View style={[s.successHeader, { paddingTop: headerPaddingTop as any }]}>
+          <Pressable onPress={resetToIdle} style={s.backBtn} hitSlop={8}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+        </View>
+        <View style={s.successContent}>
+          <Ionicons name="person-add" size={52} color={colors.accent} />
+          <Text style={[s.successTitle, { color: colors.text }]}>
+            {connUser.full_name} saved!
+          </Text>
+          <Text style={[s.successSub, { color: colors.textSecondary }]}>
+            {connUser.designation} · {connUser.company_name}
+          </Text>
+          <Pressable
+            style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
+            onPress={() => {
+              resetToIdle();
+              setPendingConnectionOpen((connUser as any).id ?? connUser.designup_user_id ?? null);
+              router.push('/(app)/connections');
+            }}
+          >
+            <Text style={s.btnText}>View Contact</Text>
+          </Pressable>
+          <Pressable
+            style={[s.outlineBtn, { borderColor: colors.border, marginTop: Spacing.sm, flexDirection: 'row', gap: Spacing.sm, justifyContent: 'center' }]}
+            onPress={() => setShowConnNoteSheet(true)}
+          >
+            <Ionicons name="create-outline" size={16} color={colors.textMuted} />
+            <Text style={[s.outlineBtnText, { color: colors.textMuted }]}>Add a note</Text>
+          </Pressable>
+        </View>
+        <Modal visible={showConnNoteSheet} animationType="slide" transparent>
+          <KeyboardAvoidingView
+            style={s.noteSheetBackdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowConnNoteSheet(false)} />
+            <View style={[s.noteSheet, { backgroundColor: colors.background }]}>
+              <View style={[s.noteSheetHandle, { backgroundColor: colors.border }]} />
+              <Text style={[s.noteSheetTitle, { color: colors.text }]}>Add a note</Text>
+              <TextInput
+                style={[s.noteSheetInput, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+                placeholder={`Where did you meet ${connUser.full_name ?? 'them'}? Any context…`}
+                placeholderTextColor={colors.textMuted}
+                value={connNoteInput}
+                onChangeText={setConnNoteInput}
+                multiline
+                autoFocus
+                maxLength={500}
+              />
+              <Pressable
+                style={[s.btn, { backgroundColor: connNoteInput.trim() ? colors.accent : colors.border }]}
+                disabled={!connNoteInput.trim()}
+                onPress={() => {
+                  if (connNoteInput.trim()) {
+                    addNote(connEntityId, connNoteInput.trim());
+                    setConnNoteInput('');
+                    setShowConnNoteSheet(false);
+                  }
+                }}
+              >
+                <Text style={s.btnText}>Done</Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     );
   }
@@ -599,21 +708,28 @@ export default function ScanScreen() {
   // ── Exhibition entry ──────────────────────────────────────────────────────
   if (scanState === 'success_entry' && scanResult?.exhibition) {
     return (
-      <View style={[s.root, s.center, { backgroundColor: colors.background }]}>
-        <Ionicons name="checkmark-circle" size={56} color={colors.accent} />
-        <Text style={[s.successTitle, { color: colors.text }]}>Welcome!</Text>
-        <Text style={[s.successSub, { color: colors.textSecondary }]}>
-          {scanResult.exhibition.name} is now active on your dashboard
-        </Text>
-        <Pressable
-          style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
-          onPress={() => {
-            resetToIdle();
-            router.replace('/(app)');
-          }}
-        >
-          <Text style={s.btnText}>Go to Dashboard</Text>
-        </Pressable>
+      <View style={[s.root, { backgroundColor: colors.background }]}>
+        <View style={[s.successHeader, { paddingTop: headerPaddingTop as any }]}>
+          <Pressable onPress={resetToIdle} style={s.backBtn} hitSlop={8}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+        </View>
+        <View style={s.successContent}>
+          <Ionicons name="checkmark-circle" size={56} color={colors.accent} />
+          <Text style={[s.successTitle, { color: colors.text }]}>Welcome!</Text>
+          <Text style={[s.successSub, { color: colors.textSecondary }]}>
+            {scanResult.exhibition.name} is now active on your dashboard
+          </Text>
+          <Pressable
+            style={[s.btn, { backgroundColor: colors.accent, marginTop: Spacing.xl }]}
+            onPress={() => {
+              resetToIdle();
+              router.replace('/(app)');
+            }}
+          >
+            <Text style={s.btnText}>Go to Dashboard</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -1073,6 +1189,14 @@ function makeStyles(colors: any) {
     btnText: { color: '#FFF', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
     textBtn: { marginTop: Spacing.sm, alignItems: 'center', paddingVertical: Spacing.sm },
     textBtnText: { fontSize: FontSize.sm },
+    backBtn: { padding: 4 },
+    successHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md },
+    successContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl },
+    noteSheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+    noteSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 44, gap: Spacing.md },
+    noteSheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
+    noteSheetTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold },
+    noteSheetInput: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.md, fontSize: FontSize.md, minHeight: 100, textAlignVertical: 'top' },
     permTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center', marginTop: Spacing.lg },
     permBody: { fontSize: FontSize.md, textAlign: 'center', lineHeight: 22, marginVertical: Spacing.lg },
   });

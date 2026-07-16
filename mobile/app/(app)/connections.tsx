@@ -857,13 +857,9 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
             {company && <Text style={[s.gCompany, { color: colors.accent }]}>{company}</Text>}
             {designation && <Text style={[s.gDesignation, { color: colors.textMuted }]}>{designation}</Text>}
             <Text style={[s.scannedAt, { color: colors.textMuted, textAlign: 'left', marginTop: 4 }]}>
-              Scanned {new Date(contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+              {contact.updated_at && contact.updated_at !== contact.scanned_at ? 'Updated' : 'Scanned'}{' '}
+              {new Date(contact.updated_at && contact.updated_at !== contact.scanned_at ? contact.updated_at : contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
             </Text>
-            {contact.updated_at && contact.updated_at !== contact.scanned_at && (
-              <Text style={[s.scannedAt, { color: colors.accent, textAlign: 'left' }]}>
-                Updated {new Date(contact.updated_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
-              </Text>
-            )}
           </View>
           {contact.card_image_uri && (
             <View style={s.gThumbStack}>
@@ -1323,18 +1319,15 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         <View style={[s.gTopRow, { paddingBottom: Spacing.md }]}>
           <View style={{ flex: 1, gap: 4, justifyContent: 'center' }}>
             <Text style={[s.gName, { color: colors.text }]}>{user.full_name}</Text>
-            {connection.brand_name && (
-              <Text style={[s.gCompany, { color: colors.accent }]}>{connection.brand_name}</Text>
+            {(connection.brand_name || user.company_name) && (
+              <Text style={[s.gCompany, { color: colors.accent }]}>{connection.brand_name || user.company_name}</Text>
             )}
             {user.designation && (
               <Text style={[s.gDesignation, { color: colors.textMuted }]}>{user.designation}</Text>
             )}
-            {user.city && (
-              <View style={s.gCityRow}>
-                <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-                <Text style={[s.gDesignation, { color: colors.textMuted }]}>{user.city}</Text>
-              </View>
-            )}
+            <Text style={[s.scannedAt, { color: colors.textMuted, textAlign: 'left', marginTop: 4 }]}>
+              Connected {new Date(connection.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+            </Text>
           </View>
           <Pressable
             onPress={() => user.profile_image_url ? setPhotoExpanded(true) : undefined}
@@ -1441,15 +1434,17 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         )}
 
         {/* LOCATION */}
-        {user.address && (
+        {(user.address || user.city) && (
           <GroupedSection label="LOCATION" colors={colors} s={s}>
             <View style={s.gRow}>
               <Ionicons name="location-outline" size={18} color={colors.textSecondary} />
               <View style={{ flex: 1 }}>
                 <Text style={[s.gRowLabel, { color: colors.textMuted }]}>Address</Text>
-                <Text style={[s.gRowValue, { color: colors.text }]}>{user.address}</Text>
+                <Text style={[s.gRowValue, { color: colors.text }]}>
+                  {[user.address, user.city].filter(Boolean).join(', ')}
+                </Text>
               </View>
-              <CopyButton value={user.address} label="Address" size={15} />
+              <CopyButton value={[user.address, user.city].filter(Boolean).join(', ')} label="Address" size={15} />
             </View>
           </GroupedSection>
         )}
@@ -1476,9 +1471,9 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
           <Text style={[s.gSectionLabel, { color: colors.textMuted }]}>NOTES</Text>
           <Pressable style={[s.gSectionCard, { backgroundColor: colors.surface }]} onPress={() => setShowNotes(true)}>
             <View style={s.gRow}>
-              <Ionicons name="create-outline" size={18} color={notes.length > 0 ? colors.gold : colors.textMuted} />
-              <Text style={[s.gRowValue, { flex: 1, color: notes.length > 0 ? colors.text : colors.textMuted }]}>
-                {notes.length > 0 ? `${notes.length} note${notes.length > 1 ? 's' : ''}` : 'Add a note'}
+              <Ionicons name="add-circle-outline" size={17} color={colors.accent} />
+              <Text style={[s.gRowValue, { flex: 1, color: notes.length > 0 ? colors.text : colors.accent }]}>
+                {notes.length > 0 ? `View ${notes.length} note${notes.length > 1 ? 's' : ''}` : 'Add a note'}
               </Text>
               <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
             </View>
@@ -1488,11 +1483,9 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         {/* Connection status / Exchange */}
         {connection.is_mutual ? (
           <View style={s.gActions}>
-            <View style={[s.slideTrack, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <View style={s.slideSuccess}>
-                <Ionicons name="checkmark-circle" size={17} color={colors.text} />
-                <Text style={[s.slideLabel, { color: colors.text }]}>Mutual Connection</Text>
-              </View>
+            <View style={[s.gMutualBadge, { backgroundColor: colors.accent + '18' }]}>
+              <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
+              <Text style={[s.gMutualBadgeText, { color: colors.accent }]}>Mutual Connection</Text>
             </View>
           </View>
         ) : (

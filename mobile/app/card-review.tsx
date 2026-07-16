@@ -203,8 +203,9 @@ export default function CardReviewScreen() {
           <Ionicons name="people-outline" size={18} color={colors.textSecondary} />
           <Text style={[s.outlineBtnText, { color: colors.textSecondary }]}>View Contact</Text>
         </Pressable>
-        <Pressable style={s.addNoteLink} onPress={() => setShowNoteSheet(true)}>
-          <Text style={[s.addNoteLinkText, { color: colors.textMuted }]}>
+        <Pressable style={[s.outlineBtn, { borderColor: colors.border, marginTop: Spacing.sm }]} onPress={() => setShowNoteSheet(true)}>
+          <Ionicons name="create-outline" size={16} color={colors.textMuted} />
+          <Text style={[s.outlineBtnText, { color: colors.textMuted }]}>
             {noteInput.trim() ? 'Edit note' : 'Add a note'}
           </Text>
         </Pressable>
@@ -477,49 +478,6 @@ export default function CardReviewScreen() {
             <Text style={[s.dupBody, { color: colors.textSecondary }]}>
               {dupContact?.fields.find((f) => f.label === 'Name')?.value ?? 'This person'} is already in your contacts.
             </Text>
-
-            {/* Field diff */}
-            {dupContact && (() => {
-              const newFields = normalizeContactFields();
-              const changed = newFields.filter((nf) => {
-                const old = dupContact.fields.find((of) => of.label === nf.label);
-                return !old || old.value.trim() !== nf.value.trim();
-              });
-              if (changed.length === 0) {
-                return (
-                  <View style={[s.diffBox, { backgroundColor: colors.surfaceElevated }]}>
-                    <Text style={[s.diffNone, { color: colors.textMuted }]}>No new information detected in this scan</Text>
-                  </View>
-                );
-              }
-              return (
-                <View style={[s.diffBox, { backgroundColor: colors.surfaceElevated }]}>
-                  <Text style={[s.diffHeader, { color: colors.textMuted }]}>
-                    {changed.length} FIELD{changed.length !== 1 ? 'S' : ''} NEW / CHANGED
-                  </Text>
-                  {changed.slice(0, 5).map((nf, i) => {
-                    const old = dupContact.fields.find((of) => of.label === nf.label);
-                    return (
-                      <View key={i} style={s.diffRow}>
-                        <Text style={[s.diffLabel, { color: colors.textMuted }]}>{nf.label.toUpperCase()}</Text>
-                        {old ? (
-                          <View style={s.diffValues}>
-                            <Text style={[s.diffOld, { color: colors.textMuted }]} numberOfLines={1}>{old.value}</Text>
-                            <Ionicons name="arrow-forward" size={10} color={colors.accent} />
-                            <Text style={[s.diffNew, { color: colors.text }]} numberOfLines={1}>{nf.value}</Text>
-                          </View>
-                        ) : (
-                          <Text style={[s.diffNew, { color: colors.accent }]} numberOfLines={1}>{nf.value}</Text>
-                        )}
-                      </View>
-                    );
-                  })}
-                  {changed.length > 5 && (
-                    <Text style={[s.diffMore, { color: colors.textMuted }]}>+{changed.length - 5} more</Text>
-                  )}
-                </View>
-              );
-            })()}
 
             <Pressable
               style={[s.solidBtn, { backgroundColor: colors.accent, marginTop: Spacing.lg }]}
@@ -844,7 +802,8 @@ const s = StyleSheet.create({
   diffRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   diffLabel: { fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.5, width: 72, flexShrink: 0 },
   diffValues: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, overflow: 'hidden' },
-  diffOld: { fontSize: 12, textDecorationLine: 'line-through' as const, flexShrink: 1 },
+  diffOld: { fontSize: 12, flexShrink: 1 },
+  diffMicro: { fontSize: 9, fontWeight: '600' as const, letterSpacing: 0.5, marginBottom: 2 },
   diffNew: { fontSize: 12, fontWeight: '600' as const, flexShrink: 1 },
   diffMore: { fontSize: 11, marginTop: 2 },
   diffNone: { fontSize: 12, textAlign: 'center' as const, paddingVertical: 4 },
