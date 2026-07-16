@@ -857,8 +857,7 @@ function CardContactDetailPage({ contact, colors, onBack, onDelete, onUpdate, no
             {company && <Text style={[s.gCompany, { color: colors.accent }]}>{company}</Text>}
             {designation && <Text style={[s.gDesignation, { color: colors.textMuted }]}>{designation}</Text>}
             <Text style={[s.scannedAt, { color: colors.textMuted, textAlign: 'left', marginTop: 4 }]}>
-              {contact.updated_at && contact.updated_at !== contact.scanned_at ? 'Updated' : 'Scanned'}{' '}
-              {new Date(contact.updated_at && contact.updated_at !== contact.scanned_at ? contact.updated_at : contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+              {'Scanned ' + new Date(contact.updated_at || contact.scanned_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
             </Text>
           </View>
           {contact.card_image_uri && (
