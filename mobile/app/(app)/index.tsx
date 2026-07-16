@@ -1164,7 +1164,7 @@ function betaStyles(colors: any) {
 
     // Fullscreen QR modal — matching My Card page expand UI
     qrOverlay: {
-      flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
+      flex: 1, backgroundColor: '#000',
       alignItems: 'center', justifyContent: 'center', gap: Spacing.lg,
     },
     qrModal: {
