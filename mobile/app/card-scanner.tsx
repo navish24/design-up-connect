@@ -58,18 +58,32 @@ export default function CardScannerScreen() {
     rawText: string;
   } | null>(null);
 
+  const compressForStorage = async (uri: string): Promise<string> => {
+    try {
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1600 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      return result.uri;
+    } catch {
+      return uri;
+    }
+  };
+
   const runOCR = async (imageUri: string) => {
     setStage('processing');
     try {
       const blocks = await recognizeCardText(imageUri);
       const fields = parseCardFields(blocks);
       const rawText = blocks.map((b) => b.text).join('\n');
+      const storedUri = await compressForStorage(imageUri);
 
       if (isSecondSide.current && frontRef.current) {
         const merged = [...frontRef.current.fields, ...fields];
         cardScanStore.set({
           imageUri: frontRef.current.imageUri,
-          backImageUri: imageUri,
+          backImageUri: storedUri,
           fields: merged,
           isBlurry: frontRef.current.isBlurry,
           rawText: frontRef.current.rawText + '\n' + rawText,
@@ -80,7 +94,7 @@ export default function CardScannerScreen() {
         isCapturing.current = false;
         router.replace('/card-review');
       } else {
-        frontRef.current = { imageUri, fields, isBlurry: blocks.length < 2, rawText };
+        frontRef.current = { imageUri: storedUri, fields, isBlurry: blocks.length < 2, rawText };
         isCapturing.current = false;
         setStage('back-prompt');
       }
