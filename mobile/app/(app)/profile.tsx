@@ -618,7 +618,7 @@ if (isLoading) {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.lg, paddingBottom: 40 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: Spacing.lg, paddingBottom: 40 }}>
 
               {/* Identity — name left, avatar right (matches connection detail layout) */}
               <View style={s.previewIdentity}>
@@ -1182,7 +1182,7 @@ function makeStyles(colors: any) {
     // Modals
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' },
     modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '92%', width: '100%', maxWidth: 390 },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, paddingBottom: Spacing.sm },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.sm },
     modalTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
     modalScroll: { padding: Spacing.lg, paddingBottom: 60, gap: Spacing.sm },
     editLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, letterSpacing: 1, marginTop: Spacing.md, marginBottom: Spacing.sm },
