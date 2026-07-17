@@ -5,12 +5,14 @@ import {
 } from 'react-native';
 import { useState, useMemo, Fragment, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useHeaderPaddingTop } from '../../lib/safeArea';
 import { isBeta } from '../../lib/betaConfig';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getTabBarStyle } from './_layout';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Spacing, FontSize, FontWeight, Radius } from '../../constants/theme';
@@ -168,6 +170,8 @@ export default function ConnectionsScreen() {
   const { colors } = useTheme();
   const { demoConnectionsReset, demoAddedConnections, notes, addNote, cardContacts, deleteCardContact, updateCardContact, user, refreshConnections } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const headerPaddingTop = useHeaderPaddingTop();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'cards' | 'connections' | 'notes'>('all');
@@ -354,6 +358,15 @@ export default function ConnectionsScreen() {
       setActiveView({ type: 'connect_detail', connection: conn });
     }
   }, [allConnections, cardContacts, pendingOpenUserId]);
+
+  useEffect(() => {
+    const isDetail = activeView.type !== 'list';
+    navigation.setOptions({
+      tabBarStyle: isDetail
+        ? { display: 'none' }
+        : getTabBarStyle(colors, Platform.OS === 'web' ? 0 : bottomInset),
+    });
+  }, [activeView.type, colors, bottomInset, navigation]);
 
   // Restore scroll position when returning to list from a detail view
   useEffect(() => {
