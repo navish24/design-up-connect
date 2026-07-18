@@ -1495,8 +1495,8 @@ function ContactDetailPage({ connection, colors, onBack, onExchange, notes, onAd
         {/* Connection status / Exchange */}
         {connection.is_mutual ? (
           <View style={s.gActions}>
-            <View style={s.gMutualBadge}>
-              <Ionicons name="checkmark" size={13} color={colors.textMuted} />
+            <View style={[s.gMutualBadge, { borderColor: colors.textMuted, borderWidth: 1 }]}>
+              <Ionicons name="checkmark-circle" size={13} color={colors.textMuted} />
               <Text style={[s.gMutualBadgeText, { color: colors.textMuted }]}>Mutual Connection</Text>
             </View>
           </View>
@@ -1781,7 +1781,7 @@ function makeStyles(colors: any) {
     gBrandLetter: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     gBrandLetterText: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
     gActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
-    gMutualBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+    gMutualBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 10, borderRadius: Radius.full, alignSelf: 'flex-start' },
     gMutualBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium },
     slideTrack: { flex: 1, height: 52, borderRadius: 26, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     slideThumb: { position: 'absolute', top: SLIDE_PAD, width: SLIDE_THUMB, height: SLIDE_THUMB, borderRadius: SLIDE_THUMB / 2, alignItems: 'center', justifyContent: 'center' },
