@@ -801,7 +801,7 @@ export default function FloorMap({ bottomInset = 0, initialZoneId, onViewEvents,
       nearestNodeId: zone.linkedNodeId,
     };
     if (pointA) applyB(syntheticStall, pointA);
-    else { setPointB(syntheticStall); setSearchB(''); setActiveField('A'); focusStall(syntheticStall); }
+    else { setPointB(syntheticStall); setSearchB(''); setActiveField('A'); setShowSearchSheet(true); }
   }
 
   function handleZoneNavigateToStall(stallId: string) {
@@ -810,13 +810,13 @@ export default function FloorMap({ bottomInset = 0, initialZoneId, onViewEvents,
     const stall = show.stalls.find(s => s.id === stallId);
     if (!stall) return;
     if (pointA) applyB(stall, pointA);
-    else { setPointB(stall); setSearchB(''); setActiveField('A'); focusStall(stall); }
+    else { setPointB(stall); setSearchB(''); setActiveField('A'); setShowSearchSheet(true); }
   }
 
   function handleNavigateHere(stall: Stall) {
     setTappedStall(null); setTappedZone(null);
     if (pointA) applyB(stall, pointA);
-    else { setPointB(stall); setSearchB(''); setActiveField('A'); focusStall(stall); }
+    else { setPointB(stall); setSearchB(''); setActiveField('A'); setShowSearchSheet(true); }
   }
 
   // ── Route selection → preview ──
