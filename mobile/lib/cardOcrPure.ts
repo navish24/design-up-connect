@@ -536,6 +536,23 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
       }
     }
 
+    // Company suffix takes priority over role keyword — e.g. "GM Modular PVT." matches
+    // DESIGNATION_RE on "gm" (General Manager) but the Pvt./Ltd./Inc. suffix makes it
+    // unambiguously a company name. Check this before DESIGNATION_RE fires.
+    const COMPANY_SUFFIX_RE = /\b(pvt\.?|ltd\.?|llp\.?|llc\.?|inc\.?|corp\.?|limited|private|incorporated|plc\.?)\b/i;
+    if (
+      !companyAssigned &&
+      DESIGNATION_RE.test(line) &&
+      COMPANY_SUFFIX_RE.test(line) &&
+      !ADDRESS_STRUCTURAL_RE.test(line) &&
+      !ADDR_PREFIX_RE.test(line)
+    ) {
+      const nameIdx = fields.findIndex((f) => f.label === 'Name');
+      fields.splice(nameIdx === -1 ? 0 : nameIdx + 1, 0, { label: 'Company', value: line });
+      companyAssigned = true;
+      return;
+    }
+
     // Designation: contains a role keyword
     if (DESIGNATION_RE.test(line)) {
       designationLines.push(line);
@@ -1437,6 +1454,24 @@ export function parseCardFields(blocks: OcrBlock[]): CardContactField[] {
         }
         const nIdx = fields.findIndex((f) => f.label === 'Name');
         fields.splice(nIdx === -1 ? 0 : nIdx + 1, 0, { label: 'Company', value: companyValue });
+      }
+    }
+  }
+
+  // Post-process: re-classify Designation as Company when the value contains a
+  // company suffix (Pvt./Ltd./Inc./LLP/etc.) — e.g. "GM Modular PVT." matched
+  // DESIGNATION_RE on "gm" (General Manager) but is clearly a company name.
+  {
+    const COMPANY_SUFFIX_RE_POST = /\b(pvt\.?|ltd\.?|llp\.?|llc\.?|inc\.?|corp\.?|limited|private|incorporated|plc\.?)\b/i;
+    const misclassified = fields.find((f) => f.label === 'Designation' && COMPANY_SUFFIX_RE_POST.test(f.value));
+    if (misclassified) {
+      misclassified.label = 'Company';
+      // Move it right after Name for correct ordering
+      const nameIdx = fields.findIndex((f) => f.label === 'Name');
+      const curIdx = fields.indexOf(misclassified);
+      if (nameIdx !== -1 && curIdx !== nameIdx + 1) {
+        fields.splice(curIdx, 1);
+        fields.splice(nameIdx + 1, 0, misclassified);
       }
     }
   }
