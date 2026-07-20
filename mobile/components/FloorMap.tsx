@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, Dimensions, Animated, PanResponder, ActivityIndicator,
-  Keyboard, Platform, Alert,
+  Alert,
 } from 'react-native';
 import Svg, { Rect, Polyline, Circle, Text as SvgText, G, Line, Polygon } from 'react-native-svg';
 import * as Location from 'expo-location';
@@ -611,8 +611,6 @@ export default function FloorMap({ bottomInset = 0, initialZoneId, onViewEvents,
   const [expandNavSheet, setExpandNavSheet]   = useState(false);
   const [tappedZone, setTappedZone]           = useState<SpecialZone | null>(null);
   const [tappedStall, setTappedStall]         = useState<Stall | null>(null);
-  const [keyboardH, setKeyboardH]             = useState(0);
-
   // ── Map rotation + heading-lock ──
   const [mapRotation, setMapRotation]     = useState(0);
   const [headingLocked, setHeadingLocked] = useState(false);
@@ -640,15 +638,6 @@ export default function FloorMap({ bottomInset = 0, initialZoneId, onViewEvents,
     })();
     return () => { locationSubRef.current?.remove(); locationSubRef.current = null; };
   }, [headingLocked]);
-
-  // ── Keyboard height tracking (Fix 11) ──
-  useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const onShow = Keyboard.addListener(showEvt, e => setKeyboardH(e.endCoordinates.height));
-    const onHide = Keyboard.addListener(hideEvt, () => setKeyboardH(0));
-    return () => { onShow.remove(); onHide.remove(); };
-  }, []);
 
   // ── Pan / zoom refs ──
   const pan          = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -1154,10 +1143,47 @@ export default function FloorMap({ bottomInset = 0, initialZoneId, onViewEvents,
         </TouchableOpacity>
       )}
 
-      {/* ── Search bottom sheet (Fix 1) ──
-          Occupies bottom 45%. Top 55% remains pannable (nothing covers it). */}
+      {/* ── Search bottom sheet ── */}
       {showSearchSheet && (
         <View style={styles.searchSheet}>
+
+          {/* Autocomplete floats above the sheet — anchored to sheet top so it
+              moves with the sheet regardless of how iOS adjusts for the keyboard */}
+          {(showDropA || showDropB) && (
+            <View style={styles.suggestionAbove}>
+              <ScrollView
+                keyboardShouldPersistTaps="always"
+                showsVerticalScrollIndicator={false}
+                style={{ maxHeight: 4 * 52 }}
+              >
+                {showDropA && matchA.slice(0, 4).map(s => (
+                  <TouchableOpacity key={s.id} style={styles.dropRow}
+                    onPress={() => { setSearchA(''); applyA(s); }}>
+                    <View style={[styles.dropDot, { backgroundColor: ROUTE_A }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.dropLabel} numberOfLines={1}>{s.brandName}</Text>
+                      <Text style={styles.dropSub}>{s.category}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                {showDropB && matchB.slice(0, 4).map(s => (
+                  <TouchableOpacity key={s.id} style={styles.dropRow}
+                    onPress={() => {
+                      setSearchB('');
+                      if (pointA) applyB(s, pointA);
+                      else applyA(s);
+                    }}>
+                    <View style={[styles.dropDot, { backgroundColor: '#27ae60' }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.dropLabel} numberOfLines={1}>{s.brandName}</Text>
+                      <Text style={styles.dropSub}>{s.category}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           <View style={styles.sheetHandleRow}>
             <View style={styles.sheetHandle} />
             <TouchableOpacity
@@ -1192,46 +1218,6 @@ export default function FloorMap({ bottomInset = 0, initialZoneId, onViewEvents,
             )}
           </View>
 
-        </View>
-      )}
-
-      {/* ── Autocomplete overlay — floats above keyboard (Fix 11) ──
-          Rendered outside the search sheet so keyboard never covers it.
-          When keyboard is open: sits at bottom = keyboardHeight + 8.
-          When keyboard is hidden: sits at bottom = sheet height + 8.     */}
-      {showSearchSheet && (showDropA || showDropB) && (
-        <View style={[styles.suggestionOverlay,
-          { bottom: keyboardH > 0 ? keyboardH + 8 : SCREEN_H * 0.47 + 8 }]}>
-          <ScrollView
-            keyboardShouldPersistTaps="always"
-            showsVerticalScrollIndicator={false}
-            style={{ maxHeight: 4 * 52 }}
-          >
-            {showDropA && matchA.slice(0, 4).map(s => (
-              <TouchableOpacity key={s.id} style={styles.dropRow}
-                onPress={() => { setSearchA(''); applyA(s); }}>
-                <View style={[styles.dropDot, { backgroundColor: ROUTE_A }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.dropLabel} numberOfLines={1}>{s.brandName}</Text>
-                  <Text style={styles.dropSub}>{s.category}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-            {showDropB && matchB.slice(0, 4).map(s => (
-              <TouchableOpacity key={s.id} style={styles.dropRow}
-                onPress={() => {
-                  setSearchB('');
-                  if (pointA) applyB(s, pointA);
-                  else applyA(s);
-                }}>
-                <View style={[styles.dropDot, { backgroundColor: '#27ae60' }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.dropLabel} numberOfLines={1}>{s.brandName}</Text>
-                  <Text style={styles.dropSub}>{s.category}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
         </View>
       )}
 
@@ -1401,7 +1387,7 @@ const styles = StyleSheet.create({
   },
   recentreBtnTxt: { fontSize: 20, color: '#2980b9' },
 
-  // Search bottom sheet (Fix 1)
+  // Search bottom sheet
   searchSheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     height: SCREEN_H * 0.47,
@@ -1410,13 +1396,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 10,
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.14, shadowRadius: 12, elevation: 22, zIndex: 70,
+    overflow: 'visible',
   },
-  // Floating autocomplete overlay — above keyboard, outside search sheet
-  suggestionOverlay: {
-    position: 'absolute', left: 12, right: 12,
+  // Autocomplete list — anchored to the sheet's top edge so it follows
+  // the sheet regardless of how iOS adjusts the view for the keyboard
+  suggestionAbove: {
+    position: 'absolute', bottom: '100%', left: 0, right: 0,
+    marginBottom: 8,
     backgroundColor: '#fff',
     borderRadius: 14, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.18, shadowRadius: 10, elevation: 24,
     zIndex: 75,
   },
